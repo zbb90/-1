@@ -1,0 +1,21 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/regular-question/index",
+    "pages/regular-question/result",
+    "pages/old-item/index",
+    "pages/old-item/result",
+    "pages/external-purchase/index",
+    "pages/external-purchase/result",
+    "pages/my-reviews/index",
+    "pages/my-reviews/detail"
+  ],
+  "window": {
+    "navigationBarTitleText": "稽核 AI 助手",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f8fa"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

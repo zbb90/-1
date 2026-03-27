@@ -1,0 +1,65 @@
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.hero-card {
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+}
+
+.hero-label,
+.section-title {
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.hero-title {
+  margin-top: 12rpx;
+  font-size: 42rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.hero-desc {
+  margin-top: 12rpx;
+  color: #4b5563;
+}
+
+.detail-item + .detail-item {
+  margin-top: 22rpx;
+}
+
+.detail-label {
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.detail-value {
+  margin-top: 10rpx;
+  font-size: 30rpx;
+  color: #111827;
+}
+
+.detail-desc {
+  margin-top: 10rpx;
+  color: #374151;
+  line-height: 1.7;
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.empty-desc {
+  color: #6b7280;
+  line-height: 1.7;
+}

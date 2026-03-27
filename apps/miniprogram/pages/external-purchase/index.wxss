@@ -1,0 +1,32 @@
+.section-title {
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.field {
+  margin-top: 24rpx;
+}
+
+.label {
+  margin-bottom: 12rpx;
+  color: #374151;
+  font-size: 26rpx;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  background: #fff;
+  padding: 20rpx;
+}
+
+.textarea {
+  min-height: 220rpx;
+}
+
+.submit {
+  margin-top: 32rpx;
+  background: #166534;
+}

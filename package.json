@@ -1,0 +1,14 @@
+{
+  "name": "audit-ai-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:admin": "npm run dev --workspace @audit-ai/admin",
+    "lint:admin": "npm run lint --workspace @audit-ai/admin",
+    "build:admin": "npm run build --workspace @audit-ai/admin"
+  }
+}

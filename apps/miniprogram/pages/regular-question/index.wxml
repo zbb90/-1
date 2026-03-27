@@ -1,0 +1,50 @@
+<view class="page">
+  <view class="card">
+    <view class="section-title">固定表单</view>
+
+    <view class="field">
+      <view class="label">门店编码</view>
+      <input
+        class="input"
+        placeholder="请输入门店编码"
+        value="{{storeCode}}"
+        bindinput="handleStoreCodeInput"
+      />
+    </view>
+
+    <view class="field">
+      <view class="label">门店问题</view>
+      <picker
+        range="{{categories}}"
+        value="{{categoryIndex}}"
+        bindchange="handleCategoryChange"
+      >
+        <view class="input picker">{{categories[categoryIndex]}}</view>
+      </picker>
+    </view>
+
+    <view class="field">
+      <view class="label">自行判断（选填）</view>
+      <input
+        class="input"
+        placeholder="例如：扣 / 不扣 / 不确定"
+        value="{{selfJudgment}}"
+        bindinput="handleSelfJudgmentInput"
+      />
+    </view>
+
+    <view class="field">
+      <view class="label">问题描述</view>
+      <textarea
+        class="textarea"
+        placeholder="请输入现场情况，例如：分装坚果碎过期，门店反馈新制作，但新旧混放无法明确区分。"
+        value="{{description}}"
+        bindinput="handleDescriptionInput"
+      />
+    </view>
+
+    <button class="submit" type="primary" loading="{{loading}}" bindtap="handleSubmit">
+      提交问题
+    </button>
+  </view>
+</view>

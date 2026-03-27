@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="card">
+    <view class="title">稽核 AI 助手</view>
+    <view class="subtitle">一期首页三条主线已经预留。</view>
+  </view>
+
+  <view class="entry-list">
+    <view class="entry card" bindtap="goToRegularQuestion">
+      <view class="entry-title">常规问题</view>
+      <view class="entry-desc">是否扣分、扣几分、依据条款、条款解释</view>
+    </view>
+
+    <view class="entry card" bindtap="goToOldItem">
+      <view class="entry-title">旧品比对</view>
+      <view class="entry-desc">图片 + 名称/备注，返回是否旧品</view>
+    </view>
+
+    <view class="entry card" bindtap="goToExternalPurchase">
+      <view class="entry-title">外购查询</view>
+      <view class="entry-desc">文字检索可外购 / 不可外购</view>
+    </view>
+
+    <view class="entry card" bindtap="goToMyReviews">
+      <view class="entry-title">我的问题 / 我的复核</view>
+      <view class="entry-desc">查看处理中、已处理、待补充的任务状态</view>
+    </view>
+  </view>
+</view>

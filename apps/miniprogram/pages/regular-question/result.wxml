@@ -1,0 +1,84 @@
+<view class="page">
+  <view wx:if="{{matched && answer}}" class="result-stack">
+    <view class="hero card">
+      <view class="hero-top">
+        <view>
+          <view class="hero-label">判定结果</view>
+          <view class="hero-title">{{statusText}}</view>
+        </view>
+        <view
+          class="result-status {{answer.shouldDeduct === '是' ? 'danger' : answer.shouldDeduct === '否' ? 'safe' : 'neutral'}}"
+        >
+          {{answer.shouldDeduct}}
+        </view>
+      </view>
+
+      <view class="metric-grid">
+        <view class="metric-item">
+          <view class="metric-label">扣几分</view>
+          <view class="metric-value">{{scoreText}}</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-label">问题分类</view>
+          <view class="metric-value">{{answer.category}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card detail-card">
+      <view class="section-title">依据与解释</view>
+      <view class="detail-item">
+        <view class="detail-label">扣几分</view>
+        <view class="detail-value">{{scoreText}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">依据条款</view>
+        <view class="detail-value strong">{{answer.clauseTitle}}</view>
+        <view class="detail-desc">{{answer.clauseSnippet}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">条款解释</view>
+        <view class="detail-desc">{{answer.explanation}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">引用来源</view>
+        <view class="detail-desc">{{answer.source}}</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">命中原因</view>
+      <view wx:for="{{answer.matchedReasons}}" wx:key="*this" class="reason-item">
+        <view class="reason-dot"></view>
+        <view>{{item}}</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">候选规则</view>
+      <view wx:for="{{candidates}}" wx:key="ruleId" class="candidate-item">
+        <view class="candidate-top">
+          <view class="strong">{{item.ruleId}}｜{{item.clauseNo}}</view>
+          <view class="candidate-score">匹配分 {{item.score}}</view>
+        </view>
+        <view class="candidate-title">{{item.clauseTitle}}</view>
+        <view class="detail-desc">分类：{{item.category}}</view>
+      </view>
+    </view>
+
+    <button class="secondary-button" bindtap="goBack">返回修改问题</button>
+  </view>
+
+  <view wx:else class="card empty-card">
+    <view class="hero-label">未找到明确依据</view>
+    <view class="hero-title neutral-text">建议进入人工复核</view>
+    <view class="detail-desc">{{rejectReason}}</view>
+    <view wx:if="{{reviewTask}}" class="review-tip">
+      已自动进入复核池：{{reviewTask.id}}｜{{reviewTask.status}}
+    </view>
+    <button wx:if="{{reviewTask}}" class="primary-button" bindtap="goToReviewDetail">
+      查看复核详情
+    </button>
+    <button class="secondary-button" bindtap="goBack">返回修改问题</button>
+  </view>
+</view>

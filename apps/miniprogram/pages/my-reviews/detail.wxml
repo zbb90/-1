@@ -1,0 +1,59 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="card empty-card">
+    <view class="empty-title">加载中...</view>
+    <view class="empty-desc">正在读取复核详情。</view>
+  </view>
+
+  <view wx:elif="{{errorMessage}}" class="card empty-card">
+    <view class="empty-title">加载失败</view>
+    <view class="empty-desc">{{errorMessage}}</view>
+  </view>
+
+  <view wx:elif="{{review}}" class="detail-stack">
+    <view class="card hero-card">
+      <view class="hero-label">当前状态</view>
+      <view class="hero-title">{{review.status}}</view>
+      <view class="hero-desc">{{review.type}}｜{{review.category}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">原始问题</view>
+      <view class="detail-item">
+        <view class="detail-label">门店编码</view>
+        <view class="detail-value">{{review.storeCode}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">问题描述</view>
+        <view class="detail-desc">{{review.description}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">系统拒答原因</view>
+        <view class="detail-desc">{{review.rejectReason}}</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">处理结果</view>
+      <view class="detail-item">
+        <view class="detail-label">最终结论</view>
+        <view class="detail-value">{{review.finalConclusion || '暂未处理'}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">最终分值</view>
+        <view class="detail-value">{{review.finalScore || '-'}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">最终依据条款</view>
+        <view class="detail-value">{{review.finalClause || '-'}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">最终解释</view>
+        <view class="detail-desc">{{review.finalExplanation || '暂未填写'}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">处理人</view>
+        <view class="detail-value">{{review.processor || '暂未处理'}}</view>
+      </view>
+    </view>
+  </view>
+</view>

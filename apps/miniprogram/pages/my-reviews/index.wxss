@@ -1,0 +1,87 @@
+.tabs {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  border-radius: 18rpx;
+  background: #ffffff;
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.tab-active {
+  background: #166534;
+  color: #ffffff;
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.review-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.review-id {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.review-meta {
+  margin-top: 8rpx;
+  color: #6b7280;
+}
+
+.review-status {
+  flex-shrink: 0;
+  border-radius: 999rpx;
+  padding: 10rpx 20rpx;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.review-desc {
+  color: #374151;
+  line-height: 1.7;
+}
+
+.review-time {
+  color: #9ca3af;
+  font-size: 24rpx;
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.empty-desc {
+  color: #6b7280;
+  line-height: 1.7;
+}

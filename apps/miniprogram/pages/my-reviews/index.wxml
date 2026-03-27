@@ -1,0 +1,44 @@
+<view class="page">
+  <view class="tabs">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="*this"
+      class="tab {{activeTab === item ? 'tab-active' : ''}}"
+      data-tab="{{item}}"
+      bindtap="handleTabChange"
+    >
+      {{item}}
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="card empty-card">
+    <view class="empty-title">加载中...</view>
+    <view class="empty-desc">正在读取你的复核任务。</view>
+  </view>
+
+  <view wx:elif="{{filteredReviews.length === 0}}" class="card empty-card">
+    <view class="empty-title">当前没有任务</view>
+    <view class="empty-desc">所选状态下还没有对应的复核记录。</view>
+  </view>
+
+  <view wx:else class="review-list">
+    <view
+      wx:for="{{filteredReviews}}"
+      wx:key="id"
+      class="card review-card"
+      data-id="{{item.id}}"
+      bindtap="goToDetail"
+    >
+      <view class="review-top">
+        <view>
+          <view class="review-id">{{item.id}}</view>
+          <view class="review-meta">{{item.type}}｜{{item.category}}</view>
+        </view>
+        <view class="review-status">{{item.status}}</view>
+      </view>
+
+      <view class="review-desc">{{item.description}}</view>
+      <view class="review-time">更新时间：{{item.updatedAt}}</view>
+    </view>
+  </view>
+</view>

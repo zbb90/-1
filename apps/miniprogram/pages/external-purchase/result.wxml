@@ -1,0 +1,58 @@
+<view class="page">
+  <view wx:if="{{matched && answer}}" class="result-stack">
+    <view class="hero card">
+      <view class="hero-top">
+        <view>
+          <view class="hero-label">外购结论</view>
+          <view class="hero-title">{{answer.canPurchase === '是' ? '可外购' : '不可外购'}}</view>
+        </view>
+        <view class="result-status {{answer.canPurchase === '是' ? 'safe' : 'danger'}}">
+          {{answer.canPurchase}}
+        </view>
+      </view>
+    </view>
+
+    <view class="card detail-card">
+      <view class="section-title">命中结果</view>
+      <view class="detail-item">
+        <view class="detail-label">物品名称</view>
+        <view class="detail-value strong">{{answer.name}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">命中来源</view>
+        <view class="detail-desc">{{answer.sourceName}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">依据文件</view>
+        <view class="detail-desc">{{answer.sourceFile}}</view>
+      </view>
+      <view class="detail-item">
+        <view class="detail-label">说明</view>
+        <view class="detail-desc">{{answer.explanation}}</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">命中原因</view>
+      <view wx:for="{{answer.matchedReasons}}" wx:key="*this" class="reason-item">
+        <view class="reason-dot"></view>
+        <view>{{item}}</view>
+      </view>
+    </view>
+
+    <button class="secondary-button" bindtap="goBack">返回修改</button>
+  </view>
+
+  <view wx:else class="card empty-card">
+    <view class="hero-label">未找到明确依据</view>
+    <view class="hero-title neutral-text">建议补充更具体名称</view>
+    <view class="detail-desc">{{rejectReason}}</view>
+    <view wx:if="{{reviewTask}}" class="review-tip">
+      已自动进入复核池：{{reviewTask.id}}｜{{reviewTask.status}}
+    </view>
+    <button wx:if="{{reviewTask}}" class="primary-button" bindtap="goToReviewDetail">
+      查看复核详情
+    </button>
+    <button class="secondary-button" bindtap="goBack">返回修改</button>
+  </view>
+</view>
