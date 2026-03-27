@@ -144,6 +144,58 @@ function buildRuleSearchText(rule: RuleRow) {
     .toLowerCase();
 }
 
+/** 区分「超赏味 / 赏味期」与「超废弃 / 废弃时间」两类表述，避免笼统「过期」误命中纯废弃条款 */
+function detectMaterialExpiryFocus(combined: string): "shangwei" | "feiqi" | "neutral" {
+  const hasShangwei =
+    /赏味期|最佳赏味|超赏味|超出赏味|已过赏味|赏味过期|赏味已过|赏味过了|赏味到/.test(
+      combined,
+    );
+  const hasFeiqi =
+    /超废弃|废弃时间|超过废弃|已过废弃|废弃期|废弃日|到废弃|废弃后仍|废弃仍/.test(
+      combined,
+    ) || (/废弃/.test(combined) && /超过|已过|超|晚于|拖过/.test(combined));
+
+  if (hasShangwei && !hasFeiqi) {
+    return "shangwei";
+  }
+
+  if (hasFeiqi && !hasShangwei) {
+    return "feiqi";
+  }
+
+  return "neutral";
+}
+
+function ruleTextBlob(rule: RuleRow) {
+  return [
+    rule.问题子类或关键词,
+    rule.场景描述,
+    rule.触发条件,
+    rule.条款标题,
+    rule.条款关键片段,
+    rule.条款解释,
+    rule.示例问法,
+  ].join("");
+}
+
+function ruleEmphasizesDiscardDeadline(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("超过废弃") ||
+    blob.includes("废弃时间") ||
+    blob.includes("超废弃")
+  );
+}
+
+function ruleEmphasizesShangweiWindow(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("赏味") ||
+    blob.includes("超赏味") ||
+    blob.includes("最佳赏味")
+  );
+}
+
 function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
   const description = normalizeText(request.description);
   const issueTitle = normalizeText(request.issueTitle);
@@ -247,6 +299,47 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
   if (matchedCorePhrases.length > 0) {
     score += Math.min(24, matchedCorePhrases.length * 8);
     reasons.push("命中问题核心短语");
+  }
+
+  const expiryFocus = detectMaterialExpiryFocus(combined);
+
+  if (expiryFocus === "shangwei") {
+    if (
+      ruleEmphasizesDiscardDeadline(rule) &&
+      !ruleEmphasizesShangweiWindow(rule)
+    ) {
+      score -= 52;
+      reasons.push("区分：表述偏赏味期，降低纯「超废弃/废弃时间」类规则优先级");
+    }
+
+    if (rule.rule_id === "R-0019") {
+      score += 42;
+      reasons.push("区分：超赏味期规则与赏味期表述一致（跨分类加权）");
+    } else if (ruleEmphasizesShangweiWindow(rule)) {
+      score += 28;
+      reasons.push("区分：规则条文含赏味期/超赏味，与当前表述更一致");
+    }
+
+    if (rule.rule_id === "R-0010") {
+      score += 12;
+      reasons.push("区分：涉及超出赏味期后处置的关联规则");
+    }
+  }
+
+  if (expiryFocus === "feiqi") {
+    if (
+      rule.rule_id === "R-0019" &&
+      ruleEmphasizesShangweiWindow(rule) &&
+      !ruleEmphasizesDiscardDeadline(rule)
+    ) {
+      score -= 40;
+      reasons.push("区分：表述偏废弃时间，降低纯「超赏味期」规则优先级");
+    }
+
+    if (ruleEmphasizesDiscardDeadline(rule)) {
+      score += 24;
+      reasons.push("区分：规则条文含废弃时间/超废弃，与当前表述更一致");
+    }
   }
 
   return { score, reasons };

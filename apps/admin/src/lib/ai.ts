@@ -133,6 +133,7 @@ export async function generateRegularQuestionAiExplanation(
 2. 先说结论，再说原因，最后给一个简短整改建议。
 3. 控制在 3 句话以内，80 到 150 字。
 4. 不要使用标题、编号、Markdown。
+5. 若涉及物料效期，用语需区分「赏味期/最佳赏味期」与「废弃时间/超废弃」，不要混用；命中条款若只对应其中一类，只围绕该类说明。
 `);
 }
 
