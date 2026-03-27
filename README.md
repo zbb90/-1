@@ -28,6 +28,18 @@ npm run dev:admin
 - 如需切换接口域名，可在小程序里调用 `getApp().setApiOrigin("http://你的地址:端口")`
 - 后台健康检查接口：`GET /api/health`
 
+## AI 解释能力
+- 当前问答链路默认先走规则匹配，再由大模型补充面向门店的简短解释
+- 未配置大模型时，不影响规则命中、结果返回和人工复核池逻辑
+- 需要在 `apps/admin/.env.local` 或部署平台环境变量中配置：
+
+```bash
+DASHSCOPE_API_KEY=你的阿里云百炼Key
+MODEL_NAME=qwen-plus
+```
+
+- 当前默认使用阿里云百炼 OpenAI 兼容接口，推荐模型为 `qwen-plus`
+
 ## 后台最小鉴权
 - 后台页面 `/reviews` 以及复核处理接口 `PATCH /api/reviews/[id]` 已启用 Basic Auth
 - 本地临时账号默认读取 `apps/admin/.env.local`

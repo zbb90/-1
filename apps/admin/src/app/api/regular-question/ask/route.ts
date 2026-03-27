@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateRegularQuestionAiExplanation } from "@/lib/ai";
 import { matchRegularQuestion } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import { createReviewTaskFromRegularQuestion } from "@/lib/review-pool";
@@ -56,9 +57,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (!result.answer) {
+      throw new Error("规则命中成功，但未生成答案内容。");
+    }
+
+    const aiExplanation = await generateRegularQuestionAiExplanation(
+      payload,
+      result.answer,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result,
+      data: {
+        ...result,
+        answer: {
+          ...result.answer,
+          aiExplanation,
+        },
+      },
     });
   } catch (error) {
     return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateExternalPurchaseAiExplanation } from "@/lib/ai";
 import { matchExternalPurchase } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import { createReviewTaskFromExternalPurchase } from "@/lib/review-pool";
@@ -43,9 +44,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (!result.answer) {
+      throw new Error("外购命中成功，但未生成答案内容。");
+    }
+
+    const aiExplanation = await generateExternalPurchaseAiExplanation(
+      body,
+      result.answer,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result,
+      data: {
+        ...result,
+        answer: {
+          ...result.answer,
+          aiExplanation,
+        },
+      },
     });
   } catch (error) {
     return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateOldItemAiExplanation } from "@/lib/ai";
 import { matchOldItem } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import { createReviewTaskFromOldItem } from "@/lib/review-pool";
@@ -43,9 +44,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (!result.answer) {
+      throw new Error("旧品命中成功，但未生成答案内容。");
+    }
+
+    const aiExplanation = await generateOldItemAiExplanation(
+      body,
+      result.answer,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result,
+      data: {
+        ...result,
+        answer: {
+          ...result.answer,
+          aiExplanation,
+        },
+      },
     });
   } catch (error) {
     return NextResponse.json(

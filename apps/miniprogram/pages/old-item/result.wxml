@@ -28,6 +28,11 @@
       </view>
     </view>
 
+    <view wx:if="{{answer.aiExplanation}}" class="card detail-card">
+      <view class="section-title">AI 解释</view>
+      <view class="detail-desc">{{answer.aiExplanation}}</view>
+    </view>
+
     <view class="card">
       <view class="section-title">命中原因</view>
       <view wx:for="{{answer.matchedReasons}}" wx:key="*this" class="reason-item">
