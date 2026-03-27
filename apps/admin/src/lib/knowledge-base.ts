@@ -16,13 +16,17 @@ let cache: KnowledgeBase | null = null;
 
 function resolveTemplateDir() {
   const candidates = [
+    resolve(process.cwd(), "../../data/templates"),
+    resolve(process.cwd(), "../../../data/templates"),
     resolve(process.cwd(), "../../../问答机器人/数据模板"),
     resolve(process.cwd(), "../问答机器人/数据模板"),
   ];
 
   const match = candidates.find((candidate) => existsSync(candidate));
   if (!match) {
-    throw new Error("未找到数据模板目录，请确认 `问答机器人/数据模板` 存在。");
+    throw new Error(
+      "未找到数据模板目录，请确认 `data/templates` 或 `问答机器人/数据模板` 存在。",
+    );
   }
 
   return match;
