@@ -10,6 +10,33 @@ import type {
   ReviewTaskType,
 } from "@/lib/types";
 
+/* ------------------------------------------------------------------ */
+/*  Storage backend: Upstash Redis (production) ↔ local JSON (dev)    */
+/* ------------------------------------------------------------------ */
+
+const REDIS_KEY = "audit:review-tasks";
+
+function useRedis() {
+  return Boolean(
+    process.env.KV_REST_API_URL?.trim() &&
+      process.env.KV_REST_API_TOKEN?.trim(),
+  );
+}
+
+let redisInstance: import("@upstash/redis").Redis | null = null;
+
+async function getRedis() {
+  if (redisInstance) return redisInstance;
+  const { Redis } = await import("@upstash/redis");
+  redisInstance = new Redis({
+    url: process.env.KV_REST_API_URL!,
+    token: process.env.KV_REST_API_TOKEN!,
+  });
+  return redisInstance;
+}
+
+/* ---------- File-based (local dev fallback) ---------- */
+
 const dataDir = resolve(process.cwd(), "../../data");
 const reviewFilePath = resolve(dataDir, "review-tasks.json");
 
@@ -17,22 +44,52 @@ async function ensureReviewFile() {
   if (!existsSync(dataDir)) {
     await mkdir(dataDir, { recursive: true });
   }
-
   if (!existsSync(reviewFilePath)) {
     await writeFile(reviewFilePath, "[]\n", "utf-8");
   }
 }
 
-async function readReviewTasks(): Promise<ReviewTask[]> {
+async function readFromFile(): Promise<ReviewTask[]> {
   await ensureReviewFile();
   const raw = await readFile(reviewFilePath, "utf-8");
   return JSON.parse(raw) as ReviewTask[];
 }
 
-async function writeReviewTasks(tasks: ReviewTask[]) {
+async function writeToFile(tasks: ReviewTask[]) {
   await ensureReviewFile();
-  await writeFile(reviewFilePath, `${JSON.stringify(tasks, null, 2)}\n`, "utf-8");
+  await writeFile(
+    reviewFilePath,
+    `${JSON.stringify(tasks, null, 2)}\n`,
+    "utf-8",
+  );
 }
+
+/* ---------- Redis-based (Vercel / production) ---------- */
+
+async function readFromRedis(): Promise<ReviewTask[]> {
+  const redis = await getRedis();
+  const data = await redis.get<ReviewTask[]>(REDIS_KEY);
+  return data ?? [];
+}
+
+async function writeToRedis(tasks: ReviewTask[]) {
+  const redis = await getRedis();
+  await redis.set(REDIS_KEY, JSON.stringify(tasks));
+}
+
+/* ---------- Unified read / write ---------- */
+
+async function readReviewTasks(): Promise<ReviewTask[]> {
+  return useRedis() ? readFromRedis() : readFromFile();
+}
+
+async function writeReviewTasks(tasks: ReviewTask[]) {
+  return useRedis() ? writeToRedis(tasks) : writeToFile(tasks);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Business logic (unchanged)                                        */
+/* ------------------------------------------------------------------ */
 
 function buildId() {
   const now = new Date();
@@ -206,4 +263,8 @@ export async function updateReviewTask(
   tasks[index] = nextTask;
   await writeReviewTasks(tasks);
   return nextTask;
+}
+
+export function getStorageBackend() {
+  return useRedis() ? "upstash-redis" : "local-file";
 }

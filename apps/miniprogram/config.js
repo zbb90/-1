@@ -1,16 +1,27 @@
-const DEFAULT_API_ORIGIN = "http://127.0.0.1:3003";
+const PRODUCTION_API_ORIGIN = "https://1-admin-seven.vercel.app";
+const LOCAL_API_ORIGIN = "http://127.0.0.1:3003";
 
-function normalizeApiOrigin(origin) {
-  const normalized = (origin || "").trim().replace(/\/+$/, "");
-  return normalized || DEFAULT_API_ORIGIN;
+function isDevToolsEnvironment() {
+  try {
+    const info = wx.getSystemInfoSync();
+    return info.platform === "devtools";
+  } catch {
+    return false;
+  }
+}
+
+function getDefaultOrigin() {
+  return isDevToolsEnvironment() ? LOCAL_API_ORIGIN : PRODUCTION_API_ORIGIN;
 }
 
 function getApiBaseUrl() {
-  const savedOrigin = wx.getStorageSync("apiOrigin");
-  return `${normalizeApiOrigin(savedOrigin)}/api`;
+  const savedOrigin = (wx.getStorageSync("apiOrigin") || "").trim().replace(/\/+$/, "");
+  const origin = savedOrigin || getDefaultOrigin();
+  return `${origin}/api`;
 }
 
 module.exports = {
-  DEFAULT_API_ORIGIN,
+  PRODUCTION_API_ORIGIN,
+  LOCAL_API_ORIGIN,
   getApiBaseUrl,
 };

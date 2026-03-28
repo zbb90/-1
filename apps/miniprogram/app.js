@@ -1,4 +1,4 @@
-const { DEFAULT_API_ORIGIN, getApiBaseUrl } = require("./config");
+const { PRODUCTION_API_ORIGIN, getApiBaseUrl } = require("./config");
 
 function createRequesterProfile() {
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -35,7 +35,7 @@ App({
   },
 
   setApiOrigin(origin) {
-    const nextOrigin = (origin || "").trim() || DEFAULT_API_ORIGIN;
+    const nextOrigin = (origin || "").trim() || PRODUCTION_API_ORIGIN;
     wx.setStorageSync("apiOrigin", nextOrigin);
     this.globalData.apiBaseUrl = getApiBaseUrl();
     return this.globalData.apiBaseUrl;

@@ -40,9 +40,15 @@ MODEL_NAME=qwen-plus
 
 - 当前默认使用阿里云百炼 OpenAI 兼容接口，推荐模型为 `qwen-plus`
 
+## 复核数据持久化
+- 本地开发：自动使用 `data/review-tasks.json`，无需额外配置
+- **Vercel 部署**：必须接入 Upstash Redis，否则复核任务数据会在容器回收后丢失
+- 设置方式：Vercel 控制台 → Storage → 创建 **Upstash Redis** 数据库 → 关联到项目后会自动注入 `KV_REST_API_URL` 和 `KV_REST_API_TOKEN`
+- 验证方式：访问 `GET /api/health`，返回的 `storage` 字段应为 `"upstash-redis"`（本地为 `"local-file"`）
+
 ## 后台最小鉴权
-- 后台页面 `/reviews` 以及复核处理接口 `PATCH /api/reviews/[id]` 已启用 Basic Auth
-- 本地临时账号默认读取 `apps/admin/.env.local`
-- 示例配置见 `apps/admin/.env.example`
+- 复核相关页面（如 `/reviews`）需先访问 **`/reviews/login`** 用账号密码登录；登录后使用 HttpOnly 会话 Cookie，避免浏览器对 Basic 与 `fetch` 行为不一致导致保存失败
+- 仍支持在请求头携带 Basic Auth（例如脚本调用 `PATCH /api/reviews/[id]`）
+- 本地账号读取 `apps/admin/.env.local`，示例见 `apps/admin/.env.example`；可选配置 `ADMIN_SESSION_SECRET` 作为会话签名密钥（生产环境建议与登录密码区分）
 - 当前本地临时账号：`admin / admin123456`
 - 正式上线前请务必替换为你自己的账号密码

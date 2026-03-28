@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listReviewTasks } from "@/lib/review-pool";
+import { adminLogoutAction } from "./actions";
 
 export default async function ReviewsPage() {
   const tasks = await listReviewTasks();
@@ -8,11 +9,23 @@ export default async function ReviewsPage() {
     <main className="min-h-screen bg-[var(--background)] p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-3xl bg-[var(--card)] p-8 shadow-sm ring-1 ring-[var(--border)]">
-          <p className="text-sm font-medium text-green-700">人工复核池</p>
-          <h1 className="mt-2 text-3xl font-bold text-gray-900">复核任务列表</h1>
-          <p className="mt-3 text-sm leading-6 text-gray-600">
-            当前已支持查看提问人、进入详情页处理，并给小程序侧提供“我的复核”筛选能力。
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-green-700">人工复核池</p>
+              <h1 className="mt-2 text-3xl font-bold text-gray-900">复核任务列表</h1>
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                当前已支持查看提问人、进入详情页处理，并给小程序侧提供“我的复核”筛选能力。
+              </p>
+            </div>
+            <form action={adminLogoutAction}>
+              <button
+                type="submit"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                退出登录
+              </button>
+            </form>
+          </div>
         </section>
 
         <section className="space-y-4">
