@@ -11,7 +11,7 @@ function isDevToolsEnvironment() {
 }
 
 function getDefaultOrigin() {
-  return isDevToolsEnvironment() ? LOCAL_API_ORIGIN : PRODUCTION_API_ORIGIN;
+  return PRODUCTION_API_ORIGIN;
 }
 
 function getApiBaseUrl() {
@@ -23,5 +23,6 @@ function getApiBaseUrl() {
 module.exports = {
   PRODUCTION_API_ORIGIN,
   LOCAL_API_ORIGIN,
+  isDevToolsEnvironment,
   getApiBaseUrl,
 };

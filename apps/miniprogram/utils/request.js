@@ -26,6 +26,20 @@ function attachRequesterPayload(data, requesterProfile) {
   };
 }
 
+function buildBasicAuthHeader(user, pass) {
+  try {
+    const raw = `${user}:${pass}`;
+    const bytes = [];
+    for (let i = 0; i < raw.length; i++) {
+      bytes.push(raw.charCodeAt(i));
+    }
+    const buffer = new Uint8Array(bytes).buffer;
+    return "Basic " + wx.arrayBufferToBase64(buffer);
+  } catch {
+    return null;
+  }
+}
+
 function request({ url, method = "GET", data, header = {} }) {
   return new Promise((resolve, reject) => {
     const app = getApp();
@@ -34,11 +48,16 @@ function request({ url, method = "GET", data, header = {} }) {
       app && typeof app.getRequesterProfile === "function"
         ? app.getRequesterProfile()
         : app?.globalData?.requesterProfile;
-    const requesterHeader = {
-      ...header,
-    };
 
-    if (requesterProfile?.requesterId) {
+    const requesterHeader = { ...header };
+
+    const supervisorAuth = wx.getStorageSync("supervisorAuth");
+    if (supervisorAuth && supervisorAuth.user && supervisorAuth.pass) {
+      const authHeader = buildBasicAuthHeader(supervisorAuth.user, supervisorAuth.pass);
+      if (authHeader) {
+        requesterHeader["Authorization"] = authHeader;
+      }
+    } else if (requesterProfile?.requesterId) {
       requesterHeader["x-requester-id"] = requesterProfile.requesterId;
     }
 
@@ -47,7 +66,7 @@ function request({ url, method = "GET", data, header = {} }) {
       method,
       data: attachRequesterPayload(data, requesterProfile),
       header: requesterHeader,
-      timeout: 10000,
+      timeout: 15000,
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data);

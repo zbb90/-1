@@ -1,28 +1,142 @@
-.title {
-  font-size: 40rpx;
+.page {
+  padding: 32rpx;
+  min-height: 100vh;
+  background: #f7f8fa;
+}
+
+/* 全局 card */
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+/* 用户身份卡片 */
+.profile-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.profile-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #15803d;
+  color: #ffffff;
+  font-size: 36rpx;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.subtitle {
-  margin-top: 12rpx;
-  color: #6b7280;
-  line-height: 1.6;
+.profile-info {
+  min-width: 0;
 }
 
+.profile-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-id {
+  font-size: 22rpx;
+  color: #9ca3af;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 4rpx;
+}
+
+.profile-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
+.role-badge {
+  border-radius: 999rpx;
+  padding: 6rpx 20rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.role-supervisor {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.role-specialist {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.settings-icon {
+  font-size: 40rpx;
+  color: #9ca3af;
+  line-height: 1;
+}
+
+/* 功能入口列表 */
 .entry-list {
-  margin-top: 24rpx;
   display: flex;
   flex-direction: column;
   gap: 20rpx;
 }
 
+.entry {
+  display: flex;
+  align-items: center;
+  padding: 28rpx 32rpx;
+  gap: 20rpx;
+}
+
+.entry-icon {
+  font-size: 48rpx;
+  width: 72rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .entry-title {
   font-size: 32rpx;
   font-weight: 600;
+  color: #111827;
 }
 
 .entry-desc {
-  margin-top: 12rpx;
-  color: #4b5563;
-  line-height: 1.7;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.entry-arrow {
+  font-size: 40rpx;
+  color: #9ca3af;
+  flex-shrink: 0;
+  line-height: 1;
 }

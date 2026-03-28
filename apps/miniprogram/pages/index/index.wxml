@@ -1,28 +1,61 @@
 <view class="page">
-  <view class="card">
-    <view class="title">稽核 AI 助手</view>
-    <view class="subtitle">一期首页三条主线已经预留。</view>
+
+  <!-- 用户身份卡片 -->
+  <view class="profile-card card" bindtap="goToSettings">
+    <view class="profile-left">
+      <view class="profile-avatar">{{displayName[0] || '?'}}</view>
+      <view class="profile-info">
+        <view class="profile-name">{{displayName}}</view>
+        <view class="profile-id">{{requesterId}}</view>
+      </view>
+    </view>
+    <view class="profile-right">
+      <view wx:if="{{isSupervisor}}" class="role-badge role-supervisor">主管</view>
+      <view wx:else class="role-badge role-specialist">专员</view>
+      <view class="settings-icon">›</view>
+    </view>
   </view>
 
+  <!-- 功能入口 -->
   <view class="entry-list">
     <view class="entry card" bindtap="goToRegularQuestion">
-      <view class="entry-title">常规问题</view>
-      <view class="entry-desc">是否扣分、扣几分、依据条款、条款解释</view>
+      <view class="entry-icon">📋</view>
+      <view class="entry-body">
+        <view class="entry-title">常规问题</view>
+        <view class="entry-desc">是否扣分、扣几分、依据条款、条款解释</view>
+      </view>
+      <view class="entry-arrow">›</view>
     </view>
 
     <view class="entry card" bindtap="goToOldItem">
-      <view class="entry-title">旧品比对</view>
-      <view class="entry-desc">图片 + 名称/备注，返回是否旧品</view>
+      <view class="entry-icon">🔍</view>
+      <view class="entry-body">
+        <view class="entry-title">旧品比对</view>
+        <view class="entry-desc">图片 + 名称/备注，返回是否旧品</view>
+      </view>
+      <view class="entry-arrow">›</view>
     </view>
 
     <view class="entry card" bindtap="goToExternalPurchase">
-      <view class="entry-title">外购查询</view>
-      <view class="entry-desc">文字检索可外购 / 不可外购</view>
+      <view class="entry-icon">🛒</view>
+      <view class="entry-body">
+        <view class="entry-title">外购查询</view>
+        <view class="entry-desc">文字检索可外购 / 不可外购</view>
+      </view>
+      <view class="entry-arrow">›</view>
     </view>
 
     <view class="entry card" bindtap="goToMyReviews">
-      <view class="entry-title">我的问题 / 我的复核</view>
-      <view class="entry-desc">查看处理中、已处理、待补充的任务状态</view>
+      <view class="entry-icon">📝</view>
+      <view class="entry-body">
+        <view class="entry-title">我的复核</view>
+        <view class="entry-desc">
+          <view wx:if="{{isSupervisor}}">主管模式：查看所有人的复核任务</view>
+          <view wx:else>查看处理中、已处理、待补充的任务状态</view>
+        </view>
+      </view>
+      <view class="entry-arrow">›</view>
     </view>
   </view>
+
 </view>

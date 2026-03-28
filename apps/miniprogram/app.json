@@ -8,7 +8,8 @@
     "pages/external-purchase/index",
     "pages/external-purchase/result",
     "pages/my-reviews/index",
-    "pages/my-reviews/detail"
+    "pages/my-reviews/detail",
+    "pages/settings/index"
   ],
   "window": {
     "navigationBarTitleText": "稽核 AI 助手",
