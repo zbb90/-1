@@ -38,9 +38,6 @@ export async function adminLoginAction(
   const next = nextRaw.startsWith("/") ? nextRaw : "/reviews";
 
   const creds = getAdminCredentials();
-  if (!creds.isConfigured) {
-    return { ok: false, message: "后台未配置账号密码。" };
-  }
 
   if (username !== creds.username || password !== creds.password) {
     return { ok: false, message: "账号或密码不正确。" };

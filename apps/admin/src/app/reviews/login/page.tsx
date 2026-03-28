@@ -9,9 +9,12 @@ export default async function ReviewsLoginPage({
   const raw = sp.next?.trim() ?? "";
   const defaultNext = raw.startsWith("/") ? raw : "/reviews";
 
+  const usingDefaults =
+    !process.env.ADMIN_BASIC_AUTH_USER || !process.env.ADMIN_BASIC_AUTH_PASSWORD;
+
   return (
     <main className="min-h-screen bg-[var(--background)] p-8">
-      <LoginForm defaultNext={defaultNext} />
+      <LoginForm defaultNext={defaultNext} usingDefaults={usingDefaults} />
     </main>
   );
 }

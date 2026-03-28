@@ -7,7 +7,7 @@ function getSessionSecret() {
   return (
     process.env.ADMIN_SESSION_SECRET?.trim() ||
     process.env.ADMIN_BASIC_AUTH_PASSWORD?.trim() ||
-    ""
+    "audit-ai-default-session-secret-2026"
   );
 }
 

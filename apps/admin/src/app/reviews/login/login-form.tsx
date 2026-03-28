@@ -3,7 +3,13 @@
 import { useActionState } from "react";
 import { adminLoginAction, type LoginFormState } from "../actions";
 
-export function LoginForm({ defaultNext }: { defaultNext: string }) {
+export function LoginForm({
+  defaultNext,
+  usingDefaults,
+}: {
+  defaultNext: string;
+  usingDefaults?: boolean;
+}) {
   const [state, formAction, pending] = useActionState<LoginFormState, FormData>(
     adminLoginAction,
     null,
@@ -18,9 +24,22 @@ export function LoginForm({ defaultNext }: { defaultNext: string }) {
         <p className="text-sm font-medium text-green-700">主管后台</p>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">登录复核后台</h1>
         <p className="mt-2 text-sm text-gray-600">
-          使用环境变量中配置的账号密码登录，浏览器会记住会话，避免保存复核结果时出现鉴权失败。
+          登录后浏览器会记住会话，避免保存复核结果时出现鉴权失败。
         </p>
       </div>
+
+      {usingDefaults ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">当前使用内置默认凭据</p>
+          <p className="mt-1">
+            账号：<code className="font-mono font-bold">admin</code>　密码：
+            <code className="font-mono font-bold">audit2026</code>
+          </p>
+          <p className="mt-1 text-xs text-amber-600">
+            如需自定义，请在 Vercel 后台设置 ADMIN_BASIC_AUTH_USER / ADMIN_BASIC_AUTH_PASSWORD。
+          </p>
+        </div>
+      ) : null}
 
       <input type="hidden" name="next" value={defaultNext} />
 
