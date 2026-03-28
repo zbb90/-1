@@ -1,0 +1,52 @@
+[
+  {
+    "name": "通用仓库未离地",
+    "input": {
+      "category": "储存与离地问题",
+      "issueTitle": "仓库物料没有离地",
+      "description": "仓库里面有原物料直接放在地上，没有离地5cm",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0018"
+  },
+  {
+    "name": "阁楼未离地优先具体规则",
+    "input": {
+      "category": "储存与离地问题",
+      "issueTitle": "门店阁楼物料未离地",
+      "description": "阁楼仓库里面有原物料直接放在地上，没有离地5cm",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0052"
+  },
+  {
+    "name": "解冻品破损",
+    "input": {
+      "category": "储存与离地问题",
+      "issueTitle": "解冻品破损",
+      "description": "榴莲果泥解冻后袋子破损漏液，门店未提前识别",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0114"
+  },
+  {
+    "name": "原物料超赏味期",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "原物料超赏味期",
+      "description": "开封物料超过最佳赏味期仍在使用",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0019"
+  },
+  {
+    "name": "篡改风味贴",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "门店撕旧贴新",
+      "description": "开封物料超出赏味期后撕掉旧风味贴，重新打印新的风味贴继续使用",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0010"
+  }
+]

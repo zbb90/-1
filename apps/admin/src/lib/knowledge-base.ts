@@ -256,6 +256,37 @@ function ruleEmphasizesGrounding(rule: RuleRow) {
   );
 }
 
+type SpecificSceneRuleConfig = {
+  label: string;
+  requestPattern: RegExp;
+  rulePattern: RegExp;
+  specificRuleIds?: string[];
+};
+
+const SPECIFIC_SCENE_RULES: SpecificSceneRuleConfig[] = [
+  {
+    label: "阁楼/楼梯",
+    requestPattern: /阁楼|楼梯/,
+    rulePattern: /阁楼|楼梯/,
+    specificRuleIds: ["R-0052"],
+  },
+  {
+    label: "平冷/凹槽",
+    requestPattern: /平冷|凹槽|冷藏柜/,
+    rulePattern: /平冷|凹槽|冷藏柜/,
+  },
+  {
+    label: "水浴/解冻",
+    requestPattern: /水浴|解冻|常温解冻/,
+    rulePattern: /水浴|解冻|常温解冻/,
+  },
+  {
+    label: "化学品专区",
+    requestPattern: /化学品|消毒剂|清洁剂|化学品专区/,
+    rulePattern: /化学品|消毒剂|清洁剂|化学品专区/,
+  },
+];
+
 function ruleEmphasizesPureExpiry(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
   return (
@@ -285,6 +316,25 @@ function calculateVectorBoost(vectorScore: number) {
     return 12;
   }
   return 6;
+}
+
+function ruleIsGenericGrounding(rule: RuleRow) {
+  return rule.rule_id === "R-0018";
+}
+
+function detectSpecificSceneMentions(combined: string) {
+  return SPECIFIC_SCENE_RULES.filter((item) => item.requestPattern.test(combined));
+}
+
+function ruleMatchesSpecificScene(
+  rule: RuleRow,
+  scene: SpecificSceneRuleConfig,
+) {
+  const blob = ruleTextBlob(rule);
+  return (
+    scene.rulePattern.test(blob) ||
+    Boolean(scene.specificRuleIds?.includes(rule.rule_id))
+  );
 }
 
 function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
@@ -396,6 +446,7 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
   const damageFocus = detectDamageFocus(combined);
   const labelTamperingFocus = detectLabelTamperingFocus(combined);
   const groundingFocus = detectGroundingFocus(combined);
+  const specificScenes = detectSpecificSceneMentions(combined);
 
   if (expiryFocus === "shangwei") {
     if (
@@ -473,6 +524,26 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
     ) {
       score -= 10;
       reasons.push("区分：当前未提到阁楼/楼梯，降低特定场景共识优先级");
+    }
+  }
+
+  if (specificScenes.length > 0) {
+    for (const scene of specificScenes) {
+      const matchedSpecificScene = ruleMatchesSpecificScene(rule, scene);
+
+      if (matchedSpecificScene) {
+        score += 24;
+        reasons.push(`区分：命中更具体场景「${scene.label}」，提升场景专属规则优先级`);
+      }
+
+      if (
+        groundingFocus &&
+        ruleIsGenericGrounding(rule) &&
+        !matchedSpecificScene
+      ) {
+        score -= 22;
+        reasons.push(`区分：当前已明确具体场景「${scene.label}」，降低通用未离地规则优先级`);
+      }
     }
   }
 

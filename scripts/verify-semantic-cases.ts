@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import regressionCases from "./semantic-regression-cases.json";
 
 async function main() {
   const rootDir = process.cwd();
@@ -8,42 +9,20 @@ async function main() {
     resolve(rootDir, "apps/admin/src/lib/knowledge-base.ts")
   );
 
-  const cases = [
-    {
-      name: "离地",
-      input: {
-        category: "储存与离地问题",
-        issueTitle: "仓库物料没有离地",
-        description: "仓库里面有原物料直接放在地上，没有离地5cm",
-        selfJudgment: "待人工确认",
-      },
-    },
-    {
-      name: "破损",
-      input: {
-        category: "储存与离地问题",
-        issueTitle: "解冻品破损",
-        description: "榴莲果泥解冻后袋子破损漏液，门店未提前识别",
-        selfJudgment: "待人工确认",
-      },
-    },
-    {
-      name: "赏味期",
-      input: {
-        category: "物料效期问题",
-        issueTitle: "原物料超赏味期",
-        description: "开封物料超过最佳赏味期仍在使用",
-        selfJudgment: "待人工确认",
-      },
-    },
-  ];
+  let failed = false;
 
-  for (const item of cases) {
+  for (const item of regressionCases) {
     const result = await matchRegularQuestion(item.input);
+    const actualRuleId = result.matched ? result.answer.ruleId : null;
+    const passed = actualRuleId === item.expectedRuleId;
+
     console.log(`CASE=${item.name}`);
     console.log(
       JSON.stringify(
         {
+          passed,
+          expectedRuleId: item.expectedRuleId,
+          actualRuleId,
           matched: result.matched,
           retrievalMode: result.debug.retrievalMode,
           fallbackReason: result.debug.fallbackReason,
@@ -60,6 +39,14 @@ async function main() {
         2,
       ),
     );
+
+    if (!passed) {
+      failed = true;
+    }
+  }
+
+  if (failed) {
+    throw new Error("存在未通过的语义回归用例。");
   }
 }
 
