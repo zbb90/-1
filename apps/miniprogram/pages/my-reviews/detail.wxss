@@ -63,3 +63,100 @@
   color: #6b7280;
   line-height: 1.7;
 }
+
+/* 状态通知块 */
+.status-notice-pending {
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+  border-left: 8rpx solid #f59e0b;
+}
+
+.status-notice-ai {
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+  border-left: 8rpx solid #3b82f6;
+}
+
+.status-notice-done {
+  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+  border-left: 8rpx solid #16a34a;
+}
+
+.notice-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+
+.notice-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.notice-desc {
+  margin-top: 10rpx;
+  font-size: 28rpx;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+/* AI 答案块 */
+.ai-answer-block {
+  margin-top: 20rpx;
+  background: #dbeafe;
+  border-radius: 16rpx;
+  padding: 20rpx;
+}
+
+.ai-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 10rpx;
+}
+
+.ai-label {
+  font-size: 26rpx;
+  color: #1d4ed8;
+  min-width: 140rpx;
+  flex-shrink: 0;
+}
+
+.ai-value {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.ai-explain {
+  margin-top: 14rpx;
+}
+
+.ai-explain-text {
+  font-size: 26rpx;
+  color: #1e40af;
+  line-height: 1.7;
+}
+
+/* 异议按钮 */
+.notice-actions {
+  margin-top: 24rpx;
+}
+
+.btn-dispute {
+  width: 100%;
+  background: #dc2626;
+  color: #ffffff;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  padding: 20rpx 0;
+  border: none;
+}
+
+.btn-dispute[disabled] {
+  background: #fca5a5;
+}
+
+/* 结论高亮 */
+.result-conclusion {
+  color: #15803d;
+  font-weight: 700;
+  font-size: 32rpx;
+}

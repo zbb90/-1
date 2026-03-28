@@ -177,6 +177,61 @@ export async function createReviewTask(params: {
   return persistNewTask(createBaseTask(params));
 }
 
+export async function createReviewTaskFromAnswer(params: {
+  type: ReviewTaskType;
+  request: RegularQuestionRequest | ExternalPurchaseRequest | OldItemRequest;
+  answer: object;
+  aiExplanation?: string;
+  storeCode?: string;
+  category?: string;
+  selfJudgment?: string;
+  description?: string;
+}) {
+  const req = params.request as RegularQuestionRequest &
+    ExternalPurchaseRequest &
+    OldItemRequest;
+  const now = new Date().toISOString();
+  const reqNorm = normalizeRequester({
+    requesterId: req.requesterId,
+    requesterName: req.requesterName,
+  });
+  const task: ReviewTask = {
+    id: buildId(),
+    type: params.type,
+    status: "AI已自动回答",
+    createdAt: now,
+    updatedAt: now,
+    requesterId: reqNorm.requesterId,
+    requester: reqNorm.requester,
+    storeCode: params.storeCode || req.storeCode || "-",
+    category: params.category || req.category || "-",
+    selfJudgment: params.selfJudgment || req.selfJudgment || "-",
+    description:
+      params.description ||
+      req.description ||
+      req.issueTitle ||
+      req.name ||
+      "-",
+    imageNotes: "-",
+    rejectReason: "-",
+    finalConclusion: "",
+    finalScore: "",
+    finalClause: "",
+    finalExplanation: "",
+    processor: "",
+    sourcePayload: JSON.stringify(
+      {
+        request: params.request,
+        autoAnswer: params.answer,
+        aiExplanation: params.aiExplanation,
+      },
+      null,
+      2,
+    ),
+  };
+  return persistNewTask(task);
+}
+
 export async function createReviewTaskFromRegularQuestion(
   request: RegularQuestionRequest,
   rejectReason: string,

@@ -1,16 +1,37 @@
 {
   "description": "稽核 AI 助手小程序骨架",
   "packOptions": {
-    "ignore": []
+    "ignore": [],
+    "include": []
   },
   "compileType": "miniprogram",
-  "libVersion": "3.6.5",
-  "appid": "touristappid",
+  "libVersion": "3.15.1",
+  "appid": "wx3b93c66e182cd02e",
   "projectname": "audit-ai-assistant-mini",
   "setting": {
     "es6": true,
     "postcss": true,
     "minified": true,
-    "enhance": true
-  }
+    "enhance": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "simulatorPluginLibVersion": {},
+  "editorSetting": {}
 }

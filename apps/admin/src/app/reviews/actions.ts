@@ -83,6 +83,7 @@ export async function saveReviewTaskAction(
 
   const allowed: ReviewTaskStatus[] = [
     "待处理",
+    "AI已自动回答",
     "已处理",
     "已加入知识库",
     "待补充",
@@ -112,4 +113,55 @@ export async function adminLogoutAction() {
   const cookieStore = await cookies();
   cookieStore.delete(ADMIN_SESSION_COOKIE);
   redirect("/reviews/login");
+}
+
+export async function saveAndSinkReviewTaskAction(
+  _prev: SaveReviewFormState,
+  formData: FormData,
+): Promise<SaveReviewFormState> {
+  if (!(await assertAdminSessionOrBasic())) {
+    return { ok: false, message: "登录已失效，请重新登录后台。" };
+  }
+
+  const id = String(formData.get("taskId") ?? "").trim();
+  if (!id) {
+    return { ok: false, message: "缺少任务编号。" };
+  }
+
+  const processor = String(formData.get("processor") ?? "").trim();
+  const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
+  const finalScore = String(formData.get("finalScore") ?? "").trim();
+  const finalClause = String(formData.get("finalClause") ?? "").trim();
+  const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
+
+  const updated = await updateReviewTask(id, {
+    status: "已加入知识库",
+    processor,
+    finalConclusion,
+    finalScore,
+    finalClause,
+    finalExplanation,
+  });
+
+  if (!updated) {
+    return { ok: false, message: "未找到对应复核任务。" };
+  }
+
+  try {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_ADMIN_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3003");
+
+    await fetch(`${baseUrl}/api/knowledge/sink`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId: id }),
+    });
+  } catch {
+    // 知识沉淀失败不阻断主流程，只记录
+  }
+
+  return { ok: true, message: "已保存并加入知识库。" };
 }

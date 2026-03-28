@@ -10,12 +10,70 @@
   </view>
 
   <view wx:elif="{{review}}" class="detail-stack">
+    <!-- 状态头部 -->
     <view class="card hero-card">
       <view class="hero-label">当前状态</view>
-      <view class="hero-title">{{review.status}}</view>
+      <view class="hero-title">{{statusLabel}}</view>
       <view class="hero-desc">{{review.type}}｜{{review.category}}</view>
     </view>
 
+    <!-- 待处理：主管处理中提示 -->
+    <view wx:if="{{review.status === '待处理'}}" class="card status-notice-pending">
+      <view class="notice-icon">⏳</view>
+      <view class="notice-title">主管正在处理</view>
+      <view class="notice-desc">您的问题已进入人工复核池，主管将尽快给出结论，请耐心等待。</view>
+    </view>
+
+    <!-- AI已自动回答：展示 AI 结论，并提供异议入口 -->
+    <view wx:if="{{review.status === 'AI已自动回答'}}" class="card status-notice-ai">
+      <view class="notice-icon">🤖</view>
+      <view class="notice-title">系统已给出参考答案</view>
+      <view class="notice-desc">以下是 AI 根据稽核规则自动生成的参考答案，供您参考。如有疑问，可点击下方按钮申请人工复核。</view>
+      <view wx:if="{{autoAnswer}}" class="ai-answer-block">
+        <view class="ai-row" wx:if="{{autoAnswer.verdict}}">
+          <text class="ai-label">判定结论：</text>
+          <text class="ai-value">{{autoAnswer.verdict}}</text>
+        </view>
+        <view class="ai-row" wx:if="{{autoAnswer.deductionScore !== undefined}}">
+          <text class="ai-label">建议扣分：</text>
+          <text class="ai-value">{{autoAnswer.deductionScore}} 分</text>
+        </view>
+        <view class="ai-row" wx:if="{{autoAnswer.clauseTitle}}">
+          <text class="ai-label">依据条款：</text>
+          <text class="ai-value">{{autoAnswer.clauseTitle}}</text>
+        </view>
+        <view class="ai-explain" wx:if="{{autoAnswer.aiExplanation}}">
+          <text class="ai-label">AI 解释：</text>
+          <text class="ai-explain-text">{{autoAnswer.aiExplanation}}</text>
+        </view>
+      </view>
+      <view class="notice-actions">
+        <button
+          class="btn-dispute"
+          loading="{{submittingDispute}}"
+          disabled="{{submittingDispute || disputeSubmitted}}"
+          bindtap="submitDispute"
+        >
+          {{disputeSubmitted ? '已申请人工复核' : '对答案有疑问，申请人工复核'}}
+        </button>
+      </view>
+    </view>
+
+    <!-- 待补充：需要用户补充信息 -->
+    <view wx:if="{{review.status === '待补充'}}" class="card status-notice-pending">
+      <view class="notice-icon">📋</view>
+      <view class="notice-title">需要补充信息</view>
+      <view class="notice-desc">主管需要您提供更多信息以便判断，请联系您的主管了解详情。</view>
+    </view>
+
+    <!-- 已处理 / 已加入知识库：展示结论卡片 -->
+    <view wx:if="{{review.status === '已处理' || review.status === '已加入知识库'}}" class="card status-notice-done">
+      <view class="notice-icon">✅</view>
+      <view class="notice-title">主管已处理</view>
+      <view class="notice-desc">以下是主管的最终处理结论。</view>
+    </view>
+
+    <!-- 原始问题 -->
     <view class="card">
       <view class="section-title">原始问题</view>
       <view class="detail-item">
@@ -26,17 +84,18 @@
         <view class="detail-label">问题描述</view>
         <view class="detail-desc">{{review.description}}</view>
       </view>
-      <view class="detail-item">
-        <view class="detail-label">系统拒答原因</view>
+      <view class="detail-item" wx:if="{{review.rejectReason && review.rejectReason !== '-'}}">
+        <view class="detail-label">拒答 / 复核原因</view>
         <view class="detail-desc">{{review.rejectReason}}</view>
       </view>
     </view>
 
-    <view class="card">
+    <!-- 处理结果（待处理时不展示或折叠） -->
+    <view class="card" wx:if="{{review.status !== '待处理'}}">
       <view class="section-title">处理结果</view>
       <view class="detail-item">
         <view class="detail-label">最终结论</view>
-        <view class="detail-value">{{review.finalConclusion || '暂未处理'}}</view>
+        <view class="detail-value result-conclusion">{{review.finalConclusion || '暂未处理'}}</view>
       </view>
       <view class="detail-item">
         <view class="detail-label">最终分值</view>

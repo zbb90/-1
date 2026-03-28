@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateRegularQuestionAiExplanation } from "@/lib/ai";
 import { matchRegularQuestion } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
-import { createReviewTaskFromRegularQuestion } from "@/lib/review-pool";
+import {
+  createReviewTaskFromAnswer,
+  createReviewTaskFromRegularQuestion,
+} from "@/lib/review-pool";
 import type { RegularQuestionRequest } from "@/lib/types";
 
 function validateBody(body: RegularQuestionRequest) {
@@ -76,14 +79,28 @@ export async function POST(request: NextRequest) {
       result.answer,
     );
 
+    const answerWithAI = { ...result.answer, aiExplanation };
+
+    const reviewTask = await createReviewTaskFromAnswer({
+      type: "常规问题",
+      request: payload,
+      answer: answerWithAI,
+      aiExplanation,
+      storeCode: payload.storeCode,
+      category: payload.category,
+      selfJudgment: payload.selfJudgment,
+      description: payload.description || payload.issueTitle,
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
         ...result,
         requestSnapshot,
-        answer: {
-          ...result.answer,
-          aiExplanation,
+        answer: answerWithAI,
+        reviewTask: {
+          id: reviewTask.id,
+          status: reviewTask.status,
         },
       },
     });

@@ -23,7 +23,32 @@ function isProtectedPath(request: NextRequest) {
   }
 
   if (
+    pathname === "/conversations" ||
+    pathname.startsWith("/conversations/")
+  ) {
+    return true;
+  }
+
+  if (
+    pathname === "/knowledge" ||
+    pathname.startsWith("/knowledge/")
+  ) {
+    return true;
+  }
+
+  if (
     (pathname === "/api/reviews" || pathname.startsWith("/api/reviews/")) &&
+    request.method !== "GET"
+  ) {
+    return true;
+  }
+
+  if (
+    (pathname === "/api/knowledge/sink" ||
+      pathname.startsWith("/api/knowledge/rules") ||
+      pathname.startsWith("/api/knowledge/consensus") ||
+      pathname.startsWith("/api/knowledge/external-purchases") ||
+      pathname.startsWith("/api/knowledge/old-items")) &&
     request.method !== "GET"
   ) {
     return true;
@@ -45,9 +70,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (isReviewsPagePath(request.nextUrl.pathname)) {
+  const pn = request.nextUrl.pathname;
+  const isPageRequest =
+    isReviewsPagePath(pn) ||
+    pn === "/conversations" ||
+    pn.startsWith("/conversations/") ||
+    pn === "/knowledge" ||
+    pn.startsWith("/knowledge/");
+
+  if (isPageRequest) {
     const login = new URL("/reviews/login", request.url);
-    login.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    login.searchParams.set(
+      "next",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
     return NextResponse.redirect(login);
   }
 
@@ -61,5 +97,15 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/reviews", "/reviews/:path*", "/api/reviews", "/api/reviews/:path*"],
+  matcher: [
+    "/reviews",
+    "/reviews/:path*",
+    "/conversations",
+    "/conversations/:path*",
+    "/knowledge",
+    "/knowledge/:path*",
+    "/api/reviews",
+    "/api/reviews/:path*",
+    "/api/knowledge/:path*",
+  ],
 };

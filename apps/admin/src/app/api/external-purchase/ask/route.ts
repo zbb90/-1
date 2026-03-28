@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateExternalPurchaseAiExplanation } from "@/lib/ai";
 import { matchExternalPurchase } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
-import { createReviewTaskFromExternalPurchase } from "@/lib/review-pool";
+import {
+  createReviewTaskFromAnswer,
+  createReviewTaskFromExternalPurchase,
+} from "@/lib/review-pool";
 import type { ExternalPurchaseRequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -53,13 +56,25 @@ export async function POST(request: NextRequest) {
       result.answer,
     );
 
+    const answerWithAI = { ...result.answer, aiExplanation };
+
+    const reviewTask = await createReviewTaskFromAnswer({
+      type: "外购查询",
+      request: body,
+      answer: answerWithAI,
+      aiExplanation: aiExplanation ?? undefined,
+      category: "外购与非认可物料/器具",
+      description: [body.name, body.description].filter(Boolean).join("｜"),
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
         ...result,
-        answer: {
-          ...result.answer,
-          aiExplanation,
+        answer: answerWithAI,
+        reviewTask: {
+          id: reviewTask.id,
+          status: reviewTask.status,
         },
       },
     });

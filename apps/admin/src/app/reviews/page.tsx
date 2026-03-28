@@ -18,6 +18,19 @@ export default async function ReviewsPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/conversations"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                问答日志
+              </Link>
+              <Link
+                href="/knowledge"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                知识库管理
+              </Link>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 href="/api/reviews/export?format=csv"
                 className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"

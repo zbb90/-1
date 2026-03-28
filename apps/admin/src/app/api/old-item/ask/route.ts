@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateOldItemAiExplanation } from "@/lib/ai";
 import { matchOldItem } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
-import { createReviewTaskFromOldItem } from "@/lib/review-pool";
+import {
+  createReviewTaskFromAnswer,
+  createReviewTaskFromOldItem,
+} from "@/lib/review-pool";
 import type { OldItemRequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -53,13 +56,25 @@ export async function POST(request: NextRequest) {
       result.answer,
     );
 
+    const answerWithAI = { ...result.answer, aiExplanation };
+
+    const reviewTask = await createReviewTaskFromAnswer({
+      type: "旧品比对",
+      request: body,
+      answer: answerWithAI,
+      aiExplanation: aiExplanation ?? undefined,
+      category: "旧品比对",
+      description: [body.name, body.remark].filter(Boolean).join("｜"),
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
         ...result,
-        answer: {
-          ...result.answer,
-          aiExplanation,
+        answer: answerWithAI,
+        reviewTask: {
+          id: reviewTask.id,
+          status: reviewTask.status,
         },
       },
     });

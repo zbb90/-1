@@ -29,12 +29,20 @@ export default async function ReviewDetailPage({
                 当前任务编号：{task.id}
               </p>
             </div>
-            <Link
-              href="/reviews"
-              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-gray-700"
-            >
-              返回列表
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href="/conversations"
+                className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-gray-700"
+              >
+                问答日志
+              </Link>
+              <Link
+                href="/reviews"
+                className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-gray-700"
+              >
+                复核池
+              </Link>
+            </div>
           </div>
         </section>
 

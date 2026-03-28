@@ -93,6 +93,7 @@ export type ReviewTaskType =
 
 export type ReviewTaskStatus =
   | "待处理"
+  | "AI已自动回答"
   | "已处理"
   | "已加入知识库"
   | "待补充";
