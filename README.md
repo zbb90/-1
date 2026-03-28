@@ -49,6 +49,12 @@ MODEL_NAME=qwen-plus
 ## 后台最小鉴权
 - 复核相关页面（如 `/reviews`）需先访问 **`/reviews/login`** 用账号密码登录；登录后使用 HttpOnly 会话 Cookie，避免浏览器对 Basic 与 `fetch` 行为不一致导致保存失败
 - 仍支持在请求头携带 Basic Auth（例如脚本调用 `PATCH /api/reviews/[id]`）
+- `GET /api/reviews` 与 `GET /api/reviews/[id]` 已收紧：主管后台可查看全部，小程序侧必须携带 `x-requester-id` 才能读取自己的复核记录
 - 本地账号读取 `apps/admin/.env.local`，示例见 `apps/admin/.env.example`；可选配置 `ADMIN_SESSION_SECRET` 作为会话签名密钥（生产环境建议与登录密码区分）
 - 当前本地临时账号：`admin / admin123456`
 - 正式上线前请务必替换为你自己的账号密码
+
+## 复核结论导出
+- 主管登录后台后，可在 `/reviews` 页面点击“导出复核结论”
+- 导出接口为 `GET /api/reviews/export?format=csv`
+- 当前会导出状态为“已处理”或“已加入知识库”的任务，便于后续整理并反哺 `data/templates`

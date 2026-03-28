@@ -17,14 +17,22 @@ export default async function ReviewsPage() {
                 当前已支持查看提问人、进入详情页处理，并给小程序侧提供“我的复核”筛选能力。
               </p>
             </div>
-            <form action={adminLogoutAction}>
-              <button
-                type="submit"
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href="/api/reviews/export?format=csv"
                 className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
               >
-                退出登录
-              </button>
-            </form>
+                导出复核结论
+              </a>
+              <form action={adminLogoutAction}>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                >
+                  退出登录
+                </button>
+              </form>
+            </div>
           </div>
         </section>
 

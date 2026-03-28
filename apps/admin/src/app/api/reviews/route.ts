@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRequesterIdFromRequest } from "@/lib/requester";
+import { getReviewReadScope } from "@/lib/review-access";
 import { listReviewTasks } from "@/lib/review-pool";
 
 export async function GET(request: NextRequest) {
   try {
+    const scope = await getReviewReadScope(request);
+    if (scope.kind === "unauthorized") {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: scope.message,
+        },
+        { status: 401 },
+      );
+    }
+
     const tasks = await listReviewTasks({
-      requesterId: getRequesterIdFromRequest(request),
+      requesterId: scope.requesterId,
     });
     return NextResponse.json({
       ok: true,

@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRequesterIdFromRequest } from "@/lib/requester";
+import { getReviewReadScope } from "@/lib/review-access";
 import { getReviewTaskById, updateReviewTask } from "@/lib/review-pool";
 import type { ReviewTaskStatus } from "@/lib/types";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const scope = await getReviewReadScope(request);
+    if (scope.kind === "unauthorized") {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: scope.message,
+        },
+        { status: 401 },
+      );
+    }
+
     const { id } = await context.params;
     const task = await getReviewTaskById(id, {
-      requesterId: getRequesterIdFromRequest(_request),
+      requesterId: scope.requesterId,
     });
 
     if (!task) {
