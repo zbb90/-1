@@ -5,7 +5,8 @@ import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
 import { getReviewTaskById, updateReviewTask } from "@/lib/review-pool";
 import { loadKnowledgeBase } from "@/lib/knowledge-base";
 import { appendCsvRow, readCsvHeaders } from "@/lib/csv-writer";
-import type { ReviewTask, ReviewTaskType } from "@/lib/types";
+import { upsertRuleVectors } from "@/lib/vector-store";
+import type { ReviewTask, ReviewTaskType, RuleRow } from "@/lib/types";
 
 function resolveTemplateDir() {
   const candidates = [
@@ -51,7 +52,10 @@ async function sinkToRules(templateDir: string, task: ReviewTask) {
   }
 
   await appendCsvRow(csvPath, headers, filteredRow);
-  return newId;
+  return {
+    newId,
+    row: filteredRow as unknown as RuleRow,
+  };
 }
 
 async function sinkToConsensus(templateDir: string, task: ReviewTask) {
@@ -150,7 +154,7 @@ function sinkDispatcher(
 ) {
   switch (type) {
     case "常规问题":
-      return sinkToRules(templateDir, task);
+      return sinkToRules(templateDir, task).then((result) => result.newId);
     case "外购查询":
       return sinkToExternalPurchases(templateDir, task);
     case "旧品比对":
@@ -207,8 +211,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const newId = await sinkDispatcher(task.type, templateDir, task);
+    let newId: string;
+    let newRuleRow: RuleRow | null = null;
+
+    if (task.type === "常规问题") {
+      const sinkResult = await sinkToRules(templateDir, task);
+      newId = sinkResult.newId;
+      newRuleRow = sinkResult.row;
+    } else {
+      newId = await sinkDispatcher(task.type, templateDir, task);
+    }
     await loadKnowledgeBase(true);
+
+    if (newRuleRow) {
+      const syncResult = await upsertRuleVectors([newRuleRow]);
+      if (!syncResult.ok) {
+        console.warn("rule vector sync skipped after sink", syncResult.reason);
+      }
+    }
 
     return NextResponse.json({
       ok: true,

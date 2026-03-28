@@ -86,6 +86,62 @@ export interface OldItemRequest extends RequesterPayload {
   remark?: string;
 }
 
+export interface SemanticRuleRecallCandidate {
+  ruleId: string;
+  category: string;
+  clauseTitle: string;
+  vectorScore: number;
+}
+
+export interface RegularQuestionAnswerPayload {
+  ruleId: string;
+  category: string;
+  shouldDeduct: string;
+  deductScore: string;
+  clauseNo: string;
+  clauseTitle: string;
+  clauseSnippet: string;
+  explanation: string;
+  source: string;
+  matchedReasons?: string[];
+  consensusKeywords?: string;
+  consensusApplicableScene?: string;
+}
+
+export interface RegularQuestionCandidatePayload {
+  ruleId: string;
+  category: string;
+  clauseNo: string;
+  clauseTitle: string;
+  score: number;
+  vectorScore?: number;
+  vectorBoost?: number;
+}
+
+export interface RegularQuestionMatchDebug {
+  retrievalMode: "semantic" | "fallback";
+  semanticEnabled: boolean;
+  queryText: string;
+  fallbackReason?: string;
+  recalled: SemanticRuleRecallCandidate[];
+  rerankedTop?: RegularQuestionCandidatePayload[];
+}
+
+export type RegularQuestionMatchResult =
+  | {
+      matched: false;
+      rejectReason: string;
+      candidates: RegularQuestionCandidatePayload[];
+      debug: RegularQuestionMatchDebug;
+    }
+  | {
+      matched: true;
+      topScore: number;
+      answer: RegularQuestionAnswerPayload;
+      candidates: RegularQuestionCandidatePayload[];
+      debug: RegularQuestionMatchDebug;
+    };
+
 export type ReviewTaskType =
   | "常规问题"
   | "旧品比对"

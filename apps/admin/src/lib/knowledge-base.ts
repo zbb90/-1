@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { readCsvAsObjects } from "@/lib/csv";
+import {
+  isSemanticSearchConfigured,
+  searchRuleVectors,
+} from "@/lib/vector-store";
 import type {
   ConsensusRow,
   ExternalPurchaseRequest,
@@ -8,6 +12,8 @@ import type {
   KnowledgeBase,
   OldItemRequest,
   OldItemRow,
+  RegularQuestionMatchDebug,
+  RegularQuestionMatchResult,
   RegularQuestionRequest,
   RuleRow,
 } from "@/lib/types";
@@ -202,6 +208,21 @@ function detectDamageFocus(combined: string) {
   );
 }
 
+function detectLabelTamperingFocus(combined: string) {
+  return /篡改风味贴|纂改风味贴|撕旧贴新|补打风味贴|重打风味贴|重新打印风味贴|更换旧的风味贴|换旧的风味贴|风味贴造假|改风味贴/.test(
+    combined,
+  );
+}
+
+function detectGroundingFocus(combined: string) {
+  const hasGroundingIntent =
+    /未离地|没离地|没有离地|不离地|未离地储存|离地不足|未按离地|未上架|没上架|没有上架|落地|直接放地上|放在地上|放地上|放地面|放在地面|贴地|接触地面/.test(
+      combined,
+    ) || (/离地/.test(combined) && /仓库|物料|包材|原物料|存放|储存/.test(combined));
+
+  return hasGroundingIntent;
+}
+
 function ruleEmphasizesMaterialDamage(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
   return (
@@ -221,6 +242,49 @@ function ruleEmphasizesLabelExpiryError(rule: RuleRow) {
     blob.includes("效期错误") ||
     blob.includes("风味贴")
   );
+}
+
+function ruleEmphasizesGrounding(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("未离地") ||
+    blob.includes("离地>5cm") ||
+    blob.includes("离地储存") ||
+    blob.includes("放置在阁楼") ||
+    blob.includes("楼梯上") ||
+    blob.includes("是否可行走活动")
+  );
+}
+
+function ruleEmphasizesPureExpiry(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("过期") ||
+    blob.includes("效期") ||
+    blob.includes("赏味") ||
+    blob.includes("废弃") ||
+    blob.includes("禁用标识") ||
+    blob.includes("风味贴")
+  );
+}
+
+function calculateVectorBoost(vectorScore: number) {
+  if (vectorScore >= 0.95) {
+    return 36;
+  }
+  if (vectorScore >= 0.9) {
+    return 30;
+  }
+  if (vectorScore >= 0.85) {
+    return 24;
+  }
+  if (vectorScore >= 0.8) {
+    return 18;
+  }
+  if (vectorScore >= 0.75) {
+    return 12;
+  }
+  return 6;
 }
 
 function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
@@ -330,6 +394,8 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
 
   const expiryFocus = detectMaterialExpiryFocus(combined);
   const damageFocus = detectDamageFocus(combined);
+  const labelTamperingFocus = detectLabelTamperingFocus(combined);
+  const groundingFocus = detectGroundingFocus(combined);
 
   if (expiryFocus === "shangwei") {
     if (
@@ -349,8 +415,13 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
     }
 
     if (rule.rule_id === "R-0010") {
-      score += 12;
-      reasons.push("区分：涉及超出赏味期后处置的关联规则");
+      if (labelTamperingFocus) {
+        score += 26;
+        reasons.push("区分：明确提到篡改/补打风味贴，更贴近篡改风味贴规则");
+      } else {
+        score -= 28;
+        reasons.push("区分：当前仅为超赏味期，降低篡改风味贴特殊条款优先级");
+      }
     }
   }
 
@@ -379,6 +450,29 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
     if (rule.rule_id === "R-0069" || ruleEmphasizesLabelExpiryError(rule)) {
       score -= 36;
       reasons.push("区分：描述聚焦破损，降低纯效期张贴错误类规则优先级");
+    }
+  }
+
+  if (groundingFocus) {
+    if (rule.rule_id === "R-0018") {
+      score += 58;
+      reasons.push("区分：描述聚焦未离地/落地存放，与通用离地储存规则最一致");
+    } else if (ruleEmphasizesGrounding(rule)) {
+      score += 34;
+      reasons.push("区分：描述聚焦未离地/落地存放，提升离地储存类规则优先级");
+    }
+
+    if (ruleEmphasizesPureExpiry(rule) && !ruleEmphasizesGrounding(rule)) {
+      score -= 44;
+      reasons.push("区分：当前问题核心是未离地，降低纯效期/过期类规则优先级");
+    }
+
+    if (
+      rule.rule_id === "R-0052" &&
+      !/阁楼|楼梯/.test(combined)
+    ) {
+      score -= 10;
+      reasons.push("区分：当前未提到阁楼/楼梯，降低特定场景共识优先级");
     }
   }
 
@@ -487,30 +581,100 @@ export async function getKnowledgeSummary() {
   };
 }
 
-export async function matchRegularQuestion(request: RegularQuestionRequest) {
+export async function matchRegularQuestion(
+  request: RegularQuestionRequest,
+): Promise<RegularQuestionMatchResult> {
   const knowledgeBase = await loadKnowledgeBase();
-  const candidates = knowledgeBase.rules
+  const semanticResult = await searchRuleVectors(request);
+  const semanticRuleIds = semanticResult.hits.map((item) => item.ruleId);
+  const semanticRuleLookup = new Set(semanticRuleIds);
+  const semanticRules = knowledgeBase.rules.filter((rule) =>
+    semanticRuleLookup.has(rule.rule_id),
+  );
+  const vectorScoreByRule = new Map(
+    semanticResult.hits.map((item) => [item.ruleId, item.vectorScore]),
+  );
+  const usingSemanticRecall = semanticRules.length > 0;
+  const candidatePool = usingSemanticRecall ? semanticRules : knowledgeBase.rules;
+  const retrievalMode: RegularQuestionMatchDebug["retrievalMode"] =
+    usingSemanticRecall ? "semantic" : "fallback";
+  const debug: RegularQuestionMatchDebug = {
+    retrievalMode,
+    semanticEnabled: isSemanticSearchConfigured(),
+    queryText: semanticResult.queryText,
+    fallbackReason: usingSemanticRecall
+      ? undefined
+      : semanticResult.fallbackReason || "语义召回未返回候选，回退整表扫描。",
+    recalled: semanticResult.hits,
+  };
+
+  const candidates = candidatePool
     .map((rule) => {
-      const { score, reasons } = scoreRuleMatch(rule, request);
-      return { rule, score, reasons };
+      const { score: baseScore, reasons: baseReasons } = scoreRuleMatch(
+        rule,
+        request,
+      );
+      const vectorScore = vectorScoreByRule.get(rule.rule_id);
+      const vectorBoost =
+        vectorScore === undefined ? undefined : calculateVectorBoost(vectorScore);
+      const score = baseScore + (vectorBoost ?? 0);
+      const reasons =
+        vectorScore === undefined
+          ? baseReasons
+          : [
+              `语义召回命中：相似度 ${vectorScore.toFixed(3)}，向量加权 +${vectorBoost}`,
+              ...baseReasons,
+            ];
+      return { rule, score, reasons, vectorScore, vectorBoost };
     })
     .filter((item) => item.score >= 20)
     .sort((left, right) => right.score - left.score);
 
   if (candidates.length === 0) {
+    console.info("[regular-question-match]", {
+      retrievalMode: debug.retrievalMode,
+      fallbackReason: debug.fallbackReason,
+      queryText: debug.queryText,
+      recalled: debug.recalled,
+      rerankedTop: [],
+      matched: false,
+    });
     return {
       matched: false,
       rejectReason: "未在规则表中找到足够明确的依据，建议进入人工复核池。",
       candidates: [],
+      debug: {
+        ...debug,
+        rerankedTop: [],
+      },
     };
   }
 
   const best = candidates[0];
+  const rerankedTop = candidates.slice(0, 5).map((item) => ({
+    ruleId: item.rule.rule_id,
+    category: item.rule.问题分类,
+    clauseNo: item.rule.条款编号,
+    clauseTitle: item.rule.条款标题,
+    score: item.score,
+    vectorScore: item.vectorScore,
+    vectorBoost: item.vectorBoost,
+  }));
   const linkedConsensus = best.rule.共识来源
     ? knowledgeBase.consensus.find(
         (item) => item.consensus_id === best.rule.共识来源,
       )
     : undefined;
+
+  console.info("[regular-question-match]", {
+    retrievalMode: debug.retrievalMode,
+    fallbackReason: debug.fallbackReason,
+    queryText: debug.queryText,
+    recalled: debug.recalled,
+    rerankedTop,
+    matched: true,
+    bestRuleId: best.rule.rule_id,
+  });
 
   return {
     matched: true,
@@ -531,13 +695,11 @@ export async function matchRegularQuestion(request: RegularQuestionRequest) {
       consensusKeywords: linkedConsensus?.关键词?.trim() || "",
       consensusApplicableScene: linkedConsensus?.适用场景?.trim() || "",
     },
-    candidates: candidates.slice(0, 5).map((item) => ({
-      ruleId: item.rule.rule_id,
-      category: item.rule.问题分类,
-      clauseNo: item.rule.条款编号,
-      clauseTitle: item.rule.条款标题,
-      score: item.score,
-    })),
+    candidates: rerankedTop,
+    debug: {
+      ...debug,
+      rerankedTop,
+    },
   };
 }
 

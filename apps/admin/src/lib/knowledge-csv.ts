@@ -37,7 +37,18 @@ export function getCsvPath(table: KbTableName): string | null {
   return resolve(dir, CSV_FILES[table]);
 }
 
-export async function readTable(table: KbTableName): Promise<Record<string, string>[]> {
+export async function readTable(table: "rules"): Promise<RuleRow[]>;
+export async function readTable(table: "consensus"): Promise<ConsensusRow[]>;
+export async function readTable(
+  table: "external-purchases",
+): Promise<ExternalPurchaseRow[]>;
+export async function readTable(table: "old-items"): Promise<OldItemRow[]>;
+export async function readTable(
+  table: KbTableName,
+): Promise<RuleRow[] | ConsensusRow[] | ExternalPurchaseRow[] | OldItemRow[]>;
+export async function readTable(
+  table: KbTableName,
+): Promise<RuleRow[] | ConsensusRow[] | ExternalPurchaseRow[] | OldItemRow[]> {
   const path = getCsvPath(table);
   if (!path) return [];
   switch (table) {
@@ -91,7 +102,7 @@ export async function patchRowStatus(
   if (!path) return null;
 
   const headers = await readCsvHeaders(path);
-  const rows = (await readTable(table)) as Record<string, string>[];
+  const rows = (await readTable(table)) as unknown as Record<string, string>[];
   const field = idField(table);
   const idx = rows.findIndex((r) => r[field] === id);
   if (idx === -1) return null;
@@ -110,7 +121,7 @@ export async function appendRow(
   if (!path) throw new Error("当前部署环境无本地 CSV 文件，无法写入。");
 
   const headers = await readCsvHeaders(path);
-  const rows = (await readTable(table)) as Record<string, string>[];
+  const rows = (await readTable(table)) as unknown as Record<string, string>[];
 
   const field = idField(table);
   if (!row[field]) {

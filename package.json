@@ -9,6 +9,12 @@
   "scripts": {
     "dev:admin": "npm run dev --workspace @audit-ai/admin",
     "lint:admin": "npm run lint --workspace @audit-ai/admin",
-    "build:admin": "npm run build --workspace @audit-ai/admin"
+    "build:admin": "npm run build --workspace @audit-ai/admin",
+    "sync:rule-embeddings": "tsx --tsconfig apps/admin/tsconfig.json scripts/sync-rule-embeddings.ts",
+    "sync:rule-embeddings:rebuild": "tsx --tsconfig apps/admin/tsconfig.json scripts/sync-rule-embeddings.ts --rebuild",
+    "verify:semantic-cases": "tsx --tsconfig apps/admin/tsconfig.json scripts/verify-semantic-cases.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
   }
 }
