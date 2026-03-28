@@ -154,12 +154,34 @@ function createBaseTask(params: {
   return task;
 }
 
+async function persistNewTask(task: ReviewTask) {
+  const tasks = await readReviewTasks();
+  tasks.unshift(task);
+  await writeReviewTasks(tasks);
+  return task;
+}
+
+export async function createReviewTask(params: {
+  type: ReviewTaskType;
+  requesterId?: string;
+  requesterName?: string;
+  requester?: string;
+  storeCode?: string;
+  category?: string;
+  selfJudgment?: string;
+  description?: string;
+  imageNotes?: string;
+  rejectReason: string;
+  sourcePayload: object;
+}) {
+  return persistNewTask(createBaseTask(params));
+}
+
 export async function createReviewTaskFromRegularQuestion(
   request: RegularQuestionRequest,
   rejectReason: string,
 ) {
-  const tasks = await readReviewTasks();
-  const task = createBaseTask({
+  return createReviewTask({
     type: "常规问题",
     requesterId: request.requesterId,
     requesterName: request.requesterName,
@@ -170,17 +192,13 @@ export async function createReviewTaskFromRegularQuestion(
     rejectReason,
     sourcePayload: request,
   });
-  tasks.unshift(task);
-  await writeReviewTasks(tasks);
-  return task;
 }
 
 export async function createReviewTaskFromExternalPurchase(
   request: ExternalPurchaseRequest,
   rejectReason: string,
 ) {
-  const tasks = await readReviewTasks();
-  const task = createBaseTask({
+  return createReviewTask({
     type: "外购查询",
     requesterId: request.requesterId,
     requesterName: request.requesterName,
@@ -189,17 +207,13 @@ export async function createReviewTaskFromExternalPurchase(
     rejectReason,
     sourcePayload: request,
   });
-  tasks.unshift(task);
-  await writeReviewTasks(tasks);
-  return task;
 }
 
 export async function createReviewTaskFromOldItem(
   request: OldItemRequest,
   rejectReason: string,
 ) {
-  const tasks = await readReviewTasks();
-  const task = createBaseTask({
+  return createReviewTask({
     type: "旧品比对",
     requesterId: request.requesterId,
     requesterName: request.requesterName,
@@ -208,9 +222,6 @@ export async function createReviewTaskFromOldItem(
     rejectReason,
     sourcePayload: request,
   });
-  tasks.unshift(task);
-  await writeReviewTasks(tasks);
-  return task;
 }
 
 export async function listReviewTasks(filters?: { requesterId?: string }) {

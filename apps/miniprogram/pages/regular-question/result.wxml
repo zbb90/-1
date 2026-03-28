@@ -71,6 +71,24 @@
       </view>
     </view>
 
+    <view class="card">
+      <view class="section-title">人工复核</view>
+      <view class="detail-desc">
+        如果你认为当前自动判定不准确，可以提交人工复核，主管会在 PC 后台处理并同步结果。
+      </view>
+      <view wx:if="{{reviewTask}}" class="review-tip">
+        已提交人工复核：{{reviewTask.id}}｜{{reviewTask.status}}
+      </view>
+      <button
+        class="primary-button"
+        bindtap="submitManualReview"
+        loading="{{submittingReview}}"
+        disabled="{{submittingReview}}"
+      >
+        {{reviewTask ? "查看复核详情" : "结果不对，提交人工复核"}}
+      </button>
+    </view>
+
     <button class="secondary-button" bindtap="goBack">返回修改问题</button>
   </view>
 

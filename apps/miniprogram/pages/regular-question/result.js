@@ -1,3 +1,5 @@
+const { request } = require("../../utils/request");
+
 Page({
   data: {
     matched: false,
@@ -5,8 +7,10 @@ Page({
     answer: null,
     candidates: [],
     reviewTask: null,
+    requestSnapshot: null,
     statusText: "无依据",
     scoreText: "待人工确认",
+    submittingReview: false,
   },
 
   onLoad(options) {
@@ -29,6 +33,7 @@ Page({
         answer,
         candidates: parsed.candidates || [],
         reviewTask: parsed.reviewTask || null,
+        requestSnapshot: parsed.requestSnapshot || null,
         statusText,
         scoreText,
       });
@@ -53,5 +58,63 @@ Page({
     wx.navigateTo({
       url: `/pages/my-reviews/detail?id=${reviewId}`,
     });
+  },
+
+  async submitManualReview() {
+    if (this.data.submittingReview) {
+      return;
+    }
+
+    if (this.data.reviewTask?.id) {
+      this.goToReviewDetail();
+      return;
+    }
+
+    if (!this.data.requestSnapshot) {
+      wx.showToast({
+        title: "缺少原始问题信息，请返回重新提交",
+        icon: "none",
+      });
+      return;
+    }
+
+    this.setData({ submittingReview: true });
+
+    try {
+      const response = await request({
+        url: "/regular-question/review",
+        method: "POST",
+        data: {
+          ...this.data.requestSnapshot,
+          answer: this.data.answer,
+          candidates: this.data.candidates,
+        },
+      });
+
+      const reviewTask = response?.data?.reviewTask || null;
+      if (!reviewTask?.id) {
+        throw new Error("人工复核任务创建失败");
+      }
+
+      this.setData({ reviewTask });
+
+      wx.showToast({
+        title: "已提交人工复核",
+        icon: "success",
+      });
+
+      setTimeout(() => {
+        wx.navigateTo({
+          url: `/pages/my-reviews/detail?id=${reviewTask.id}`,
+        });
+      }, 300);
+    } catch (error) {
+      wx.showToast({
+        title: error?.message || "提交人工复核失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({ submittingReview: false });
+    }
   },
 });

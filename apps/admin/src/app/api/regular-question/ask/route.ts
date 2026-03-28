@@ -23,6 +23,15 @@ export async function POST(request: NextRequest) {
       request,
       (await request.json()) as RegularQuestionRequest,
     );
+    const requestSnapshot = {
+      storeCode: payload.storeCode,
+      category: payload.category,
+      selfJudgment: payload.selfJudgment,
+      issueTitle: payload.issueTitle,
+      description: payload.description,
+      requesterId: payload.requesterId,
+      requesterName: payload.requesterName,
+    };
     const errorMessage = validateBody(payload);
 
     if (errorMessage) {
@@ -49,6 +58,7 @@ export async function POST(request: NextRequest) {
         data: {
           ...result,
           rejectReason,
+          requestSnapshot,
           reviewTask: {
             id: reviewTask.id,
             status: reviewTask.status,
@@ -70,6 +80,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       data: {
         ...result,
+        requestSnapshot,
         answer: {
           ...result.answer,
           aiExplanation,

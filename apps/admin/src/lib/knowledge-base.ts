@@ -196,6 +196,33 @@ function ruleEmphasizesShangweiWindow(rule: RuleRow) {
   );
 }
 
+function detectDamageFocus(combined: string) {
+  return /破损|破口|裂口|裂开|漏液|漏汁|漏包|胀包|包装破|袋子破|盒子破|破袋/.test(
+    combined,
+  );
+}
+
+function ruleEmphasizesMaterialDamage(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("原物料破损") ||
+    blob.includes("出现破损") ||
+    blob.includes("破损，进行扣分") ||
+    blob.includes("物料本身") ||
+    blob.includes("包装破损")
+  );
+}
+
+function ruleEmphasizesLabelExpiryError(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("张贴了解冻效期") ||
+    blob.includes("开封效期") ||
+    blob.includes("效期错误") ||
+    blob.includes("风味贴")
+  );
+}
+
 function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
   const description = normalizeText(request.description);
   const issueTitle = normalizeText(request.issueTitle);
@@ -302,6 +329,7 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
   }
 
   const expiryFocus = detectMaterialExpiryFocus(combined);
+  const damageFocus = detectDamageFocus(combined);
 
   if (expiryFocus === "shangwei") {
     if (
@@ -339,6 +367,18 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
     if (ruleEmphasizesDiscardDeadline(rule)) {
       score += 24;
       reasons.push("区分：规则条文含废弃时间/超废弃，与当前表述更一致");
+    }
+  }
+
+  if (damageFocus) {
+    if (rule.rule_id === "R-0114" || ruleEmphasizesMaterialDamage(rule)) {
+      score += 46;
+      reasons.push("区分：描述聚焦破损/漏液，更贴近原物料破损类共识");
+    }
+
+    if (rule.rule_id === "R-0069" || ruleEmphasizesLabelExpiryError(rule)) {
+      score -= 36;
+      reasons.push("区分：描述聚焦破损，降低纯效期张贴错误类规则优先级");
     }
   }
 
