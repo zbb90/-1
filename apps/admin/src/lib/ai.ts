@@ -17,6 +17,9 @@ type RegularQuestionAnswer = {
   clauseSnippet: string;
   explanation: string;
   source: string;
+  matchedReasons?: string[];
+  consensusKeywords?: string;
+  consensusApplicableScene?: string;
 };
 
 type ExternalPurchaseAnswer = {
@@ -65,13 +68,13 @@ async function requestDashScopeExplanation(prompt: string) {
       },
       body: JSON.stringify({
         model: getModelName(),
-        temperature: 0.2,
-        max_tokens: 220,
+        temperature: 0,
+        max_tokens: 260,
         messages: [
           {
             role: "system",
             content:
-              "你是茶饮稽核助手。你只能依据给定材料解释结论，禁止编造新规则。输出中文，简洁、明确、适合一线门店人员阅读。",
+              "你是茶饮稽核助手。你只能根据用户提供的「规则命中结果」中的条款标题、条款片段、原始解释、判定结论、扣分分值、共识关键词与适用场景来组织语言，禁止编造共识文件中未出现的流程、场景、例外或结论。若用户描述与条款文字不完全一致，仍以条款与判定结论为准。输出中文，简洁、适合一线阅读。",
           },
           {
             role: "user",
@@ -106,12 +109,34 @@ async function requestDashScopeExplanation(prompt: string) {
   }
 }
 
+function formatMatchedReasons(reasons?: string[]) {
+  if (!reasons?.length) {
+    return "无";
+  }
+  return reasons.join("；");
+}
+
+function buildDeterministicRegularQuestionExplanation(
+  answer: RegularQuestionAnswer,
+) {
+  const conclusion = normalizeText(answer.shouldDeduct);
+  const score = normalizeText(answer.deductScore);
+  return `本条命中「${normalizeText(answer.clauseTitle)}」。共识要点见条款解释：${normalizeText(answer.explanation)}。系统判定结论为「${conclusion}」，对应扣分分值为「${score}」。请严格按稽核共识与现场情况执行；如需个案判断请走人工复核。`;
+}
+
 export async function generateRegularQuestionAiExplanation(
   request: RegularQuestionRequest,
   answer: RegularQuestionAnswer,
 ) {
-  return requestDashScopeExplanation(`
-请把下面的稽核命中结果整理成给门店同学看的简短解释。
+  const conclusion = normalizeText(answer.shouldDeduct);
+  const rulesBlock = `
+【硬性对齐，必须遵守】
+- 「判定结论」字段为：${conclusion}。
+- 若判定结论为「是」：全文必须体现需要按规则扣分或需记录扣分情形，禁止写「不扣分」「本次不扣分」「不予扣分」等相反结论。
+- 若判定结论为「否」：必须体现不扣分或仅提醒等与不扣分一致的含义，禁止写「应扣分」「需要扣分」等相反结论。
+- 若判定结论为「按场景判定」：不得擅自给出「一定不扣分」或「一定扣分」的终局结论；应说明须结合现场与共识条款核对，必要时人工复核。
+- 禁止编造「水浴/平冷/转移」等流程细节，除非这些词出现在下面的「条款片段」或「原始解释」中。
+- 优先复述「原始解释」中的共识逻辑；可结合用户描述点出现场，但不得与判定结论矛盾。
 
 用户提交信息：
 - 问题分类：${normalizeText(request.category)}
@@ -119,22 +144,30 @@ export async function generateRegularQuestionAiExplanation(
 - 问题描述：${normalizeText(request.description)}
 - 自行判断：${normalizeText(request.selfJudgment)}
 
-规则命中结果：
-- 判定结论：${normalizeText(answer.shouldDeduct)}
+规则命中结果（稽核共识与规则表）：
+- 判定结论：${conclusion}
 - 扣分分值：${normalizeText(answer.deductScore)}
 - 条款编号：${normalizeText(answer.clauseNo)}
 - 条款标题：${normalizeText(answer.clauseTitle)}
 - 条款片段：${normalizeText(answer.clauseSnippet)}
-- 原始解释：${normalizeText(answer.explanation)}
+- 原始解释（共识正文）：${normalizeText(answer.explanation)}
+- 共识关键词：${normalizeText(answer.consensusKeywords)}
+- 适用场景：${normalizeText(answer.consensusApplicableScene)}
 - 引用来源：${normalizeText(answer.source)}
+- 规则命中原因：${formatMatchedReasons(answer.matchedReasons)}
 
 输出要求：
-1. 只依据以上信息，不补充未知规则。
-2. 先说结论，再说原因，最后给一个简短整改建议。
-3. 控制在 3 句话以内，80 到 150 字。
-4. 不要使用标题、编号、Markdown。
-5. 若涉及物料效期，用语需区分「赏味期/最佳赏味期」与「废弃时间/超废弃」，不要混用；命中条款若只对应其中一类，只围绕该类说明。
-`);
+1. 用 3 句以内、共 90～180 字，先说与判定结论一致的一句话，再依据「原始解释」压缩说明理由，最后一句给可执行建议。
+2. 不要使用标题、编号、Markdown。
+3. 若涉及效期，区分「赏味期」与「废弃时间」，且仅当条款中出现时才写。
+`;
+
+  const llm = await requestDashScopeExplanation(rulesBlock);
+  if (llm) {
+    return llm;
+  }
+
+  return buildDeterministicRegularQuestionExplanation(answer);
 }
 
 export async function generateExternalPurchaseAiExplanation(

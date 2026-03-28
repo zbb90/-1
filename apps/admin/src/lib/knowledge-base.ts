@@ -528,6 +528,8 @@ export async function matchRegularQuestion(request: RegularQuestionRequest) {
         ? `${linkedConsensus.标题} / ${linkedConsensus.来源文件}`
         : best.rule.条款标题,
       matchedReasons: best.reasons,
+      consensusKeywords: linkedConsensus?.关键词?.trim() || "",
+      consensusApplicableScene: linkedConsensus?.适用场景?.trim() || "",
     },
     candidates: candidates.slice(0, 5).map((item) => ({
       ruleId: item.rule.rule_id,
