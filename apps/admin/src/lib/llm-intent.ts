@@ -1,7 +1,4 @@
-import type {
-  RegularQuestionIntentParse,
-  RegularQuestionRequest,
-} from "@/lib/types";
+import type { RegularQuestionIntentParse, RegularQuestionRequest } from "@/lib/types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -76,7 +73,9 @@ function buildSummary(intent: Omit<RegularQuestionIntentParse, "summary">) {
   ].join(" | ");
 }
 
-function buildHeuristicIntent(request: RegularQuestionRequest): RegularQuestionIntentParse {
+function buildHeuristicIntent(
+  request: RegularQuestionRequest,
+): RegularQuestionIntentParse {
   const combined = [
     normalizeText(request.issueTitle),
     normalizeText(request.description),
@@ -204,7 +203,8 @@ export async function analyzeRegularQuestionIntent(
   }
 
   const llmIntent = {
-    normalizedCategory: normalizeText(llmResult.normalizedCategory) || heuristic.normalizedCategory,
+    normalizedCategory:
+      normalizeText(llmResult.normalizedCategory) || heuristic.normalizedCategory,
     sceneTags: mergeUnique(heuristic.sceneTags, llmResult.sceneTags ?? []),
     objectTags: mergeUnique(heuristic.objectTags, llmResult.objectTags ?? []),
     issueTags: mergeUnique(heuristic.issueTags, llmResult.issueTags ?? []),

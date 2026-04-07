@@ -16,7 +16,8 @@ function resolveAdminCwd() {
   const current = process.cwd();
   const candidates = [current, resolve(current, "apps/admin")];
   return (
-    candidates.find((dir) => existsSync(resolve(dir, "../../data/templates"))) ?? current
+    candidates.find((dir) => existsSync(resolve(dir, "../../data/templates"))) ??
+    current
   );
 }
 

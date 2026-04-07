@@ -272,7 +272,9 @@ function ruleAllowsReminderOrVerification(rule: RuleRow) {
 
 function ruleEmphasizesStorageDiscard(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
-  return blob.includes("下架物料") || blob.includes("禁用标识") || blob.includes("仓库内");
+  return (
+    blob.includes("下架物料") || blob.includes("禁用标识") || blob.includes("仓库内")
+  );
 }
 
 function ruleEmphasizesMachineFailure(rule: RuleRow) {
@@ -345,12 +347,18 @@ function applyIntentSignalScore(
     }
   }
 
-  if (intent.sceneTags.includes("私人物品区") && ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
+  if (
+    intent.sceneTags.includes("私人物品区") &&
+    ruleEmphasizesPrivateAreaOrPersonalUse(rule)
+  ) {
     score += 18;
     scoreReasons.push("意图理解：明确是私人物品区场景");
   }
 
-  if (intent.objectTags.includes("原物料") && ruleEmphasizesGenericMaterialExpiry(rule)) {
+  if (
+    intent.objectTags.includes("原物料") &&
+    ruleEmphasizesGenericMaterialExpiry(rule)
+  ) {
     score += 12;
     scoreReasons.push("意图理解：对象为原物料，提升通用物料效期规则");
   }
@@ -393,7 +401,9 @@ function applyIntentSignalScore(
 
     if (ruleEmphasizesStorageDiscard(rule) && !intent.sceneTags.includes("仓储区")) {
       score -= 24;
-      scoreReasons.push("意图理解：当前不是仓库下架物料场景，降低禁用标识/下架物料规则");
+      scoreReasons.push(
+        "意图理解：当前不是仓库下架物料场景，降低禁用标识/下架物料规则",
+      );
     }
   }
 
@@ -406,7 +416,10 @@ function applyIntentSignalScore(
     scoreReasons.push("意图理解：未提到效期机故障或报修，降低设备故障特例优先级");
   }
 
-  if (intent.exclusionTags.includes("可提醒") && ruleAllowsReminderOrVerification(rule)) {
+  if (
+    intent.exclusionTags.includes("可提醒") &&
+    ruleAllowsReminderOrVerification(rule)
+  ) {
     score += 8;
     scoreReasons.push("意图理解：用户倾向提醒/核实，提升不扣分或按场景判定规则");
   }
@@ -618,7 +631,8 @@ function scoreRuleMatch(
   const privateAreaFocus = detectPrivateAreaFocus(combined);
   const materialIngredientFocus = detectMaterialIngredientFocus(combined);
   const specificScenes = detectSpecificSceneMentions(combined);
-  const hasExpiryIssue = /无效期|效期缺失|过期/.test(combined) || expiryFocus !== "neutral";
+  const hasExpiryIssue =
+    /无效期|效期缺失|过期/.test(combined) || expiryFocus !== "neutral";
   const machineFailureMentioned = /效期机|打印机|报修|机器坏|设备坏/.test(combined);
   const mislabeledMarkerFocus = /贴错|错贴|贴成|先用标识|禁用标识/.test(combined);
 
@@ -678,7 +692,9 @@ function scoreRuleMatch(
   if (damageFocus && hasExpiryIssue && storageAreaFocus) {
     if (rule.rule_id === "R-0064") {
       score += 24;
-      reasons.push("区分：仓储区原物料同时出现效期问题与附带破损，优先按物料无效期处理");
+      reasons.push(
+        "区分：仓储区原物料同时出现效期问题与附带破损，优先按物料无效期处理",
+      );
     }
 
     if (rule.rule_id === "R-0114") {
@@ -728,16 +744,24 @@ function scoreRuleMatch(
   if (storageAreaFocus && (expiryFocus !== "neutral" || materialIngredientFocus)) {
     if (rule.rule_id === "R-0064" || ruleEmphasizesGenericMaterialExpiry(rule)) {
       score += 30;
-      reasons.push("区分：描述聚焦仓储区/仓库内原物料无效期，提升通用物料无效期规则优先级");
+      reasons.push(
+        "区分：描述聚焦仓储区/仓库内原物料无效期，提升通用物料无效期规则优先级",
+      );
     }
 
     if (ruleEmphasizesPrivateAreaOrPersonalUse(rule) && !privateAreaFocus) {
       score -= 42;
-      reasons.push("区分：当前描述未提到私人物品区/个人食用，降低私人物品类效期规则优先级");
+      reasons.push(
+        "区分：当前描述未提到私人物品区/个人食用，降低私人物品类效期规则优先级",
+      );
     }
   }
 
-  if (hasExpiryIssue && !machineFailureMentioned && ruleEmphasizesMachineFailure(rule)) {
+  if (
+    hasExpiryIssue &&
+    !machineFailureMentioned &&
+    ruleEmphasizesMachineFailure(rule)
+  ) {
     score -= 26;
     reasons.push("区分：描述未提到效期机故障/报修，降低设备故障特例优先级");
   }
@@ -1005,7 +1029,8 @@ export async function matchRegularQuestion(
         };
 
   const selectedCandidate =
-    candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ?? candidates[0];
+    candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ??
+    candidates[0];
   if (candidates[0].score - selectedCandidate.score >= 8) {
     judgeDecision = {
       judgeMode: "fallback",
