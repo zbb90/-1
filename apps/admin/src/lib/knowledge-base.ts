@@ -270,6 +270,33 @@ function ruleAllowsReminderOrVerification(rule: RuleRow) {
   return rule.是否扣分 === "否" || rule.是否扣分 === "按场景判定";
 }
 
+function ruleEmphasizesStorageDiscard(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return blob.includes("下架物料") || blob.includes("禁用标识") || blob.includes("仓库内");
+}
+
+function ruleEmphasizesMachineFailure(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return blob.includes("效期机") || blob.includes("报修") || blob.includes("打印机");
+}
+
+const RULE_SPECIFIC_OBJECT_RULES: Array<{ tag: string; pattern: RegExp }> = [
+  { tag: "干橙片", pattern: /干橙片|橙片/ },
+  { tag: "奶油", pattern: /淡奶油|奶油枪|奶油|奶盖/ },
+  { tag: "麻薯", pattern: /麻薯/ },
+  { tag: "生椰乳", pattern: /生椰乳/ },
+  { tag: "奇亚籽", pattern: /奇亚籽/ },
+  { tag: "草莓", pattern: /草莓/ },
+  { tag: "洗手液", pattern: /洗手液/ },
+];
+
+function detectRuleSpecificObjects(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return RULE_SPECIFIC_OBJECT_RULES.filter((item) => item.pattern.test(blob)).map(
+    (item) => item.tag,
+  );
+}
+
 function applyIntentSignalScore(
   rule: RuleRow,
   intent: RegularQuestionIntentParse | undefined,
@@ -281,6 +308,19 @@ function applyIntentSignalScore(
   const scoreReasons: string[] = [];
   let score = 0;
   const blob = ruleTextBlob(rule);
+  const requestSpecificObjects = intent.objectTags.filter((tag) =>
+    RULE_SPECIFIC_OBJECT_RULES.some((item) => item.tag === tag),
+  );
+  const ruleSpecificObjects = detectRuleSpecificObjects(rule);
+
+  if (
+    requestSpecificObjects.length > 0 &&
+    ruleSpecificObjects.length > 0 &&
+    !requestSpecificObjects.some((tag) => ruleSpecificObjects.includes(tag))
+  ) {
+    score -= 20;
+    scoreReasons.push("意图理解：规则聚焦的具体对象与当前提问不一致");
+  }
 
   if (intent.sceneTags.includes("仓储区")) {
     if (rule.rule_id === "R-0064" || /仓储区|仓库|后仓|原物料|效期缺失/.test(blob)) {
@@ -334,6 +374,36 @@ function applyIntentSignalScore(
   if (intent.exclusionTags.includes("非人为") && ruleEmphasizesMaterialDamage(rule)) {
     score += 8;
     scoreReasons.push("意图理解：描述提到非人为，更接近破损/个案核实类规则");
+  }
+
+  if (
+    intent.issueTags.some((tag) => tag === "无效期" || tag === "过期") &&
+    ruleEmphasizesMaterialDamage(rule) &&
+    !ruleEmphasizesGenericMaterialExpiry(rule)
+  ) {
+    score -= 26;
+    scoreReasons.push("意图理解：当前核心是效期问题，降低纯破损类规则优先级");
+  }
+
+  if (intent.sceneTags.includes("垃圾桶")) {
+    if (rule.rule_id === "R-0064" || ruleEmphasizesGenericMaterialExpiry(rule)) {
+      score += 14;
+      scoreReasons.push("意图理解：垃圾桶/废弃回溯场景更贴近通用物料无效期规则");
+    }
+
+    if (ruleEmphasizesStorageDiscard(rule) && !intent.sceneTags.includes("仓储区")) {
+      score -= 24;
+      scoreReasons.push("意图理解：当前不是仓库下架物料场景，降低禁用标识/下架物料规则");
+    }
+  }
+
+  if (
+    intent.issueTags.includes("无效期") &&
+    ruleEmphasizesMachineFailure(rule) &&
+    !intent.exclusionTags.includes("已核实")
+  ) {
+    score -= 18;
+    scoreReasons.push("意图理解：未提到效期机故障或报修，降低设备故障特例优先级");
   }
 
   if (intent.exclusionTags.includes("可提醒") && ruleAllowsReminderOrVerification(rule)) {
@@ -548,6 +618,9 @@ function scoreRuleMatch(
   const privateAreaFocus = detectPrivateAreaFocus(combined);
   const materialIngredientFocus = detectMaterialIngredientFocus(combined);
   const specificScenes = detectSpecificSceneMentions(combined);
+  const hasExpiryIssue = /无效期|效期缺失|过期/.test(combined) || expiryFocus !== "neutral";
+  const machineFailureMentioned = /效期机|打印机|报修|机器坏|设备坏/.test(combined);
+  const mislabeledMarkerFocus = /贴错|错贴|贴成|先用标识|禁用标识/.test(combined);
 
   if (expiryFocus === "shangwei") {
     if (ruleEmphasizesDiscardDeadline(rule) && !ruleEmphasizesShangweiWindow(rule)) {
@@ -602,6 +675,18 @@ function scoreRuleMatch(
     }
   }
 
+  if (damageFocus && hasExpiryIssue && storageAreaFocus) {
+    if (rule.rule_id === "R-0064") {
+      score += 24;
+      reasons.push("区分：仓储区原物料同时出现效期问题与附带破损，优先按物料无效期处理");
+    }
+
+    if (rule.rule_id === "R-0114") {
+      score -= 28;
+      reasons.push("区分：当前核心仍是仓储区效期问题，降低纯破损共识优先级");
+    }
+  }
+
   if (groundingFocus) {
     if (rule.rule_id === "R-0018") {
       score += 58;
@@ -649,6 +734,38 @@ function scoreRuleMatch(
     if (ruleEmphasizesPrivateAreaOrPersonalUse(rule) && !privateAreaFocus) {
       score -= 42;
       reasons.push("区分：当前描述未提到私人物品区/个人食用，降低私人物品类效期规则优先级");
+    }
+  }
+
+  if (hasExpiryIssue && !machineFailureMentioned && ruleEmphasizesMachineFailure(rule)) {
+    score -= 26;
+    reasons.push("区分：描述未提到效期机故障/报修，降低设备故障特例优先级");
+  }
+
+  if (mislabeledMarkerFocus && hasExpiryIssue) {
+    if (rule.rule_id === "R-0064") {
+      score += 16;
+      reasons.push("区分：禁用/先用标识贴错但现场仍在使用，更贴近通用物料无效期");
+    }
+
+    if (rule.rule_id === "R-0010" && !labelTamperingFocus) {
+      score -= 22;
+      reasons.push("区分：当前是标识贴错而非故意篡改风味贴，降低篡改规则优先级");
+    }
+  }
+
+  if (intent?.sceneTags.includes("垃圾桶") && intent.exclusionTags.includes("可提醒")) {
+    if (rule.rule_id === "R-0064") {
+      score += 18;
+      reasons.push("区分：垃圾桶废弃回溯且可提醒，优先按通用物料无效期处理");
+    }
+
+    if (
+      (ruleEmphasizesDiscardDeadline(rule) || /篡改风味贴/.test(ruleTextBlob(rule))) &&
+      !labelTamperingFocus
+    ) {
+      score -= 28;
+      reasons.push("区分：当前是废弃回溯提醒场景，降低超废弃/篡改风味贴总则优先级");
     }
   }
 
@@ -886,6 +1003,21 @@ export async function matchRegularQuestion(
           judgeReason: "仅有一个有效候选，沿用旧排序结果。",
           rejectedRuleIds: [],
         };
+
+  const selectedCandidate =
+    candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ?? candidates[0];
+  if (candidates[0].score - selectedCandidate.score >= 8) {
+    judgeDecision = {
+      judgeMode: "fallback",
+      selectedRuleId: candidates[0].rule.rule_id,
+      confidence: judgeDecision.confidence,
+      judgeReason: `裁判结果与基础排序偏差过大，回退到最高分候选：${candidates[0].rule.rule_id}`,
+      rejectedRuleIds: candidates
+        .slice(1)
+        .map((item) => item.rule.rule_id)
+        .filter((ruleId) => ruleId !== candidates[0].rule.rule_id),
+    };
+  }
 
   const best =
     candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ??

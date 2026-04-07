@@ -159,9 +159,16 @@ function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAns
 }
 
 function buildHeuristicJudgeDecision(
+  request: RegularQuestionRequest,
   intent: RegularQuestionIntentParse,
   candidates: RegularQuestionJudgeCandidate[],
 ): RegularQuestionJudgeDecision {
+  const requestText = [
+    normalizeText(request.issueTitle),
+    normalizeText(request.description),
+    normalizeText(request.selfJudgment),
+  ].join(" ");
+  const mentionsMachineFailure = /效期机|打印机|报修|机器坏|设备坏/.test(requestText);
   const ranked = candidates
     .map((candidate) => {
       let bonus = 0;
@@ -175,7 +182,11 @@ function buildHeuristicJudgeDecision(
 
       const isPrivateRule = /私人物品|个人食用|私人区域/.test(blob);
       const isGenericExpiryRule = /物料无效期|效期缺失|无效期/.test(blob);
+      const isDamageRule = /破损|漏液|胀包/.test(blob);
+      const isStorageDiscardRule = /下架物料|禁用标识|仓库内/.test(blob);
+      const isMachineFailureRule = /效期机|打印机|报修/.test(blob);
       const isStorageScene = intent.sceneTags.includes("仓储区");
+      const isWasteScene = intent.sceneTags.includes("垃圾桶");
       const isPrivateScene = intent.sceneTags.includes("私人物品区");
       const hasExpiryIssue =
         intent.issueTags.includes("无效期") || intent.issueTags.includes("过期");
@@ -183,6 +194,11 @@ function buildHeuristicJudgeDecision(
       if (isStorageScene && hasExpiryIssue && isGenericExpiryRule) {
         bonus += 18;
         reasons.push("仓储区 + 效期问题更贴近通用物料无效期规则");
+      }
+
+      if (isWasteScene && hasExpiryIssue && isGenericExpiryRule) {
+        bonus += 14;
+        reasons.push("垃圾桶/废弃回溯场景更贴近通用物料无效期规则");
       }
 
       if (
@@ -197,6 +213,21 @@ function buildHeuristicJudgeDecision(
       if (!isPrivateScene && isPrivateRule) {
         bonus -= 12;
         reasons.push("当前未出现私人物品区场景");
+      }
+
+      if (hasExpiryIssue && isDamageRule && !intent.issueTags.includes("破损")) {
+        bonus -= 24;
+        reasons.push("当前主问题是效期，不应让纯破损规则抢占优先级");
+      }
+
+      if (isWasteScene && isStorageDiscardRule && !isStorageScene) {
+        bonus -= 18;
+        reasons.push("当前不是仓库下架物料场景");
+      }
+
+      if (hasExpiryIssue && isMachineFailureRule && !mentionsMachineFailure) {
+        bonus -= 22;
+        reasons.push("原始提问未提到效期机故障或报修");
       }
 
       if (intent.needsHumanVerification && candidate.shouldDeduct === "按场景判定") {
@@ -234,7 +265,7 @@ export async function judgeRegularQuestionCandidates(
   intent: RegularQuestionIntentParse,
   candidates: RegularQuestionJudgeCandidate[],
 ): Promise<RegularQuestionJudgeDecision> {
-  const heuristic = buildHeuristicJudgeDecision(intent, candidates);
+  const heuristic = buildHeuristicJudgeDecision(request, intent, candidates);
   const apiKey = getApiKey();
   if (!apiKey || candidates.length <= 1) {
     return heuristic;
