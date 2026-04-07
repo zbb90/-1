@@ -90,7 +90,10 @@ export function KnowledgeTabs() {
       const res = await fetch(`/api/knowledge/${activeTab}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...addFields, 状态: addFields["状态"] || "启用" }),
+        body: JSON.stringify({
+          ...addFields,
+          状态: addFields["状态"] || "启用",
+        }),
       });
       const json = await res.json();
       if (json.ok) {
@@ -152,11 +155,7 @@ export function KnowledgeTabs() {
           <h3 className="text-base font-semibold text-gray-800 mb-4">
             新增条目
           </h3>
-          <AddForm
-            tab={activeTab}
-            fields={addFields}
-            onChange={setAddFields}
-          />
+          <AddForm tab={activeTab} fields={addFields} onChange={setAddFields} />
           <div className="mt-4 flex items-center gap-4">
             <button
               onClick={handleAdd}
@@ -253,7 +252,10 @@ export function KnowledgeTabs() {
   );
 }
 
-const FIELD_DEFS: Record<TabKey, Array<{ key: string; label: string; required?: boolean; multiline?: boolean }>> = {
+const FIELD_DEFS: Record<
+  TabKey,
+  Array<{ key: string; label: string; required?: boolean; multiline?: boolean }>
+> = {
   rules: [
     { key: "问题分类", label: "问题分类", required: true },
     { key: "问题子类或关键词", label: "关键词" },
@@ -326,14 +328,18 @@ function AddForm({
           {def.multiline ? (
             <textarea
               value={fields[def.key] ?? ""}
-              onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...fields, [def.key]: e.target.value })
+              }
               className="min-h-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
               placeholder={def.label}
             />
           ) : (
             <input
               value={fields[def.key] ?? ""}
-              onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...fields, [def.key]: e.target.value })
+              }
               className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
               placeholder={def.label}
             />

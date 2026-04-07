@@ -14,7 +14,11 @@ import type {
   RuleRow,
 } from "@/lib/types";
 
-export type KbTableName = "rules" | "consensus" | "external-purchases" | "old-items";
+export type KbTableName =
+  | "rules"
+  | "consensus"
+  | "external-purchases"
+  | "old-items";
 
 const CSV_FILES: Record<KbTableName, string> = {
   rules: "03_常规问题规则表.csv",

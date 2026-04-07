@@ -29,10 +29,7 @@ export async function POST(request: NextRequest) {
     if (!result.matched) {
       const rejectReason =
         result.rejectReason || "未找到明确旧品依据，建议进入人工复核池。";
-      const reviewTask = await createReviewTaskFromOldItem(
-        body,
-        rejectReason,
-      );
+      const reviewTask = await createReviewTaskFromOldItem(body, rejectReason);
 
       return NextResponse.json({
         ok: true,

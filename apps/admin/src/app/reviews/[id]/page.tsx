@@ -93,7 +93,9 @@ export default async function ReviewDetailPage({
             </div>
 
             <div className="rounded-2xl bg-[var(--card)] p-6 shadow-sm ring-1 ring-[var(--border)]">
-              <h2 className="text-xl font-semibold text-gray-900">原始请求数据</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                原始请求数据
+              </h2>
               <pre className="mt-4 overflow-x-auto rounded-xl bg-slate-50 p-4 text-xs leading-6 text-slate-700">
                 {task.sourcePayload}
               </pre>

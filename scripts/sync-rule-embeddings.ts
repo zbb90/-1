@@ -1,6 +1,9 @@
 import { resolve } from "node:path";
 import { readTable } from "../apps/admin/src/lib/knowledge-csv";
-import { rebuildRuleVectorIndex, upsertRuleVectors } from "../apps/admin/src/lib/vector-store";
+import {
+  rebuildRuleVectorIndex,
+  upsertRuleVectors,
+} from "../apps/admin/src/lib/vector-store";
 import type { RuleRow } from "../apps/admin/src/lib/types";
 
 async function main() {

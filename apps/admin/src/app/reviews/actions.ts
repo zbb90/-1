@@ -2,7 +2,10 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getAdminCredentials, isAuthorizedAdminRequest } from "@/lib/admin-auth";
+import {
+  getAdminCredentials,
+  isAuthorizedAdminRequest,
+} from "@/lib/admin-auth";
 import {
   ADMIN_SESSION_COOKIE,
   signAdminSessionValue,
@@ -34,7 +37,8 @@ export async function adminLoginAction(
 ): Promise<LoginFormState> {
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
-  const nextRaw = String(formData.get("next") ?? "/reviews").trim() || "/reviews";
+  const nextRaw =
+    String(formData.get("next") ?? "/reviews").trim() || "/reviews";
   const next = nextRaw.startsWith("/") ? nextRaw : "/reviews";
 
   const creds = getAdminCredentials();
@@ -74,12 +78,16 @@ export async function saveReviewTaskAction(
     return { ok: false, message: "缺少任务编号。" };
   }
 
-  const status = String(formData.get("status") ?? "").trim() as ReviewTaskStatus;
+  const status = String(
+    formData.get("status") ?? "",
+  ).trim() as ReviewTaskStatus;
   const processor = String(formData.get("processor") ?? "").trim();
   const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
   const finalScore = String(formData.get("finalScore") ?? "").trim();
   const finalClause = String(formData.get("finalClause") ?? "").trim();
-  const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
+  const finalExplanation = String(
+    formData.get("finalExplanation") ?? "",
+  ).trim();
 
   const allowed: ReviewTaskStatus[] = [
     "待处理",
@@ -132,7 +140,9 @@ export async function saveAndSinkReviewTaskAction(
   const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
   const finalScore = String(formData.get("finalScore") ?? "").trim();
   const finalClause = String(formData.get("finalClause") ?? "").trim();
-  const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
+  const finalExplanation = String(
+    formData.get("finalExplanation") ?? "",
+  ).trim();
 
   const updated = await updateReviewTask(id, {
     status: "已加入知识库",

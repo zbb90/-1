@@ -19,7 +19,7 @@ const REDIS_KEY = "audit:review-tasks";
 function useRedis() {
   return Boolean(
     process.env.KV_REST_API_URL?.trim() &&
-      process.env.KV_REST_API_TOKEN?.trim(),
+    process.env.KV_REST_API_TOKEN?.trim(),
   );
 }
 
@@ -93,7 +93,10 @@ async function writeReviewTasks(tasks: ReviewTask[]) {
 
 function buildId() {
   const now = new Date();
-  const stamp = now.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  const stamp = now
+    .toISOString()
+    .replace(/[-:TZ.]/g, "")
+    .slice(0, 14);
   const random = Math.floor(Math.random() * 900 + 100);
   return `RV-${stamp}-${random}`;
 }

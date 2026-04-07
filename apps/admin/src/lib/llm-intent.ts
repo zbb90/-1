@@ -1,4 +1,7 @@
-import type { RegularQuestionIntentParse, RegularQuestionRequest } from "@/lib/types";
+import type {
+  RegularQuestionIntentParse,
+  RegularQuestionRequest,
+} from "@/lib/types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -59,7 +62,9 @@ function normalizeCategory(request: RegularQuestionRequest, combined: string) {
 }
 
 function collectTags(combined: string, rules: IntentTagRule[]) {
-  return rules.filter((item) => item.pattern.test(combined)).map((item) => item.tag);
+  return rules
+    .filter((item) => item.pattern.test(combined))
+    .map((item) => item.tag);
 }
 
 function buildSummary(intent: Omit<RegularQuestionIntentParse, "summary">) {
@@ -90,7 +95,9 @@ function buildHeuristicIntent(
     objectTags: collectTags(combined, OBJECT_TAG_RULES),
     issueTags: collectTags(combined, ISSUE_TAG_RULES),
     exclusionTags: collectTags(combined, EXCLUSION_TAG_RULES),
-    needsHumanVerification: /核实|监控|报备|非人为|需确认|待确认/.test(combined),
+    needsHumanVerification: /核实|监控|报备|非人为|需确认|待确认/.test(
+      combined,
+    ),
     parseMode: "heuristic" as const,
   };
 
@@ -204,13 +211,18 @@ export async function analyzeRegularQuestionIntent(
 
   const llmIntent = {
     normalizedCategory:
-      normalizeText(llmResult.normalizedCategory) || heuristic.normalizedCategory,
+      normalizeText(llmResult.normalizedCategory) ||
+      heuristic.normalizedCategory,
     sceneTags: mergeUnique(heuristic.sceneTags, llmResult.sceneTags ?? []),
     objectTags: mergeUnique(heuristic.objectTags, llmResult.objectTags ?? []),
     issueTags: mergeUnique(heuristic.issueTags, llmResult.issueTags ?? []),
-    exclusionTags: mergeUnique(heuristic.exclusionTags, llmResult.exclusionTags ?? []),
+    exclusionTags: mergeUnique(
+      heuristic.exclusionTags,
+      llmResult.exclusionTags ?? [],
+    ),
     needsHumanVerification:
-      Boolean(llmResult.needsHumanVerification) || heuristic.needsHumanVerification,
+      Boolean(llmResult.needsHumanVerification) ||
+      heuristic.needsHumanVerification,
     parseMode: "llm" as const,
   };
 

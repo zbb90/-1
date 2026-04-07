@@ -42,7 +42,9 @@ async function hmacSha256Hex(secret: string, message: string) {
 export async function signAdminSessionValue() {
   const secret = getSessionSecret();
   if (!secret) {
-    throw new Error("未配置 ADMIN_SESSION_SECRET 或 ADMIN_BASIC_AUTH_PASSWORD。");
+    throw new Error(
+      "未配置 ADMIN_SESSION_SECRET 或 ADMIN_BASIC_AUTH_PASSWORD。",
+    );
   }
 
   const payload = JSON.stringify({

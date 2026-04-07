@@ -82,8 +82,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "外购查询时发生异常",
+        message: error instanceof Error ? error.message : "外购查询时发生异常",
       },
       { status: 500 },
     );

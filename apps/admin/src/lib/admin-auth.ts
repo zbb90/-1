@@ -21,7 +21,8 @@ export function getAdminCredentials() {
     username,
     password,
     isConfigured: true,
-    usingDefaults: !process.env[ADMIN_USER_ENV] || !process.env[ADMIN_PASSWORD_ENV],
+    usingDefaults:
+      !process.env[ADMIN_USER_ENV] || !process.env[ADMIN_PASSWORD_ENV],
   };
 }
 

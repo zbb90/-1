@@ -227,13 +227,15 @@ function SinkButton({
   saveFormId: string;
 }) {
   function handleSink() {
-    const saveForm = document.getElementById(saveFormId) as HTMLFormElement | null;
+    const saveForm = document.getElementById(
+      saveFormId,
+    ) as HTMLFormElement | null;
     if (!saveForm) return;
     const fd = new FormData(saveForm);
 
-    const sinkFields = document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
-      `[form="${saveFormId}"]`,
-    );
+    const sinkFields = document.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >(`[form="${saveFormId}"]`);
     sinkFields.forEach((el) => {
       if (el.name && el.name !== "taskId") {
         fd.set(el.name, el.value);

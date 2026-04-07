@@ -4,7 +4,9 @@ import { isAuthorizedAdminRequest } from "@/lib/admin-auth";
 import { verifyAdminSessionFromRequest } from "@/lib/admin-session";
 
 function isReviewsLoginPath(pathname: string) {
-  return pathname === "/reviews/login" || pathname.startsWith("/reviews/login/");
+  return (
+    pathname === "/reviews/login" || pathname.startsWith("/reviews/login/")
+  );
 }
 
 function isReviewsPagePath(pathname: string) {
@@ -22,17 +24,11 @@ function isProtectedPath(request: NextRequest) {
     return true;
   }
 
-  if (
-    pathname === "/conversations" ||
-    pathname.startsWith("/conversations/")
-  ) {
+  if (pathname === "/conversations" || pathname.startsWith("/conversations/")) {
     return true;
   }
 
-  if (
-    pathname === "/knowledge" ||
-    pathname.startsWith("/knowledge/")
-  ) {
+  if (pathname === "/knowledge" || pathname.startsWith("/knowledge/")) {
     return true;
   }
 

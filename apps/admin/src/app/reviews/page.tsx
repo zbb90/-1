@@ -12,7 +12,9 @@ export default async function ReviewsPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-green-700">人工复核池</p>
-              <h1 className="mt-2 text-3xl font-bold text-gray-900">复核任务列表</h1>
+              <h1 className="mt-2 text-3xl font-bold text-gray-900">
+                复核任务列表
+              </h1>
               <p className="mt-3 text-sm leading-6 text-gray-600">
                 当前已支持查看提问人、进入详情页处理，并给小程序侧提供“我的复核”筛选能力。
               </p>
@@ -63,7 +65,9 @@ export default async function ReviewsPage() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{task.id}</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {task.id}
+                    </p>
                     <p className="mt-1 text-sm text-gray-500">
                       {task.type}｜门店编码：{task.storeCode}
                     </p>
@@ -76,15 +80,21 @@ export default async function ReviewsPage() {
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div>
                     <p className="text-xs text-gray-500">分类</p>
-                    <p className="mt-1 text-sm text-gray-800">{task.category}</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {task.category}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">自行判断</p>
-                    <p className="mt-1 text-sm text-gray-800">{task.selfJudgment}</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {task.selfJudgment}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">提问人</p>
-                    <p className="mt-1 text-sm text-gray-800">{task.requester}</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {task.requester}
+                    </p>
                   </div>
                   <div className="md:col-span-2">
                     <p className="text-xs text-gray-500">问题描述</p>

@@ -95,7 +95,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        message: error instanceof Error ? error.message : "导出复核结论时发生异常",
+        message:
+          error instanceof Error ? error.message : "导出复核结论时发生异常",
       },
       { status: 500 },
     );

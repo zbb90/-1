@@ -2,7 +2,10 @@ import {
   judgeRegularQuestionCandidates,
   type RegularQuestionJudgeCandidate,
 } from "@/lib/ai";
-import { isSemanticSearchConfigured, searchRuleVectors } from "@/lib/vector-store";
+import {
+  isSemanticSearchConfigured,
+  searchRuleVectors,
+} from "@/lib/vector-store";
 import { analyzeRegularQuestionIntent } from "@/lib/llm-intent";
 import { readRows } from "@/lib/knowledge-store";
 import type {
@@ -63,7 +66,8 @@ function extractCorePhrases(text?: string) {
       phrases.add(part);
     }
 
-    const negativeMatches = fragment.match(/(?:未|无|不)[^，。；;、]{1,8}/g) ?? [];
+    const negativeMatches =
+      fragment.match(/(?:未|无|不)[^，。；;、]{1,8}/g) ?? [];
     for (const match of negativeMatches) {
       if (match.length >= 2) {
         phrases.add(match.trim());
@@ -110,7 +114,12 @@ function buildExternalPurchaseSearchText(item: ExternalPurchaseRow) {
 }
 
 function buildOldItemSearchText(item: OldItemRow) {
-  return [item.物品名称, item.别名或常见叫法, item.命中的清单名称, item.识别备注]
+  return [
+    item.物品名称,
+    item.别名或常见叫法,
+    item.命中的清单名称,
+    item.识别备注,
+  ]
     .join(" ")
     .toLowerCase();
 }
@@ -131,7 +140,9 @@ function buildRuleSearchText(rule: RuleRow) {
 }
 
 /** 区分「超赏味 / 赏味期」与「超废弃 / 废弃时间」两类表述，避免笼统「过期」误命中纯废弃条款 */
-function detectMaterialExpiryFocus(combined: string): "shangwei" | "feiqi" | "neutral" {
+function detectMaterialExpiryFocus(
+  combined: string,
+): "shangwei" | "feiqi" | "neutral" {
   const hasShangwei =
     /赏味期|最佳赏味|超赏味|超出赏味|已过赏味|赏味过期|赏味已过|赏味过了|赏味到/.test(
       combined,
@@ -168,13 +179,19 @@ function ruleTextBlob(rule: RuleRow) {
 function ruleEmphasizesDiscardDeadline(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
   return (
-    blob.includes("超过废弃") || blob.includes("废弃时间") || blob.includes("超废弃")
+    blob.includes("超过废弃") ||
+    blob.includes("废弃时间") ||
+    blob.includes("超废弃")
   );
 }
 
 function ruleEmphasizesShangweiWindow(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
-  return blob.includes("赏味") || blob.includes("超赏味") || blob.includes("最佳赏味");
+  return (
+    blob.includes("赏味") ||
+    blob.includes("超赏味") ||
+    blob.includes("最佳赏味")
+  );
 }
 
 function detectDamageFocus(combined: string) {
@@ -273,13 +290,17 @@ function ruleAllowsReminderOrVerification(rule: RuleRow) {
 function ruleEmphasizesStorageDiscard(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
   return (
-    blob.includes("下架物料") || blob.includes("禁用标识") || blob.includes("仓库内")
+    blob.includes("下架物料") ||
+    blob.includes("禁用标识") ||
+    blob.includes("仓库内")
   );
 }
 
 function ruleEmphasizesMachineFailure(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
-  return blob.includes("效期机") || blob.includes("报修") || blob.includes("打印机");
+  return (
+    blob.includes("效期机") || blob.includes("报修") || blob.includes("打印机")
+  );
 }
 
 const RULE_SPECIFIC_OBJECT_RULES: Array<{ tag: string; pattern: RegExp }> = [
@@ -294,9 +315,9 @@ const RULE_SPECIFIC_OBJECT_RULES: Array<{ tag: string; pattern: RegExp }> = [
 
 function detectRuleSpecificObjects(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
-  return RULE_SPECIFIC_OBJECT_RULES.filter((item) => item.pattern.test(blob)).map(
-    (item) => item.tag,
-  );
+  return RULE_SPECIFIC_OBJECT_RULES.filter((item) =>
+    item.pattern.test(blob),
+  ).map((item) => item.tag);
 }
 
 function applyIntentSignalScore(
@@ -325,7 +346,10 @@ function applyIntentSignalScore(
   }
 
   if (intent.sceneTags.includes("仓储区")) {
-    if (rule.rule_id === "R-0064" || /仓储区|仓库|后仓|原物料|效期缺失/.test(blob)) {
+    if (
+      rule.rule_id === "R-0064" ||
+      /仓储区|仓库|后仓|原物料|效期缺失/.test(blob)
+    ) {
       score += 16;
       scoreReasons.push("意图理解：仓储区场景更贴近原物料/无效期规则");
     }
@@ -372,14 +396,19 @@ function applyIntentSignalScore(
   }
 
   if (
-    intent.exclusionTags.some((tag) => tag === "非私人物品" || tag === "非个人食用") &&
+    intent.exclusionTags.some(
+      (tag) => tag === "非私人物品" || tag === "非个人食用",
+    ) &&
     ruleEmphasizesPrivateAreaOrPersonalUse(rule)
   ) {
     score -= 30;
     scoreReasons.push("意图理解：已明确排除私人物品/个人食用");
   }
 
-  if (intent.exclusionTags.includes("非人为") && ruleEmphasizesMaterialDamage(rule)) {
+  if (
+    intent.exclusionTags.includes("非人为") &&
+    ruleEmphasizesMaterialDamage(rule)
+  ) {
     score += 8;
     scoreReasons.push("意图理解：描述提到非人为，更接近破损/个案核实类规则");
   }
@@ -394,12 +423,20 @@ function applyIntentSignalScore(
   }
 
   if (intent.sceneTags.includes("垃圾桶")) {
-    if (rule.rule_id === "R-0064" || ruleEmphasizesGenericMaterialExpiry(rule)) {
+    if (
+      rule.rule_id === "R-0064" ||
+      ruleEmphasizesGenericMaterialExpiry(rule)
+    ) {
       score += 14;
-      scoreReasons.push("意图理解：垃圾桶/废弃回溯场景更贴近通用物料无效期规则");
+      scoreReasons.push(
+        "意图理解：垃圾桶/废弃回溯场景更贴近通用物料无效期规则",
+      );
     }
 
-    if (ruleEmphasizesStorageDiscard(rule) && !intent.sceneTags.includes("仓储区")) {
+    if (
+      ruleEmphasizesStorageDiscard(rule) &&
+      !intent.sceneTags.includes("仓储区")
+    ) {
       score -= 24;
       scoreReasons.push(
         "意图理解：当前不是仓库下架物料场景，降低禁用标识/下架物料规则",
@@ -413,7 +450,9 @@ function applyIntentSignalScore(
     !intent.exclusionTags.includes("已核实")
   ) {
     score -= 18;
-    scoreReasons.push("意图理解：未提到效期机故障或报修，降低设备故障特例优先级");
+    scoreReasons.push(
+      "意图理解：未提到效期机故障或报修，降低设备故障特例优先级",
+    );
   }
 
   if (
@@ -421,7 +460,9 @@ function applyIntentSignalScore(
     ruleAllowsReminderOrVerification(rule)
   ) {
     score += 8;
-    scoreReasons.push("意图理解：用户倾向提醒/核实，提升不扣分或按场景判定规则");
+    scoreReasons.push(
+      "意图理解：用户倾向提醒/核实，提升不扣分或按场景判定规则",
+    );
   }
 
   if (
@@ -430,7 +471,9 @@ function applyIntentSignalScore(
     !ruleEmphasizesPrivateAreaOrPersonalUse(rule)
   ) {
     score += 6;
-    scoreReasons.push("意图理解：该问题需要人工核实，适合保留提醒/按场景判定候选");
+    scoreReasons.push(
+      "意图理解：该问题需要人工核实，适合保留提醒/按场景判定候选",
+    );
   }
 
   return { score, reasons: scoreReasons };
@@ -503,10 +546,15 @@ function ruleIsGenericGrounding(rule: RuleRow) {
 }
 
 function detectSpecificSceneMentions(combined: string) {
-  return SPECIFIC_SCENE_RULES.filter((item) => item.requestPattern.test(combined));
+  return SPECIFIC_SCENE_RULES.filter((item) =>
+    item.requestPattern.test(combined),
+  );
 }
 
-function ruleMatchesSpecificScene(rule: RuleRow, scene: SpecificSceneRuleConfig) {
+function ruleMatchesSpecificScene(
+  rule: RuleRow,
+  scene: SpecificSceneRuleConfig,
+) {
   const blob = ruleTextBlob(rule);
   return (
     scene.rulePattern.test(blob) ||
@@ -564,7 +612,11 @@ function scoreRuleMatch(
     reasons.push("问题描述与规则高度重合");
   }
 
-  if (issueTitle && issueTitle !== category && searchText.includes(issueTitle)) {
+  if (
+    issueTitle &&
+    issueTitle !== category &&
+    searchText.includes(issueTitle)
+  ) {
     score += 12;
     reasons.push("门店问题标题命中规则");
   }
@@ -633,11 +685,18 @@ function scoreRuleMatch(
   const specificScenes = detectSpecificSceneMentions(combined);
   const hasExpiryIssue =
     /无效期|效期缺失|过期/.test(combined) || expiryFocus !== "neutral";
-  const machineFailureMentioned = /效期机|打印机|报修|机器坏|设备坏/.test(combined);
-  const mislabeledMarkerFocus = /贴错|错贴|贴成|先用标识|禁用标识/.test(combined);
+  const machineFailureMentioned = /效期机|打印机|报修|机器坏|设备坏/.test(
+    combined,
+  );
+  const mislabeledMarkerFocus = /贴错|错贴|贴成|先用标识|禁用标识/.test(
+    combined,
+  );
 
   if (expiryFocus === "shangwei") {
-    if (ruleEmphasizesDiscardDeadline(rule) && !ruleEmphasizesShangweiWindow(rule)) {
+    if (
+      ruleEmphasizesDiscardDeadline(rule) &&
+      !ruleEmphasizesShangweiWindow(rule)
+    ) {
       score -= 52;
       reasons.push("区分：表述偏赏味期，降低纯「超废弃/废弃时间」类规则优先级");
     }
@@ -729,10 +788,16 @@ function scoreRuleMatch(
 
       if (matchedSpecificScene) {
         score += 24;
-        reasons.push(`区分：命中更具体场景「${scene.label}」，提升场景专属规则优先级`);
+        reasons.push(
+          `区分：命中更具体场景「${scene.label}」，提升场景专属规则优先级`,
+        );
       }
 
-      if (groundingFocus && ruleIsGenericGrounding(rule) && !matchedSpecificScene) {
+      if (
+        groundingFocus &&
+        ruleIsGenericGrounding(rule) &&
+        !matchedSpecificScene
+      ) {
         score -= 22;
         reasons.push(
           `区分：当前已明确具体场景「${scene.label}」，降低通用未离地规则优先级`,
@@ -741,8 +806,14 @@ function scoreRuleMatch(
     }
   }
 
-  if (storageAreaFocus && (expiryFocus !== "neutral" || materialIngredientFocus)) {
-    if (rule.rule_id === "R-0064" || ruleEmphasizesGenericMaterialExpiry(rule)) {
+  if (
+    storageAreaFocus &&
+    (expiryFocus !== "neutral" || materialIngredientFocus)
+  ) {
+    if (
+      rule.rule_id === "R-0064" ||
+      ruleEmphasizesGenericMaterialExpiry(rule)
+    ) {
       score += 30;
       reasons.push(
         "区分：描述聚焦仓储区/仓库内原物料无效期，提升通用物料无效期规则优先级",
@@ -769,33 +840,45 @@ function scoreRuleMatch(
   if (mislabeledMarkerFocus && hasExpiryIssue) {
     if (rule.rule_id === "R-0064") {
       score += 16;
-      reasons.push("区分：禁用/先用标识贴错但现场仍在使用，更贴近通用物料无效期");
+      reasons.push(
+        "区分：禁用/先用标识贴错但现场仍在使用，更贴近通用物料无效期",
+      );
     }
 
     if (rule.rule_id === "R-0010" && !labelTamperingFocus) {
       score -= 22;
-      reasons.push("区分：当前是标识贴错而非故意篡改风味贴，降低篡改规则优先级");
+      reasons.push(
+        "区分：当前是标识贴错而非故意篡改风味贴，降低篡改规则优先级",
+      );
     }
   }
 
-  if (intent?.sceneTags.includes("垃圾桶") && intent.exclusionTags.includes("可提醒")) {
+  if (
+    intent?.sceneTags.includes("垃圾桶") &&
+    intent.exclusionTags.includes("可提醒")
+  ) {
     if (rule.rule_id === "R-0064") {
       score += 18;
       reasons.push("区分：垃圾桶废弃回溯且可提醒，优先按通用物料无效期处理");
     }
 
     if (
-      (ruleEmphasizesDiscardDeadline(rule) || /篡改风味贴/.test(ruleTextBlob(rule))) &&
+      (ruleEmphasizesDiscardDeadline(rule) ||
+        /篡改风味贴/.test(ruleTextBlob(rule))) &&
       !labelTamperingFocus
     ) {
       score -= 28;
-      reasons.push("区分：当前是废弃回溯提醒场景，降低超废弃/篡改风味贴总则优先级");
+      reasons.push(
+        "区分：当前是废弃回溯提醒场景，降低超废弃/篡改风味贴总则优先级",
+      );
     }
   }
 
   if (privateAreaFocus && ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
     score += 32;
-    reasons.push("区分：描述明确提到私人物品区/个人食用，提升私人物品类规则优先级");
+    reasons.push(
+      "区分：描述明确提到私人物品区/个人食用，提升私人物品类规则优先级",
+    );
   }
 
   const intentSignal = applyIntentSignalScore(rule, intent);
@@ -922,10 +1005,11 @@ export async function matchRegularQuestion(
     semanticResult.hits.map((item) => [item.ruleId, item.vectorScore]),
   );
   const usingSemanticRecall = semanticRules.length > 0;
-  const candidatePool = usingSemanticRecall ? semanticRules : knowledgeBase.rules;
-  const retrievalMode: RegularQuestionMatchDebug["retrievalMode"] = usingSemanticRecall
-    ? "semantic"
-    : "fallback";
+  const candidatePool = usingSemanticRecall
+    ? semanticRules
+    : knowledgeBase.rules;
+  const retrievalMode: RegularQuestionMatchDebug["retrievalMode"] =
+    usingSemanticRecall ? "semantic" : "fallback";
   const debug: RegularQuestionMatchDebug = {
     retrievalMode,
     semanticEnabled: isSemanticSearchConfigured(),
@@ -946,7 +1030,9 @@ export async function matchRegularQuestion(
       );
       const vectorScore = vectorScoreByRule.get(rule.rule_id);
       const vectorBoost =
-        vectorScore === undefined ? undefined : calculateVectorBoost(vectorScore);
+        vectorScore === undefined
+          ? undefined
+          : calculateVectorBoost(vectorScore);
       const score = baseScore + (vectorBoost ?? 0);
       const reasons =
         vectorScore === undefined
@@ -1029,8 +1115,9 @@ export async function matchRegularQuestion(
         };
 
   const selectedCandidate =
-    candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ??
-    candidates[0];
+    candidates.find(
+      (item) => item.rule.rule_id === judgeDecision.selectedRuleId,
+    ) ?? candidates[0];
   if (candidates[0].score - selectedCandidate.score >= 8) {
     judgeDecision = {
       judgeMode: "fallback",
@@ -1045,10 +1132,13 @@ export async function matchRegularQuestion(
   }
 
   const best =
-    candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ??
-    candidates[0];
+    candidates.find(
+      (item) => item.rule.rule_id === judgeDecision.selectedRuleId,
+    ) ?? candidates[0];
   const linkedConsensus = best.rule.共识来源
-    ? knowledgeBase.consensus.find((item) => item.consensus_id === best.rule.共识来源)
+    ? knowledgeBase.consensus.find(
+        (item) => item.consensus_id === best.rule.共识来源,
+      )
     : undefined;
 
   console.info("[regular-question-match]", {

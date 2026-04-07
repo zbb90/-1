@@ -10,7 +10,8 @@ export default async function ReviewsLoginPage({
   const defaultNext = raw.startsWith("/") ? raw : "/reviews";
 
   const usingDefaults =
-    !process.env.ADMIN_BASIC_AUTH_USER || !process.env.ADMIN_BASIC_AUTH_PASSWORD;
+    !process.env.ADMIN_BASIC_AUTH_USER ||
+    !process.env.ADMIN_BASIC_AUTH_PASSWORD;
 
   return (
     <main className="min-h-screen bg-[var(--background)] p-8">

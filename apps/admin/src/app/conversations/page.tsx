@@ -62,8 +62,8 @@ export default async function ConversationsPage({
                 全量问答记录
               </h1>
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                所有专员提问均会在此记录，无论是否命中规则。主管可标记
-                &ldquo;AI 已自动回答&rdquo;的记录为答错，转入人工复核池。
+                所有专员提问均会在此记录，无论是否命中规则。主管可标记 &ldquo;AI
+                已自动回答&rdquo;的记录为答错，转入人工复核池。
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -115,7 +115,9 @@ export default async function ConversationsPage({
             <Link
               key={opt.value}
               href={
-                opt.value ? `/conversations?status=${encodeURIComponent(opt.value)}` : "/conversations"
+                opt.value
+                  ? `/conversations?status=${encodeURIComponent(opt.value)}`
+                  : "/conversations"
               }
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 (filterStatus ?? "") === opt.value
@@ -148,8 +150,8 @@ export default async function ConversationsPage({
                         {task.id}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        {task.type}｜{task.requester}｜门店：{task.storeCode}
-                        ｜{new Date(task.createdAt).toLocaleString("zh-CN")}
+                        {task.type}｜{task.requester}｜门店：{task.storeCode}｜
+                        {new Date(task.createdAt).toLocaleString("zh-CN")}
                       </p>
                     </div>
                     <span
@@ -188,7 +190,9 @@ export default async function ConversationsPage({
                         <div className="grid gap-2 md:grid-cols-3 text-sm">
                           {autoAnswer.verdict && (
                             <div>
-                              <span className="text-xs text-blue-500">判定：</span>
+                              <span className="text-xs text-blue-500">
+                                判定：
+                              </span>
                               <span className="text-blue-900 font-medium">
                                 {autoAnswer.verdict}
                               </span>
@@ -196,7 +200,9 @@ export default async function ConversationsPage({
                           )}
                           {autoAnswer.deductionScore !== undefined && (
                             <div>
-                              <span className="text-xs text-blue-500">扣分：</span>
+                              <span className="text-xs text-blue-500">
+                                扣分：
+                              </span>
                               <span className="text-blue-900 font-medium">
                                 {autoAnswer.deductionScore} 分
                               </span>
@@ -204,7 +210,9 @@ export default async function ConversationsPage({
                           )}
                           {autoAnswer.clauseTitle && (
                             <div>
-                              <span className="text-xs text-blue-500">条款：</span>
+                              <span className="text-xs text-blue-500">
+                                条款：
+                              </span>
                               <span className="text-blue-900">
                                 {autoAnswer.clauseTitle}
                               </span>

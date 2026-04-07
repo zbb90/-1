@@ -36,7 +36,8 @@ export function LoginForm({
             <code className="font-mono font-bold">audit2026</code>
           </p>
           <p className="mt-1 text-xs text-amber-600">
-            如需自定义，请在 Vercel 后台设置 ADMIN_BASIC_AUTH_USER / ADMIN_BASIC_AUTH_PASSWORD。
+            如需自定义，请在 Vercel 后台设置 ADMIN_BASIC_AUTH_USER /
+            ADMIN_BASIC_AUTH_PASSWORD。
           </p>
         </div>
       ) : null}
