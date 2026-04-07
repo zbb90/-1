@@ -5,6 +5,8 @@ dist
 coverage
 .env
 .env.local
+.env.production
 npm-debug.log*
 Library/
 *.tsbuildinfo
+.vercel

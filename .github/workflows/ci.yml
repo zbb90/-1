@@ -1,0 +1,97 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: Lint admin
+        run: npm run lint:admin
+
+      - name: Test admin
+        run: npm run test
+
+      - name: Build admin
+        run: npm run build:admin
+
+  deploy:
+    needs: admin
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to ECS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            APP_DIR="${{ secrets.ECS_APP_DIR }}"
+            cd "$APP_DIR"
+
+            echo ">>> Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo ">>> Tagging current image as rollback..."
+            podman tag audit-admin:latest audit-admin:rollback 2>/dev/null || true
+
+            echo ">>> Building new image..."
+            podman build -t audit-admin:latest -f apps/admin/Dockerfile .
+
+            echo ">>> Restarting container..."
+            podman stop audit-admin 2>/dev/null || true
+            podman rm audit-admin 2>/dev/null || true
+            podman run -d \
+              --name audit-admin \
+              --env-file /root/audit-admin.env \
+              -p 127.0.0.1:3003:3003 \
+              --restart=always \
+              audit-admin:latest
+
+            echo ">>> Waiting for startup..."
+            sleep 5
+
+            echo ">>> Health check..."
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "Deploy OK — health check passed"
+            else
+              echo "Health check FAILED (status=$STATUS), rolling back..."
+              podman stop audit-admin 2>/dev/null || true
+              podman rm audit-admin 2>/dev/null || true
+              podman run -d \
+                --name audit-admin \
+                --env-file /root/audit-admin.env \
+                -p 127.0.0.1:3003:3003 \
+                --restart=always \
+                audit-admin:rollback
+              echo "Rolled back to previous image"
+              exit 1
+            fi
