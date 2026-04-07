@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateOldItemAiExplanation } from "@/lib/ai";
+import { rateLimit } from "@/lib/rate-limit";
 import { matchOldItem } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import {
@@ -9,6 +10,17 @@ import {
 import type { OldItemRequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, "old-item-ask", 40);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, message: "请求过于频繁，请稍后再试" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   try {
     const body = getRequesterPayloadFromRequest(
       request,
@@ -48,10 +60,7 @@ export async function POST(request: NextRequest) {
       throw new Error("旧品命中成功，但未生成答案内容。");
     }
 
-    const aiExplanation = await generateOldItemAiExplanation(
-      body,
-      result.answer,
-    );
+    const aiExplanation = await generateOldItemAiExplanation(body, result.answer);
 
     const answerWithAI = { ...result.answer, aiExplanation };
 

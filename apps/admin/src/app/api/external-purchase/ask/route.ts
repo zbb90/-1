@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateExternalPurchaseAiExplanation } from "@/lib/ai";
+import { rateLimit } from "@/lib/rate-limit";
 import { matchExternalPurchase } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import {
@@ -9,6 +10,17 @@ import {
 import type { ExternalPurchaseRequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, "external-purchase-ask", 40);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, message: "请求过于频繁，请稍后再试" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   try {
     const body = getRequesterPayloadFromRequest(
       request,
@@ -29,10 +41,7 @@ export async function POST(request: NextRequest) {
     if (!result.matched) {
       const rejectReason =
         result.rejectReason || "未找到明确外购依据，建议进入人工复核池。";
-      const reviewTask = await createReviewTaskFromExternalPurchase(
-        body,
-        rejectReason,
-      );
+      const reviewTask = await createReviewTaskFromExternalPurchase(body, rejectReason);
 
       return NextResponse.json({
         ok: true,

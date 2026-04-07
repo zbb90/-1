@@ -21,25 +21,70 @@ function buildNewId(prefix: string, existingCount: number): string {
   return `${prefix}-${seq}`;
 }
 
+function normalizeText(value?: string) {
+  return value?.trim() || "";
+}
+
+function looksLikeClauseCode(value?: string) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return /^(?:[A-Z]\d+(?:\.\d+)*|\d+(?:\.\d+)*|R-\d{4,})$/i.test(normalized);
+}
+
+function splitClauseAndReason(task: ReviewTask) {
+  const raw = normalizeText(task.finalClause);
+  if (!raw) {
+    return { clauseCode: "-", reason: "" };
+  }
+
+  if (looksLikeClauseCode(raw)) {
+    return { clauseCode: raw, reason: "" };
+  }
+
+  return { clauseCode: "-", reason: raw };
+}
+
+function buildKnowledgeExplanation(task: ReviewTask) {
+  const { reason } = splitClauseAndReason(task);
+  const explanation = normalizeText(task.finalExplanation);
+
+  if (reason && explanation) {
+    return `主管判定依据：${reason}\n${explanation}`;
+  }
+  if (explanation) {
+    return explanation;
+  }
+  if (reason) {
+    return `主管判定依据：${reason}`;
+  }
+
+  return "-";
+}
+
 async function sinkToRules(templateDir: string, task: ReviewTask) {
   const csvPath = resolve(templateDir, "03_常规问题规则表.csv");
   const headers = await readCsvHeaders(csvPath);
 
   const kb = await loadKnowledgeBase(false);
   const newId = buildNewId("R", kb.rules.length);
+  const { clauseCode, reason } = splitClauseAndReason(task);
+  const explanation = buildKnowledgeExplanation(task);
 
   const row: Record<string, string> = {
     rule_id: newId,
     问题分类: task.category || "-",
     问题子类或关键词: task.description || "-",
     场景描述: task.description || "-",
-    触发条件: "-",
+    触发条件: reason || "-",
     是否扣分: task.finalConclusion?.includes("扣分") ? "是" : "否",
     扣分分值: task.finalScore || "0",
-    条款编号: task.finalClause || "-",
+    条款编号: clauseCode,
     条款标题: task.finalConclusion || "-",
-    条款关键片段: task.finalExplanation || "-",
-    条款解释: task.finalExplanation || "-",
+    条款关键片段: reason || task.description || "-",
+    条款解释: explanation,
     共识来源: `复核任务 ${task.id}`,
     示例问法: task.description || "-",
     状态: "启用",
@@ -65,13 +110,15 @@ async function sinkToConsensus(templateDir: string, task: ReviewTask) {
   const kb = await loadKnowledgeBase(false);
   const newId = buildNewId("C", kb.consensus.length);
   const today = new Date().toLocaleDateString("zh-CN");
+  const { clauseCode } = splitClauseAndReason(task);
+  const explanation = buildKnowledgeExplanation(task);
 
   const row: Record<string, string> = {
     consensus_id: newId,
     标题: task.finalConclusion || task.description || "-",
-    关联条款编号: task.finalClause || "-",
+    关联条款编号: clauseCode,
     适用场景: task.description || "-",
-    解释内容: task.finalExplanation || "-",
+    解释内容: explanation,
     判定结果: task.finalConclusion || "-",
     扣分分值: task.finalScore || "0",
     关键词: task.description || "-",
@@ -97,15 +144,17 @@ async function sinkToExternalPurchases(templateDir: string, task: ReviewTask) {
 
   const kb = await loadKnowledgeBase(false);
   const newId = buildNewId("EP", kb.externalPurchases.length);
+  const { reason } = splitClauseAndReason(task);
+  const explanation = buildKnowledgeExplanation(task);
 
   const row: Record<string, string> = {
     item_id: newId,
     物品名称: task.description || "-",
     别名或关键词: task.description || "-",
     是否允许外购: task.finalConclusion || "-",
-    命中的清单或共识名称: task.finalClause || "-",
+    命中的清单或共识名称: reason || task.finalConclusion || "-",
     依据来源: `复核任务 ${task.id}`,
-    说明: task.finalExplanation || "-",
+    说明: explanation,
     状态: "启用",
     备注: `由主管 ${task.processor || "-"} 沉淀`,
   };
@@ -125,6 +174,7 @@ async function sinkToOldItems(templateDir: string, task: ReviewTask) {
 
   const kb = await loadKnowledgeBase(false);
   const newId = buildNewId("OI", kb.oldItems.length);
+  const explanation = buildKnowledgeExplanation(task);
 
   const row: Record<string, string> = {
     item_id: newId,
@@ -132,7 +182,7 @@ async function sinkToOldItems(templateDir: string, task: ReviewTask) {
     别名或常见叫法: task.description || "-",
     是否旧品: task.finalConclusion?.includes("旧品") ? "是" : "否",
     命中的清单名称: `复核任务 ${task.id}`,
-    识别备注: task.finalExplanation || "-",
+    识别备注: explanation,
     参考图片名称: "-",
     状态: "启用",
     备注: `由主管 ${task.processor || "-"} 沉淀`,
@@ -147,11 +197,7 @@ async function sinkToOldItems(templateDir: string, task: ReviewTask) {
   return newId;
 }
 
-function sinkDispatcher(
-  type: ReviewTaskType,
-  templateDir: string,
-  task: ReviewTask,
-) {
+function sinkDispatcher(type: ReviewTaskType, templateDir: string, task: ReviewTask) {
   switch (type) {
     case "常规问题":
       return sinkToRules(templateDir, task).then((result) => result.newId);

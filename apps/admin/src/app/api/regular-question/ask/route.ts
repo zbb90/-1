@@ -122,8 +122,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "常规问题检索时发生异常",
+        message: error instanceof Error ? error.message : "常规问题检索时发生异常",
       },
       { status: 500 },
     );

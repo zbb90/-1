@@ -94,8 +94,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "创建人工复核任务时发生异常",
+        message: error instanceof Error ? error.message : "创建人工复核任务时发生异常",
       },
       { status: 500 },
     );

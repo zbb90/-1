@@ -43,7 +43,7 @@
           <input
             class="input"
             value="{{supervisorUser}}"
-            placeholder="主管账号（默认 admin）"
+            placeholder="主管账号（填写手机号）"
             bindinput="handleSupervisorUserInput"
           />
         </view>
@@ -53,7 +53,7 @@
             class="input"
             password
             value="{{supervisorPass}}"
-            placeholder="主管密码（默认 audit2026）"
+            placeholder="主管密码（填写当前账号密码）"
             bindinput="handleSupervisorPassInput"
           />
         </view>

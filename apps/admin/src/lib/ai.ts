@@ -152,9 +152,7 @@ function formatMatchedReasons(reasons?: string[]) {
   return reasons.join("；");
 }
 
-function buildDeterministicRegularQuestionExplanation(
-  answer: RegularQuestionAnswer,
-) {
+function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAnswer) {
   const conclusion = normalizeText(answer.shouldDeduct);
   const score = normalizeText(answer.deductScore);
   return `本条命中「${normalizeText(answer.clauseTitle)}」。共识要点见条款解释：${normalizeText(answer.explanation)}。系统判定结论为「${conclusion}」，对应扣分分值为「${score}」。请严格按稽核共识与现场情况执行；如需个案判断请走人工复核。`;
@@ -170,9 +168,7 @@ function buildHeuristicJudgeDecision(
     normalizeText(request.description),
     normalizeText(request.selfJudgment),
   ].join(" ");
-  const mentionsMachineFailure = /效期机|打印机|报修|机器坏|设备坏/.test(
-    requestText,
-  );
+  const mentionsMachineFailure = /效期机|打印机|报修|机器坏|设备坏/.test(requestText);
   const ranked = candidates
     .map((candidate) => {
       let bonus = 0;
@@ -193,8 +189,7 @@ function buildHeuristicJudgeDecision(
       const isWasteScene = intent.sceneTags.includes("垃圾桶");
       const isPrivateScene = intent.sceneTags.includes("私人物品区");
       const hasExpiryIssue =
-        intent.issueTags.includes("无效期") ||
-        intent.issueTags.includes("过期");
+        intent.issueTags.includes("无效期") || intent.issueTags.includes("过期");
 
       if (isStorageScene && hasExpiryIssue && isGenericExpiryRule) {
         bonus += 18;
@@ -220,11 +215,7 @@ function buildHeuristicJudgeDecision(
         reasons.push("当前未出现私人物品区场景");
       }
 
-      if (
-        hasExpiryIssue &&
-        isDamageRule &&
-        !intent.issueTags.includes("破损")
-      ) {
+      if (hasExpiryIssue && isDamageRule && !intent.issueTags.includes("破损")) {
         bonus -= 24;
         reasons.push("当前主问题是效期，不应让纯破损规则抢占优先级");
       }
@@ -239,10 +230,7 @@ function buildHeuristicJudgeDecision(
         reasons.push("原始提问未提到效期机故障或报修");
       }
 
-      if (
-        intent.needsHumanVerification &&
-        candidate.shouldDeduct === "按场景判定"
-      ) {
+      if (intent.needsHumanVerification && candidate.shouldDeduct === "按场景判定") {
         bonus += 8;
         reasons.push("问题需核实，优先保留按场景判定类规则");
       }
@@ -260,8 +248,7 @@ function buildHeuristicJudgeDecision(
     judgeMode: "heuristic",
     selectedRuleId: best.candidate.ruleId,
     confidence: ranked.length > 1 ? 0.72 : 0.64,
-    judgeReason:
-      best.reasons.join("；") || "按结构化场景与问题标签进行启发式裁判。",
+    judgeReason: best.reasons.join("；") || "按结构化场景与问题标签进行启发式裁判。",
     rejectedRuleIds: ranked.slice(1).map((item) => item.candidate.ruleId),
   };
 }
@@ -346,9 +333,7 @@ ${candidateBlock}
         ? Math.max(0, Math.min(parsed.confidence, 1))
         : 0.78,
     judgeReason: parsed.judgeReason?.trim() || "LLM 在候选规则中完成裁判。",
-    rejectedRuleIds: (parsed.rejectedRuleIds ?? []).filter((id) =>
-      validIds.has(id),
-    ),
+    rejectedRuleIds: (parsed.rejectedRuleIds ?? []).filter((id) => validIds.has(id)),
   };
 }
 

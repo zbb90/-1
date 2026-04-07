@@ -87,16 +87,14 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition":
-          'attachment; filename="review-knowledge-export.csv"',
+        "Content-Disposition": 'attachment; filename="review-knowledge-export.csv"',
       },
     });
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "导出复核结论时发生异常",
+        message: error instanceof Error ? error.message : "导出复核结论时发生异常",
       },
       { status: 500 },
     );

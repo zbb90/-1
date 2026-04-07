@@ -13,12 +13,9 @@ import type {
   OldItemRow,
   RuleRow,
 } from "@/lib/types";
+import type { KbTableName } from "./kb-schema";
 
-export type KbTableName =
-  | "rules"
-  | "consensus"
-  | "external-purchases"
-  | "old-items";
+export type { KbTableName };
 
 const CSV_FILES: Record<KbTableName, string> = {
   rules: "03_常规问题规则表.csv",
@@ -80,10 +77,7 @@ function escapeCsvField(value: string): string {
   return value;
 }
 
-function serializeCsv(
-  headers: string[],
-  rows: Record<string, string>[],
-): string {
+function serializeCsv(headers: string[], rows: Record<string, string>[]): string {
   const headerLine = headers.map(escapeCsvField).join(",");
   const dataLines = rows.map((row) =>
     headers.map((h) => escapeCsvField(row[h] ?? "")).join(","),

@@ -213,8 +213,7 @@ export async function searchRuleVectors(
     return {
       queryText,
       hits: [] as SemanticRuleRecallCandidate[],
-      fallbackReason:
-        "未配置 DashScope Embedding 或 Qdrant，使用旧版规则扫描。",
+      fallbackReason: "未配置 DashScope Embedding 或 Qdrant，使用旧版规则扫描。",
     };
   }
 

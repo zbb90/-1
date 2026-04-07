@@ -8,11 +8,7 @@ export function MarkWrongButton({ taskId }: { taskId: string }) {
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
-    if (
-      !confirm(
-        "确认标记该 AI 回答有误，并将其转入人工复核池？此操作无法自动撤销。",
-      )
-    )
+    if (!confirm("确认标记该 AI 回答有误，并将其转入人工复核池？此操作无法自动撤销。"))
       return;
 
     setLoading(true);

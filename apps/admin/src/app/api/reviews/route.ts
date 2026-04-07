@@ -26,8 +26,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "读取复核池列表时发生异常",
+        message: error instanceof Error ? error.message : "读取复核池列表时发生异常",
       },
       { status: 500 },
     );

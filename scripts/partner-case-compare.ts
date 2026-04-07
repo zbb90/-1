@@ -16,9 +16,8 @@ function resolveAdminCwd() {
   const current = process.cwd();
   const candidates = [current, resolve(current, "apps/admin")];
   return (
-    candidates.find((dir) =>
-      existsSync(resolve(dir, "../../data/templates")),
-    ) ?? current
+    candidates.find((dir) => existsSync(resolve(dir, "../../data/templates"))) ??
+    current
   );
 }
 
@@ -41,9 +40,7 @@ function norm(s: string) {
 }
 
 /** 粗粒度：主管说「可提醒」类 vs 系统是否扣分 */
-function supervisorTone(
-  supervisor: string,
-): "remind" | "deduct" | "verify" | "other" {
+function supervisorTone(supervisor: string): "remind" | "deduct" | "verify" | "other" {
   const s = String(supervisor ?? "");
   if (/可提醒|提醒|报备提醒|先报备/.test(s)) return "remind";
   if (/正常记录|未整改|需扣|扣分|处理掉|废弃/.test(s)) return "deduct";
@@ -127,8 +124,7 @@ async function main() {
     } else {
       const ans = result.answer!;
       const sysT = systemTone(ans.shouldDeduct);
-      if (supT === "remind" && sysT === "remind")
-        align = "一致倾向（可提醒/不扣）";
+      if (supT === "remind" && sysT === "remind") align = "一致倾向（可提醒/不扣）";
       else if (supT === "deduct" && sysT === "deduct")
         align = "一致倾向（应记录/扣分）";
       else if (supT === "verify")
@@ -148,9 +144,7 @@ async function main() {
       系统命中: result.matched,
       系统规则: result.matched ? result.answer!.ruleId : null,
       系统是否扣分字段: result.matched ? result.answer!.shouldDeduct : null,
-      系统条款标题: result.matched
-        ? result.answer!.clauseTitle?.slice(0, 80)
-        : null,
+      系统条款标题: result.matched ? result.answer!.clauseTitle?.slice(0, 80) : null,
       对照结论: align,
     };
 

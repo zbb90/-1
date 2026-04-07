@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type TabKey = "rules" | "consensus" | "external-purchases" | "old-items";
 
@@ -22,6 +22,21 @@ export function KnowledgeTabs() {
   const [addFields, setAddFields] = useState<Row>({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+
+  // Inline editing
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<Row>({});
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Import
+  const [showImport, setShowImport] = useState(false);
+  const [importMode, setImportMode] = useState<"append" | "replace">("append");
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Search
+  const [search, setSearch] = useState("");
 
   const fetchRows = useCallback(async (tab: TabKey) => {
     setLoading(true);
@@ -46,24 +61,36 @@ export function KnowledgeTabs() {
   useEffect(() => {
     fetchRows(activeTab);
     setShowAdd(false);
+    setShowImport(false);
     setSaveMsg("");
+    setImportMsg("");
+    setEditId(null);
+    setSearch("");
   }, [activeTab, fetchRows]);
 
   function switchTab(tab: TabKey) {
     setActiveTab(tab);
-    setShowAdd(false);
-    setSaveMsg("");
-    setAddFields({});
+  }
+
+  function idField(tab: TabKey) {
+    return tab === "rules"
+      ? "rule_id"
+      : tab === "consensus"
+        ? "consensus_id"
+        : "item_id";
+  }
+
+  function primaryField(tab: TabKey) {
+    return tab === "rules" ? "条款标题" : tab === "consensus" ? "标题" : "物品名称";
+  }
+
+  function closeEdit() {
+    setEditId(null);
+    setEditFields({});
   }
 
   async function toggleStatus(row: Row) {
-    const idField =
-      activeTab === "rules"
-        ? "rule_id"
-        : activeTab === "consensus"
-          ? "consensus_id"
-          : "item_id";
-    const id = row[idField];
+    const id = row[idField(activeTab)];
     const newStatus = row["状态"] === "停用" ? "启用" : "停用";
 
     try {
@@ -90,28 +117,91 @@ export function KnowledgeTabs() {
       const res = await fetch(`/api/knowledge/${activeTab}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...addFields,
-          状态: addFields["状态"] || "启用",
-        }),
+        body: JSON.stringify({ ...addFields, 状态: addFields["状态"] || "启用" }),
       });
       const json = await res.json();
       if (json.ok) {
-        setSaveMsg("✓ 添加成功");
+        setSaveMsg("添加成功");
         setShowAdd(false);
         setAddFields({});
         await fetchRows(activeTab);
       } else {
-        setSaveMsg(`✗ ${json.message}`);
+        setSaveMsg(`失败：${json.message}`);
       }
     } catch {
-      setSaveMsg("✗ 网络错误");
+      setSaveMsg("网络错误");
     } finally {
       setSaving(false);
     }
   }
 
+  function startEdit(row: Row) {
+    setEditId(row[idField(activeTab)]);
+    setEditFields({ ...row });
+  }
+
+  async function saveEdit() {
+    if (!editId) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/knowledge/${activeTab}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editId, data: editFields }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        closeEdit();
+        await fetchRows(activeTab);
+      } else {
+        alert(`保存失败：${json.message}`);
+      }
+    } catch {
+      alert("网络错误，请稍后重试。");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleImport() {
+    const file = fileRef.current?.files?.[0];
+    if (!file) {
+      setImportMsg("请先选择 Excel 文件");
+      return;
+    }
+    setImporting(true);
+    setImportMsg("");
+    try {
+      const form = new FormData();
+      form.append("table", activeTab);
+      form.append("mode", importMode);
+      form.append("file", file);
+      const res = await fetch("/api/knowledge/import", { method: "POST", body: form });
+      const json = await res.json();
+      if (json.ok) {
+        setImportMsg(json.message);
+        setShowImport(false);
+        if (fileRef.current) fileRef.current.value = "";
+        await fetchRows(activeTab);
+      } else {
+        setImportMsg(`导入失败：${json.message}`);
+      }
+    } catch {
+      setImportMsg("网络错误，导入失败。");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const currentPrimaryField = primaryField(activeTab);
+  const currentEditTitle = editFields[currentPrimaryField] || editId || "";
+
+  const filteredRows = search.trim()
+    ? rows.filter((r) =>
+        Object.values(r).some((v) => v.toLowerCase().includes(search.toLowerCase())),
+      )
+    : rows;
 
   return (
     <div className="space-y-4">
@@ -133,28 +223,131 @@ export function KnowledgeTabs() {
       </div>
 
       {/* 工具栏 */}
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-gray-500">
-          共 <span className="font-semibold text-gray-800">{rows.length}</span>{" "}
-          条记录
-        </p>
-        <button
-          onClick={() => {
-            setShowAdd(!showAdd);
-            setSaveMsg("");
-          }}
-          className="rounded-xl bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
-        >
-          {showAdd ? "取消" : "+ 新增条目"}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500">
+            共 <span className="font-semibold text-gray-800">{rows.length}</span> 条
+            {search.trim() && filteredRows.length !== rows.length && (
+              <span className="ml-1 text-amber-600">
+                （筛选出 {filteredRows.length} 条）
+              </span>
+            )}
+          </p>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索关键字..."
+            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 w-48"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          {/* 下载模板 */}
+          <a
+            href={`/api/knowledge/export?table=${activeTab}&type=template`}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            下载模板
+          </a>
+          {/* 导出数据 */}
+          <a
+            href={`/api/knowledge/export?table=${activeTab}&type=data`}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            导出数据
+          </a>
+          {/* 导入 */}
+          <button
+            onClick={() => {
+              setShowImport(!showImport);
+              setImportMsg("");
+            }}
+            className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+          >
+            {showImport ? "取消导入" : "Excel 导入"}
+          </button>
+          {/* 新增 */}
+          <button
+            onClick={() => {
+              setShowAdd(!showAdd);
+              setSaveMsg("");
+            }}
+            className="rounded-xl bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+          >
+            {showAdd ? "取消" : "+ 新增条目"}
+          </button>
+        </div>
       </div>
+
+      {/* 提示消息 */}
+      {(saveMsg || importMsg) && (
+        <div
+          className={`rounded-xl px-4 py-2 text-sm ${
+            (saveMsg || importMsg).includes("成功")
+              ? "bg-green-50 text-green-700"
+              : "bg-red-50 text-red-700"
+          }`}
+        >
+          {saveMsg || importMsg}
+        </div>
+      )}
+
+      {/* Excel 导入面板 */}
+      {showImport && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 space-y-4">
+          <h3 className="text-base font-semibold text-gray-800">Excel 文件导入</h3>
+          <p className="text-sm text-gray-500">
+            请先
+            <a
+              href={`/api/knowledge/export?table=${activeTab}&type=template`}
+              className="mx-1 text-green-700 underline"
+            >
+              下载模板
+            </a>
+            ，按模板格式填写后上传 .xlsx 文件。
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-green-700 hover:file:bg-green-100"
+            />
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="radio"
+                name="import-mode"
+                value="append"
+                checked={importMode === "append"}
+                onChange={() => setImportMode("append")}
+              />
+              追加到现有数据
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="radio"
+                name="import-mode"
+                value="replace"
+                checked={importMode === "replace"}
+                onChange={() => setImportMode("replace")}
+              />
+              <span className="text-red-600">替换全部数据</span>
+            </label>
+          </div>
+          <button
+            onClick={handleImport}
+            disabled={importing}
+            className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
+          >
+            {importing ? "导入中..." : "开始导入"}
+          </button>
+        </div>
+      )}
 
       {/* 新增表单 */}
       {showAdd && (
         <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">
-            新增条目
-          </h3>
+          <h3 className="text-base font-semibold text-gray-800 mb-4">新增条目</h3>
           <AddForm tab={activeTab} fields={addFields} onChange={setAddFields} />
           <div className="mt-4 flex items-center gap-4">
             <button
@@ -164,13 +357,6 @@ export function KnowledgeTabs() {
             >
               {saving ? "保存中..." : "保存"}
             </button>
-            {saveMsg && (
-              <p
-                className={`text-sm ${saveMsg.startsWith("✓") ? "text-green-600" : "text-red-600"}`}
-              >
-                {saveMsg}
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -186,67 +372,140 @@ export function KnowledgeTabs() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-2xl bg-white p-8 text-center text-sm text-gray-500 shadow-sm ring-1 ring-gray-200">
-          暂无数据。
+          暂无数据。可点击「+ 新增条目」手动添加，或使用「Excel 导入」批量导入。
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                {headers.map((h) => (
-                  <th
-                    key={h}
-                    className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium text-gray-500"
-                  >
-                    {h}
+        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 text-xs text-gray-500">
+            <p>表格支持横向滚动，右侧操作列已固定，可直接点任意行进入编辑。</p>
+            <p className="hidden md:block">当前显示 {filteredRows.length} 条</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  {headers.map((h) => (
+                    <th
+                      key={h}
+                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium text-gray-500"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                  <th className="sticky right-0 z-20 border-l border-gray-100 bg-gray-50 px-4 py-3 text-left text-xs font-medium text-gray-500 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.25)]">
+                    操作
                   </th>
-                ))}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {rows.map((row, idx) => {
-                const idField =
-                  activeTab === "rules"
-                    ? "rule_id"
-                    : activeTab === "consensus"
-                      ? "consensus_id"
-                      : "item_id";
-                const isDisabled = row["状态"] === "停用";
-                return (
-                  <tr
-                    key={row[idField] || idx}
-                    className={isDisabled ? "opacity-50" : ""}
-                  >
-                    {headers.map((h) => (
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredRows.map((row, idx) => {
+                  const rid = row[idField(activeTab)] || String(idx);
+                  const isDisabled = row["状态"] === "停用";
+                  const isEditing = editId === rid;
+                  return (
+                    <tr
+                      key={rid}
+                      onClick={() => startEdit(row)}
+                      className={`cursor-pointer ${isDisabled ? "opacity-50" : ""} ${isEditing ? "bg-amber-50" : "hover:bg-gray-50"}`}
+                    >
+                      {headers.map((h) => (
+                        <td
+                          key={h}
+                          className="max-w-[200px] truncate px-4 py-3 text-gray-800"
+                          title={row[h]}
+                        >
+                          {row[h] || "-"}
+                        </td>
+                      ))}
                       <td
-                        key={h}
-                        className="max-w-[200px] truncate px-4 py-3 text-gray-800"
-                        title={row[h]}
-                      >
-                        {row[h] || "-"}
-                      </td>
-                    ))}
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <button
-                        onClick={() => toggleStatus(row)}
-                        className={`rounded-lg px-3 py-1 text-xs font-medium ${
-                          isDisabled
-                            ? "bg-green-50 text-green-700 hover:bg-green-100"
-                            : "bg-red-50 text-red-700 hover:bg-red-100"
+                        className={`sticky right-0 whitespace-nowrap border-l border-gray-100 px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.25)] ${
+                          isEditing ? "bg-amber-50" : "bg-white"
                         }`}
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {isDisabled ? "启用" : "停用"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEdit(row)}
+                            className="rounded-lg bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => toggleStatus(row)}
+                            className={`rounded-lg px-3 py-1 text-xs font-medium ${
+                              isDisabled
+                                ? "bg-green-50 text-green-700 hover:bg-green-100"
+                                : "bg-red-50 text-red-700 hover:bg-red-100"
+                            }`}
+                          >
+                            {isDisabled ? "启用" : "停用"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      {editId && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[1px]"
+            onClick={closeEdit}
+          />
+          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l border-amber-200 bg-white shadow-2xl">
+            <div className="border-b border-amber-100 bg-amber-50 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-amber-700">正在编辑</p>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">
+                    {currentEditTitle || "未命名条目"}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    编号：{editId}。在右侧直接修改，保存后会自动刷新表格。
+                  </p>
+                </div>
+                <button
+                  onClick={closeEdit}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <AddForm tab={activeTab} fields={editFields} onChange={setEditFields} />
+            </div>
+
+            <div className="border-t border-gray-100 bg-white px-6 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-gray-500">
+                  无需返回页面顶部，右侧面板可随时保存或关闭。
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={closeEdit}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={editSaving}
+                    className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:bg-amber-300"
+                  >
+                    {editSaving ? "保存中..." : "保存修改"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </>
       )}
     </div>
   );
@@ -328,19 +587,15 @@ function AddForm({
           {def.multiline ? (
             <textarea
               value={fields[def.key] ?? ""}
-              onChange={(e) =>
-                onChange({ ...fields, [def.key]: e.target.value })
-              }
-              className="min-h-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
+              onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
+              className="min-h-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
               placeholder={def.label}
             />
           ) : (
             <input
               value={fields[def.key] ?? ""}
-              onChange={(e) =>
-                onChange({ ...fields, [def.key]: e.target.value })
-              }
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
+              onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
               placeholder={def.label}
             />
           )}

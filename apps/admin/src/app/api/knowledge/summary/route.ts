@@ -12,8 +12,7 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "读取知识库摘要时发生异常",
+        message: error instanceof Error ? error.message : "读取知识库摘要时发生异常",
       },
       { status: 500 },
     );

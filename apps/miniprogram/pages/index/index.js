@@ -1,6 +1,7 @@
 Page({
   data: {
     displayName: "",
+    avatarLetter: "?",
     requesterId: "",
     isSupervisor: false,
   },
@@ -15,8 +16,13 @@ Page({
     const supervisorAuth = wx.getStorageSync("supervisorAuth");
     const isSupervisor = Boolean(supervisorAuth && supervisorAuth.user);
 
+    const displayName = profile.requesterName || "未设置昵称";
+    const trimmed = String(displayName).trim();
+    const avatarLetter = trimmed ? trimmed.charAt(0) : "?";
+
     this.setData({
-      displayName: profile.requesterName || "未设置昵称",
+      displayName,
+      avatarLetter,
       requesterId: profile.requesterId || "",
       isSupervisor,
     });

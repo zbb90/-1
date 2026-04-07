@@ -9,9 +9,7 @@ function getDashScopeApiKey() {
 }
 
 export function getEmbeddingModelName() {
-  return (
-    process.env.EMBEDDING_MODEL_NAME?.trim() || DEFAULT_EMBEDDING_MODEL_NAME
-  );
+  return process.env.EMBEDDING_MODEL_NAME?.trim() || DEFAULT_EMBEDDING_MODEL_NAME;
 }
 
 export function getEmbeddingDimensions() {

@@ -3,7 +3,7 @@
   <!-- 用户身份卡片 -->
   <view class="profile-card card" bindtap="goToSettings">
     <view class="profile-left">
-      <view class="profile-avatar">{{displayName[0] || '?'}}</view>
+      <view class="profile-avatar">{{avatarLetter}}</view>
       <view class="profile-info">
         <view class="profile-name">{{displayName}}</view>
         <view class="profile-id">{{requesterId}}</view>

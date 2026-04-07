@@ -11,15 +11,12 @@ import type {
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
-/*  Storage backend: Upstash Redis (production) ↔ local JSON (dev)    */
+/*  Storage backend detection                                          */
 /* ------------------------------------------------------------------ */
 
-const REDIS_KEY = "audit:review-tasks";
-
-function useRedis() {
+function isRedisConfigured() {
   return Boolean(
-    process.env.KV_REST_API_URL?.trim() &&
-    process.env.KV_REST_API_TOKEN?.trim(),
+    process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim(),
   );
 }
 
@@ -35,7 +32,28 @@ async function getRedis() {
   return redisInstance;
 }
 
-/* ---------- File-based (local dev fallback) ---------- */
+/* ------------------------------------------------------------------ */
+/*  Redis key schema (v2 – per-task keys + sorted-set index)           */
+/* ------------------------------------------------------------------ */
+
+const IDX_ALL = "audit:review-task-ids";
+const LEGACY_KEY = "audit:review-tasks";
+
+function taskKey(id: string) {
+  return `audit:review-task:${id}`;
+}
+
+function requesterIdx(requesterId: string) {
+  return `audit:requester-tasks:${requesterId}`;
+}
+
+function isoToScore(iso: string) {
+  return new Date(iso).getTime();
+}
+
+/* ------------------------------------------------------------------ */
+/*  File-based storage (local dev fallback – unchanged)                */
+/* ------------------------------------------------------------------ */
 
 const dataDir = resolve(process.cwd(), "../../data");
 const reviewFilePath = resolve(dataDir, "review-tasks.json");
@@ -57,38 +75,208 @@ async function readFromFile(): Promise<ReviewTask[]> {
 
 async function writeToFile(tasks: ReviewTask[]) {
   await ensureReviewFile();
-  await writeFile(
-    reviewFilePath,
-    `${JSON.stringify(tasks, null, 2)}\n`,
-    "utf-8",
-  );
-}
-
-/* ---------- Redis-based (Vercel / production) ---------- */
-
-async function readFromRedis(): Promise<ReviewTask[]> {
-  const redis = await getRedis();
-  const data = await redis.get<ReviewTask[]>(REDIS_KEY);
-  return data ?? [];
-}
-
-async function writeToRedis(tasks: ReviewTask[]) {
-  const redis = await getRedis();
-  await redis.set(REDIS_KEY, JSON.stringify(tasks));
-}
-
-/* ---------- Unified read / write ---------- */
-
-async function readReviewTasks(): Promise<ReviewTask[]> {
-  return useRedis() ? readFromRedis() : readFromFile();
-}
-
-async function writeReviewTasks(tasks: ReviewTask[]) {
-  return useRedis() ? writeToRedis(tasks) : writeToFile(tasks);
+  await writeFile(reviewFilePath, `${JSON.stringify(tasks, null, 2)}\n`, "utf-8");
 }
 
 /* ------------------------------------------------------------------ */
-/*  Business logic (unchanged)                                        */
+/*  Redis v2 – individual key operations                               */
+/* ------------------------------------------------------------------ */
+
+let migrationDone = false;
+
+async function ensureMigrated() {
+  if (migrationDone) return;
+  migrationDone = true;
+
+  const redis = await getRedis();
+  const existsNew = await redis.exists(IDX_ALL);
+  if (existsNew) return;
+
+  const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
+  if (!legacy || !Array.isArray(legacy) || legacy.length === 0) return;
+
+  const pipeline = redis.pipeline();
+  for (const task of legacy) {
+    pipeline.set(taskKey(task.id), JSON.stringify(task));
+    pipeline.zadd(IDX_ALL, {
+      score: isoToScore(task.createdAt),
+      member: task.id,
+    });
+    if (task.requesterId?.trim()) {
+      pipeline.sadd(requesterIdx(task.requesterId), task.id);
+    }
+  }
+  await pipeline.exec();
+}
+
+async function redisAddTask(task: ReviewTask) {
+  await ensureMigrated();
+  const redis = await getRedis();
+  const pipeline = redis.pipeline();
+  pipeline.set(taskKey(task.id), JSON.stringify(task));
+  pipeline.zadd(IDX_ALL, {
+    score: isoToScore(task.createdAt),
+    member: task.id,
+  });
+  if (task.requesterId?.trim()) {
+    pipeline.sadd(requesterIdx(task.requesterId), task.id);
+  }
+  await pipeline.exec();
+}
+
+async function redisGetTask(id: string): Promise<ReviewTask | null> {
+  await ensureMigrated();
+  const redis = await getRedis();
+  const raw = await redis.get<string>(taskKey(id));
+  if (!raw) return null;
+  return typeof raw === "string"
+    ? (JSON.parse(raw) as ReviewTask)
+    : (raw as unknown as ReviewTask);
+}
+
+async function redisUpdateTask(
+  id: string,
+  patch: Partial<ReviewTask>,
+): Promise<ReviewTask | null> {
+  await ensureMigrated();
+  const current = await redisGetTask(id);
+  if (!current) return null;
+
+  const updated: ReviewTask = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const redis = await getRedis();
+  await redis.set(taskKey(id), JSON.stringify(updated));
+  return updated;
+}
+
+async function redisListIds(requesterId?: string): Promise<string[]> {
+  await ensureMigrated();
+  const redis = await getRedis();
+
+  if (requesterId) {
+    return (await redis.smembers(requesterIdx(requesterId))) as string[];
+  }
+
+  return (await redis.zrange(IDX_ALL, 0, -1, { rev: true })) as string[];
+}
+
+async function redisGetMany(ids: string[]): Promise<ReviewTask[]> {
+  if (ids.length === 0) return [];
+  const redis = await getRedis();
+
+  const BATCH = 100;
+  const tasks: ReviewTask[] = [];
+
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const pipeline = redis.pipeline();
+    for (const id of batch) {
+      pipeline.get(taskKey(id));
+    }
+    const results = await pipeline.exec();
+    for (const raw of results) {
+      if (!raw) continue;
+      const task =
+        typeof raw === "string"
+          ? (JSON.parse(raw) as ReviewTask)
+          : (raw as unknown as ReviewTask);
+      if (task?.id) tasks.push(task);
+    }
+  }
+
+  return tasks;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Unified CRUD                                                       */
+/* ------------------------------------------------------------------ */
+
+async function persistNewTask(task: ReviewTask) {
+  if (isRedisConfigured()) {
+    await redisAddTask(task);
+  } else {
+    const tasks = await readFromFile();
+    tasks.unshift(task);
+    await writeToFile(tasks);
+  }
+  return task;
+}
+
+export async function listReviewTasks(filters?: { requesterId?: string }) {
+  const requesterId = filters?.requesterId?.trim();
+
+  if (isRedisConfigured()) {
+    const ids = await redisListIds(requesterId);
+    const tasks = await redisGetMany(ids);
+    return tasks.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  const tasks = await readFromFile();
+  const filtered = requesterId
+    ? tasks.filter((t) => t.requesterId === requesterId)
+    : tasks;
+  return filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getReviewTaskById(
+  id: string,
+  filters?: { requesterId?: string },
+) {
+  if (isRedisConfigured()) {
+    const task = await redisGetTask(id);
+    if (!task) return null;
+    const requesterId = filters?.requesterId?.trim();
+    if (requesterId && task.requesterId !== requesterId) return null;
+    return task;
+  }
+
+  const tasks = await listReviewTasks(filters);
+  return tasks.find((t) => t.id === id) || null;
+}
+
+export async function updateReviewTask(
+  id: string,
+  payload: Partial<ReviewTask> & { status?: ReviewTaskStatus },
+) {
+  if (isRedisConfigured()) {
+    return redisUpdateTask(id, payload);
+  }
+
+  const tasks = await readFromFile();
+  const index = tasks.findIndex((t) => t.id === id);
+  if (index === -1) return null;
+
+  const updated: ReviewTask = {
+    ...tasks[index],
+    ...payload,
+    updatedAt: new Date().toISOString(),
+  };
+  tasks[index] = updated;
+  await writeToFile(tasks);
+  return updated;
+}
+
+export async function getReviewSummary() {
+  const tasks = await listReviewTasks();
+  return {
+    total: tasks.length,
+    pending: tasks.filter((t) => t.status === "待处理").length,
+    needMoreInfo: tasks.filter((t) => t.status === "待补充").length,
+    completed: tasks.filter((t) => t.status === "已处理").length,
+    latest: tasks.slice(0, 5),
+  };
+}
+
+export function getStorageBackend() {
+  return isRedisConfigured() ? "upstash-redis" : "local-file";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Task creation helpers                                              */
 /* ------------------------------------------------------------------ */
 
 function buildId() {
@@ -101,13 +289,9 @@ function buildId() {
   return `RV-${stamp}-${random}`;
 }
 
-function normalizeRequester(params: {
-  requesterId?: string;
-  requesterName?: string;
-}) {
+function normalizeRequester(params: { requesterId?: string; requesterName?: string }) {
   const requesterId = params.requesterId?.trim();
   const requesterName = params.requesterName?.trim();
-
   return {
     requesterId,
     requester: requesterName || requesterId || "当前用户",
@@ -153,14 +337,6 @@ function createBaseTask(params: {
     processor: "",
     sourcePayload: JSON.stringify(params.sourcePayload, null, 2),
   };
-
-  return task;
-}
-
-async function persistNewTask(task: ReviewTask) {
-  const tasks = await readReviewTasks();
-  tasks.unshift(task);
-  await writeReviewTasks(tasks);
   return task;
 }
 
@@ -210,11 +386,7 @@ export async function createReviewTaskFromAnswer(params: {
     category: params.category || req.category || "-",
     selfJudgment: params.selfJudgment || req.selfJudgment || "-",
     description:
-      params.description ||
-      req.description ||
-      req.issueTitle ||
-      req.name ||
-      "-",
+      params.description || req.description || req.issueTitle || req.name || "-",
     imageNotes: "-",
     rejectReason: "-",
     finalConclusion: "",
@@ -280,60 +452,4 @@ export async function createReviewTaskFromOldItem(
     rejectReason,
     sourcePayload: request,
   });
-}
-
-export async function listReviewTasks(filters?: { requesterId?: string }) {
-  const tasks = await readReviewTasks();
-  const requesterId = filters?.requesterId?.trim();
-  const filteredTasks = requesterId
-    ? tasks.filter((task) => task.requesterId === requesterId)
-    : tasks;
-
-  return filteredTasks.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export async function getReviewTaskById(
-  id: string,
-  filters?: { requesterId?: string },
-) {
-  const tasks = await listReviewTasks(filters);
-  return tasks.find((task) => task.id === id) || null;
-}
-
-export async function getReviewSummary() {
-  const tasks = await listReviewTasks();
-  return {
-    total: tasks.length,
-    pending: tasks.filter((task) => task.status === "待处理").length,
-    needMoreInfo: tasks.filter((task) => task.status === "待补充").length,
-    completed: tasks.filter((task) => task.status === "已处理").length,
-    latest: tasks.slice(0, 5),
-  };
-}
-
-export async function updateReviewTask(
-  id: string,
-  payload: Partial<ReviewTask> & { status?: ReviewTaskStatus },
-) {
-  const tasks = await readReviewTasks();
-  const index = tasks.findIndex((task) => task.id === id);
-
-  if (index === -1) {
-    return null;
-  }
-
-  const current = tasks[index];
-  const nextTask: ReviewTask = {
-    ...current,
-    ...payload,
-    updatedAt: new Date().toISOString(),
-  };
-
-  tasks[index] = nextTask;
-  await writeReviewTasks(tasks);
-  return nextTask;
-}
-
-export function getStorageBackend() {
-  return useRedis() ? "upstash-redis" : "local-file";
 }

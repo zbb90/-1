@@ -1,4 +1,5 @@
 import { LoginForm } from "./login-form";
+import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function ReviewsLoginPage({
   searchParams,
@@ -9,13 +10,11 @@ export default async function ReviewsLoginPage({
   const raw = sp.next?.trim() ?? "";
   const defaultNext = raw.startsWith("/") ? raw : "/reviews";
 
-  const usingDefaults =
-    !process.env.ADMIN_BASIC_AUTH_USER ||
-    !process.env.ADMIN_BASIC_AUTH_PASSWORD;
-
   return (
-    <main className="min-h-screen bg-[var(--background)] p-8">
-      <LoginForm defaultNext={defaultNext} usingDefaults={usingDefaults} />
-    </main>
+    <AdminShell>
+      <div className="flex min-h-[calc(100vh-3rem)] flex-col items-center justify-center py-8">
+        <LoginForm defaultNext={defaultNext} />
+      </div>
+    </AdminShell>
   );
 }

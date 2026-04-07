@@ -1,167 +1,177 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
 import { getReviewSummary } from "@/lib/review-pool";
+import { listAllUsers } from "@/lib/user-store";
+import { AdminNav } from "@/components/admin/admin-nav";
+import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function HomePage() {
   const reviewSummary = await getReviewSummary();
-  const dashboardStats = [
+  const cookieStore = await cookies();
+  const role = cookieStore.get("audit_role")?.value;
+  const isLeader = role === "leader";
+
+  let userCounts = { supervisor: 0, specialist: 0 };
+  if (isLeader) {
+    try {
+      const users = await listAllUsers();
+      userCounts = {
+        supervisor: users.filter((u) => u.role === "supervisor").length,
+        specialist: users.filter((u) => u.role === "specialist").length,
+      };
+    } catch {
+      // Redis 不可用时降级
+    }
+  }
+
+  const stats = [
+    { label: "复核总数", value: reviewSummary.total, color: "text-gray-900" },
+    { label: "待复核", value: reviewSummary.pending, color: "text-amber-600" },
+    { label: "待补充", value: reviewSummary.needMoreInfo, color: "text-orange-600" },
+    { label: "已处理", value: reviewSummary.completed, color: "text-green-700" },
+  ];
+
+  const navItems = [
+    { href: "/reviews", label: "复核池", desc: "查看并处理待复核任务", icon: "📋" },
+    { href: "/conversations", label: "问答日志", desc: "查看全部问答记录", icon: "💬" },
+    { href: "/knowledge", label: "知识库", desc: "管理稽核规则数据", icon: "📚" },
+    ...(isLeader
+      ? [
+          {
+            href: "/users",
+            label: "账号管理",
+            desc: "管理主管与专员账号",
+            icon: "👥",
+          },
+        ]
+      : []),
     {
-      label: "复核总数",
-      value: String(reviewSummary.total),
-      description: "已进入人工复核池的全部任务数量",
-    },
-    {
-      label: "待复核",
-      value: String(reviewSummary.pending),
-      description: "系统拒答或无法判断，等待处理的问题",
-    },
-    {
-      label: "待补充",
-      value: String(reviewSummary.needMoreInfo),
-      description: "已退回给提问人补充信息的任务",
-    },
-    {
-      label: "已处理",
-      value: String(reviewSummary.completed),
-      description: "主管已完成结论确认的复核任务",
+      href: "/api/reviews/export?format=csv",
+      label: "导出结论",
+      desc: "下载 CSV 格式复核报告",
+      icon: "📥",
     },
   ];
 
   return (
-    <main className="min-h-screen bg-[var(--background)] p-8">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <section className="rounded-3xl bg-[var(--card)] p-8 shadow-sm ring-1 ring-[var(--border)]">
-          <p className="text-sm font-medium text-green-700">主管后台工作台</p>
-          <h1 className="mt-2 text-3xl font-bold text-gray-900">
-            稽核 AI 助手 PC 端测试入口
-          </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">
-            这里是主管在 PC
-            端查看复核池、处理人工复核、导出复核结论的统一入口。专员继续通过小程序提问，主管可在此完成登录、处理和结果导出。
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <a
-              href="/reviews/login"
-              className="rounded-xl bg-green-700 px-5 py-3 text-sm font-medium text-white"
-            >
-              主管登录
-            </a>
-            <a
-              href="/reviews"
-              className="rounded-xl border border-[var(--border)] px-5 py-3 text-sm font-medium text-gray-700"
-            >
-              进入复核池
-            </a>
-            <a
-              href="/api/reviews/export?format=csv"
-              className="rounded-xl border border-[var(--border)] px-5 py-3 text-sm font-medium text-gray-700"
-            >
-              导出复核结论
-            </a>
+    <AdminShell>
+      {role ? (
+        <div className="flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 md:px-5">
+          <AdminNav current="home" showUsersLink={isLeader} />
+        </div>
+      ) : null}
+
+      <section className="rounded-3xl bg-gradient-to-br from-green-700 to-green-900 p-8 text-white shadow-lg">
+        <p className="text-sm font-medium text-green-200">稽核 AI 助手</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">管理工作台</h1>
+        <p className="mt-2 text-sm leading-6 text-green-100">
+          {isLeader
+            ? "您已以负责人身份登录，可管理复核、知识库与全部账号。"
+            : role === "supervisor"
+              ? "您已以主管身份登录，可处理复核任务与管理知识库。"
+              : "请先登录后使用管理功能。"}
+        </p>
+        {!role && (
+          <Link
+            href="/reviews/login"
+            className="mt-4 inline-block rounded-xl bg-white px-5 py-2.5 text-sm font-medium text-green-800 shadow transition hover:bg-green-50"
+          >
+            登录
+          </Link>
+        )}
+      </section>
+
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200"
+          >
+            <p className="text-xs font-medium text-gray-500">{s.label}</p>
+            <p className={`mt-2 text-3xl font-bold ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </section>
+
+      {isLeader && (
+        <section className="grid grid-cols-2 gap-4 md:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+            <p className="text-xs font-medium text-gray-500">主管人数</p>
+            <p className="mt-2 text-3xl font-bold text-gray-900">
+              {userCounts.supervisor}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+            <p className="text-xs font-medium text-gray-500">专员人数</p>
+            <p className="mt-2 text-3xl font-bold text-gray-900">
+              {userCounts.specialist}
+            </p>
           </div>
         </section>
+      )}
 
-        <section className="grid gap-4 md:grid-cols-4">
-          {dashboardStats.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl bg-[var(--card)] p-6 shadow-sm ring-1 ring-[var(--border)]"
-            >
-              <p className="text-sm text-gray-500">{item.label}</p>
-              <p className="mt-3 text-3xl font-semibold text-gray-900">
-                {item.value}
+      <section className="grid gap-4 md:grid-cols-3">
+        {navItems.map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="group flex items-start gap-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:shadow-md hover:ring-green-200"
+          >
+            <span className="text-2xl">{item.icon}</span>
+            <div>
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-green-700">
+                {item.label}
               </p>
-              <p className="mt-2 text-sm leading-6 text-gray-600">
-                {item.description}
-              </p>
+              <p className="mt-1 text-xs text-gray-500">{item.desc}</p>
             </div>
-          ))}
-        </section>
+          </Link>
+        ))}
+      </section>
 
-        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="rounded-2xl bg-[var(--card)] p-6 shadow-sm ring-1 ring-[var(--border)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  最近复核任务
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  主管可以从这里快速进入最新的复核记录。
-                </p>
-              </div>
-              <a
-                href="/reviews"
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-gray-700"
+      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">最新复核任务</h2>
+          <Link
+            href="/reviews"
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+          >
+            查看全部
+          </Link>
+        </div>
+        <div className="mt-4 space-y-3">
+          {reviewSummary.latest.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              暂无复核任务，专员在小程序提问后会自动产生。
+            </p>
+          ) : (
+            reviewSummary.latest.map((r) => (
+              <Link
+                key={r.id}
+                href={`/reviews/${r.id}`}
+                className="flex items-center justify-between rounded-xl border border-gray-200 p-4 transition hover:bg-gray-50"
               >
-                查看完整复核池
-              </a>
-            </div>
-
-            <div className="mt-6 space-y-4">
-              {reviewSummary.latest.length === 0 ? (
-                <div className="rounded-xl border border-[var(--border)] p-4 text-sm text-gray-500">
-                  目前还没有复核任务。专员在小程序端遇到无法自动判断的问题后，会自动进入这里。
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{r.description}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {r.category} · {r.id}
+                  </p>
                 </div>
-              ) : (
-                reviewSummary.latest.map((review) => (
-                  <a
-                    key={review.id}
-                    href={`/reviews/${review.id}`}
-                    className="block rounded-xl border border-[var(--border)] p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">
-                          {review.id}
-                        </p>
-                        <p className="mt-1 text-sm text-gray-500">
-                          门店编码：{review.storeCode}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                        {review.status}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm font-medium text-gray-800">
-                      {review.category}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-gray-600">
-                      {review.description}
-                    </p>
-                  </a>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-2xl bg-[var(--card)] p-6 shadow-sm ring-1 ring-[var(--border)]">
-              <h2 className="text-xl font-semibold text-gray-900">
-                PC 端测试路径
-              </h2>
-              <ol className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
-                <li>1. 先访问 `/reviews/login`，使用主管账号登录。</li>
-                <li>2. 登录后进入 `/reviews`，查看待处理复核任务。</li>
-                <li>3. 进入任意一条复核详情，填写最终结论并保存。</li>
-                <li>4. 如需整理沉淀结果，可导出复核结论 CSV。</li>
-              </ol>
-            </div>
-
-            <div className="rounded-2xl bg-[var(--card)] p-6 shadow-sm ring-1 ring-[var(--border)]">
-              <h2 className="text-xl font-semibold text-gray-900">
-                小程序联动说明
-              </h2>
-              <ul className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
-                <li>1. 专员使用小程序提交常规问题、旧品比对、外购查询。</li>
-                <li>
-                  2. 系统命中规则时直接返回；无法判断时自动进入人工复核池。
-                </li>
-                <li>
-                  3. 主管在 PC 端处理完成后，专员可在“我的复核”查看更新结果。
-                </li>
-              </ul>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                    r.status === "待处理"
+                      ? "bg-amber-50 text-amber-700"
+                      : r.status === "已处理"
+                        ? "bg-green-50 text-green-700"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {r.status}
+                </span>
+              </Link>
+            ))
+          )}
+        </div>
+      </section>
+    </AdminShell>
   );
 }

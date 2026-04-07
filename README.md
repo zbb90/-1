@@ -40,10 +40,10 @@ npm run dev:admin
 
 ```bash
 DASHSCOPE_API_KEY=你的阿里云百炼Key
-MODEL_NAME=qwen-plus
+MODEL_NAME=qwen3.5-flash
 ```
 
-- 当前默认使用阿里云百炼 OpenAI 兼容接口，推荐模型为 `qwen-plus`
+- 当前默认使用阿里云百炼 OpenAI 兼容接口，推荐对话模型为 `qwen3.5-flash`（成本低、响应快，适合规则命中后的简短解释）
 
 ## 复核数据持久化
 
@@ -66,3 +66,34 @@ MODEL_NAME=qwen-plus
 - 主管登录后台后，可在 `/reviews` 页面点击“导出复核结论”
 - 导出接口为 `GET /api/reviews/export?format=csv`
 - 当前会导出状态为“已处理”或“已加入知识库”的任务，便于后续整理并反哺 `data/templates`
+
+## 生产部署（阿里云 ECS）
+
+- 应用以 Docker/Podman 容器运行，Nginx 反向代理与 HTTPS 证书由服务器侧配置；运维与重启命令见 [docs/OPS_ALIYUN.md](docs/OPS_ALIYUN.md)。
+- 生产环境同样需要 **Upstash Redis**（`KV_REST_*`）用于复核任务与知识库在线数据，否则数据会在容器重建后丢失。
+
+## 测试与脚本
+
+```bash
+npm run test              # Vitest（admin 子包）
+npm run lint:admin
+npm run build:admin
+npm run validate:knowledge-excel -- path/to/file.xlsx [表名]   # 校验 Excel 表头
+npm run verify:semantic-cases  # 语义回归（需已配置向量等）
+```
+
+## 代码风格（可选）
+
+- 格式化：`npm run format` / `npm run format:check`
+- 若使用 Git hooks：在仓库根目录执行 `npx husky init`（或已包含 `.husky/pre-commit` 时提交前会运行 `lint-staged`）
+
+## 文档索引
+
+| 文档                                                       | 说明                    |
+| ---------------------------------------------------------- | ----------------------- |
+| [data/README.md](data/README.md)                           | 知识库模板与 Excel 校验 |
+| [docs/LOCAL_E2E_CHECKLIST.md](docs/LOCAL_E2E_CHECKLIST.md) | 本地全链路测试清单      |
+| [docs/ACCOUNT_ONBOARDING.md](docs/ACCOUNT_ONBOARDING.md)   | 账号与权限预配置        |
+| [docs/SECURITY.md](docs/SECURITY.md)                       | 安全与限流说明          |
+| [docs/OPS_ALIYUN.md](docs/OPS_ALIYUN.md)                   | 阿里云运维              |
+| [docs/USAGE_MINIPROGRAM.md](docs/USAGE_MINIPROGRAM.md)     | 专员小程序使用说明      |

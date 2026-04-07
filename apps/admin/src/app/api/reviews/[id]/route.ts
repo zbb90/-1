@@ -42,8 +42,7 @@ export async function GET(
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "读取复核任务详情时发生异常",
+        message: error instanceof Error ? error.message : "读取复核任务详情时发生异常",
       },
       { status: 500 },
     );
@@ -84,8 +83,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "更新复核任务时发生异常",
+        message: error instanceof Error ? error.message : "更新复核任务时发生异常",
       },
       { status: 500 },
     );

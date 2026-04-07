@@ -1,9 +1,6 @@
 const ADMIN_USER_ENV = "ADMIN_BASIC_AUTH_USER";
 const ADMIN_PASSWORD_ENV = "ADMIN_BASIC_AUTH_PASSWORD";
 
-const DEFAULT_ADMIN_USER = "admin";
-const DEFAULT_ADMIN_PASSWORD = "audit2026";
-
 function decodeBase64(value: string) {
   if (typeof atob === "function") {
     return atob(value);
@@ -13,16 +10,14 @@ function decodeBase64(value: string) {
 }
 
 export function getAdminCredentials() {
-  const username = process.env[ADMIN_USER_ENV]?.trim() || DEFAULT_ADMIN_USER;
-  const password =
-    process.env[ADMIN_PASSWORD_ENV]?.trim() || DEFAULT_ADMIN_PASSWORD;
+  const username = process.env[ADMIN_USER_ENV]?.trim() || "";
+  const password = process.env[ADMIN_PASSWORD_ENV]?.trim() || "";
 
   return {
     username,
     password,
-    isConfigured: true,
-    usingDefaults:
-      !process.env[ADMIN_USER_ENV] || !process.env[ADMIN_PASSWORD_ENV],
+    isConfigured: Boolean(username && password),
+    usingDefaults: false,
   };
 }
 

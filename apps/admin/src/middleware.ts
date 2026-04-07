@@ -3,41 +3,34 @@ import type { NextRequest } from "next/server";
 import { isAuthorizedAdminRequest } from "@/lib/admin-auth";
 import { verifyAdminSessionFromRequest } from "@/lib/admin-session";
 
-function isReviewsLoginPath(pathname: string) {
-  return (
-    pathname === "/reviews/login" || pathname.startsWith("/reviews/login/")
-  );
+function isLoginPath(pathname: string) {
+  return pathname === "/reviews/login" || pathname.startsWith("/reviews/login/");
 }
 
-function isReviewsPagePath(pathname: string) {
-  return pathname === "/reviews" || pathname.startsWith("/reviews/");
+function isLeaderOnlyPath(pathname: string) {
+  return pathname === "/users" || pathname.startsWith("/users/");
 }
 
-function isProtectedPath(request: NextRequest) {
+function isProtectedPagePath(pathname: string) {
+  if (isLoginPath(pathname)) return false;
+
+  if (pathname === "/reviews" || pathname.startsWith("/reviews/")) return true;
+  if (pathname === "/conversations" || pathname.startsWith("/conversations/"))
+    return true;
+  if (pathname === "/knowledge" || pathname.startsWith("/knowledge/")) return true;
+  if (isLeaderOnlyPath(pathname)) return true;
+
+  return false;
+}
+
+function isProtectedApiPath(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-
-  if (isReviewsLoginPath(pathname)) {
-    return false;
-  }
-
-  if (isReviewsPagePath(pathname)) {
-    return true;
-  }
-
-  if (pathname === "/conversations" || pathname.startsWith("/conversations/")) {
-    return true;
-  }
-
-  if (pathname === "/knowledge" || pathname.startsWith("/knowledge/")) {
-    return true;
-  }
 
   if (
     (pathname === "/api/reviews" || pathname.startsWith("/api/reviews/")) &&
     request.method !== "GET"
-  ) {
+  )
     return true;
-  }
 
   if (
     (pathname === "/api/knowledge/sink" ||
@@ -46,15 +39,20 @@ function isProtectedPath(request: NextRequest) {
       pathname.startsWith("/api/knowledge/external-purchases") ||
       pathname.startsWith("/api/knowledge/old-items")) &&
     request.method !== "GET"
-  ) {
+  )
     return true;
-  }
+
+  if (pathname === "/api/users" || pathname.startsWith("/api/users/")) return true;
 
   return false;
 }
 
 export async function middleware(request: NextRequest) {
-  if (!isProtectedPath(request)) {
+  const pathname = request.nextUrl.pathname;
+  const isPage = isProtectedPagePath(pathname);
+  const isApi = isProtectedApiPath(request);
+
+  if (!isPage && !isApi) {
     return NextResponse.next();
   }
 
@@ -62,34 +60,41 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (await verifyAdminSessionFromRequest(request)) {
-    return NextResponse.next();
+  const hasSession = await verifyAdminSessionFromRequest(request);
+
+  if (!hasSession) {
+    if (isPage) {
+      const login = new URL("/reviews/login", request.url);
+      login.searchParams.set(
+        "next",
+        `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      );
+      return NextResponse.redirect(login);
+    }
+    return new NextResponse("后台处理接口需要管理员身份验证。", {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": 'Basic realm="audit-ai-admin"',
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
   }
 
-  const pn = request.nextUrl.pathname;
-  const isPageRequest =
-    isReviewsPagePath(pn) ||
-    pn === "/conversations" ||
-    pn.startsWith("/conversations/") ||
-    pn === "/knowledge" ||
-    pn.startsWith("/knowledge/");
-
-  if (isPageRequest) {
-    const login = new URL("/reviews/login", request.url);
-    login.searchParams.set(
-      "next",
-      `${request.nextUrl.pathname}${request.nextUrl.search}`,
-    );
-    return NextResponse.redirect(login);
+  if (
+    isLeaderOnlyPath(pathname) ||
+    pathname === "/api/users" ||
+    pathname.startsWith("/api/users/")
+  ) {
+    const role = request.cookies.get("audit_role")?.value;
+    if (role !== "leader") {
+      if (isPage) {
+        return NextResponse.redirect(new URL("/reviews", request.url));
+      }
+      return NextResponse.json({ error: "需要负责人权限" }, { status: 403 });
+    }
   }
 
-  return new NextResponse("后台处理接口需要管理员身份验证。", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="audit-ai-admin"',
-      "Content-Type": "text/plain; charset=utf-8",
-    },
-  });
+  return NextResponse.next();
 }
 
 export const config = {
@@ -100,8 +105,12 @@ export const config = {
     "/conversations/:path*",
     "/knowledge",
     "/knowledge/:path*",
+    "/users",
+    "/users/:path*",
     "/api/reviews",
     "/api/reviews/:path*",
     "/api/knowledge/:path*",
+    "/api/users",
+    "/api/users/:path*",
   ],
 };

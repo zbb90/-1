@@ -26,9 +26,7 @@ export async function getReviewReadScope(
   if (await isAdminSessionOrBasicAuthorized(request)) {
     return {
       kind: "admin",
-      requesterId: normalizeValue(
-        request.nextUrl.searchParams.get("requesterId"),
-      ),
+      requesterId: normalizeValue(request.nextUrl.searchParams.get("requesterId")),
     };
   }
 

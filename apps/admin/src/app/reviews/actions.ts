@@ -2,16 +2,14 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  getAdminCredentials,
-  isAuthorizedAdminRequest,
-} from "@/lib/admin-auth";
+import { getAdminCredentials, isAuthorizedAdminRequest } from "@/lib/admin-auth";
 import {
   ADMIN_SESSION_COOKIE,
   signAdminSessionValue,
   verifyAdminSessionCookieValue,
 } from "@/lib/admin-session";
 import { updateReviewTask } from "@/lib/review-pool";
+import { resolvePcLogin } from "@/lib/user-store";
 import type { ReviewTaskStatus } from "@/lib/types";
 
 async function assertAdminSessionOrBasic() {
@@ -35,22 +33,57 @@ export async function adminLoginAction(
   _prev: LoginFormState,
   formData: FormData,
 ): Promise<LoginFormState> {
-  const username = String(formData.get("username") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
-  const nextRaw =
-    String(formData.get("next") ?? "/reviews").trim() || "/reviews";
+  const nextRaw = String(formData.get("next") ?? "/reviews").trim() || "/reviews";
   const next = nextRaw.startsWith("/") ? nextRaw : "/reviews";
 
-  const creds = getAdminCredentials();
+  let login = await resolvePcLogin(phone, password);
 
-  if (username !== creds.username || password !== creds.password) {
-    return { ok: false, message: "账号或密码不正确。" };
+  if (!login.ok) {
+    const creds = getAdminCredentials();
+    if (creds.isConfigured && phone === creds.username && password === creds.password) {
+      login = {
+        ok: true,
+        role: "leader",
+        leaderSessionKind: "primary",
+        name: "负责人",
+      };
+    }
   }
+
+  if (!login.ok) {
+    return { ok: false, message: "手机号或密码不正确。" };
+  }
+
+  const role = login.role;
+  const leaderKindCookie = login.role === "leader" ? login.leaderSessionKind : "none";
 
   const value = await signAdminSessionValue();
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_SESSION_COOKIE, value, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+  cookieStore.set("audit_role", role, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+  cookieStore.set("audit_leader_kind", leaderKindCookie, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+  cookieStore.set("audit_login_phone", phone.trim(), {
+    httpOnly: false,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
@@ -78,16 +111,12 @@ export async function saveReviewTaskAction(
     return { ok: false, message: "缺少任务编号。" };
   }
 
-  const status = String(
-    formData.get("status") ?? "",
-  ).trim() as ReviewTaskStatus;
+  const status = String(formData.get("status") ?? "").trim() as ReviewTaskStatus;
   const processor = String(formData.get("processor") ?? "").trim();
   const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
   const finalScore = String(formData.get("finalScore") ?? "").trim();
   const finalClause = String(formData.get("finalClause") ?? "").trim();
-  const finalExplanation = String(
-    formData.get("finalExplanation") ?? "",
-  ).trim();
+  const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
 
   const allowed: ReviewTaskStatus[] = [
     "待处理",
@@ -120,6 +149,9 @@ export async function saveReviewTaskAction(
 export async function adminLogoutAction() {
   const cookieStore = await cookies();
   cookieStore.delete(ADMIN_SESSION_COOKIE);
+  cookieStore.delete("audit_role");
+  cookieStore.delete("audit_leader_kind");
+  cookieStore.delete("audit_login_phone");
   redirect("/reviews/login");
 }
 
@@ -140,9 +172,7 @@ export async function saveAndSinkReviewTaskAction(
   const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
   const finalScore = String(formData.get("finalScore") ?? "").trim();
   const finalClause = String(formData.get("finalClause") ?? "").trim();
-  const finalExplanation = String(
-    formData.get("finalExplanation") ?? "",
-  ).trim();
+  const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
 
   const updated = await updateReviewTask(id, {
     status: "已加入知识库",

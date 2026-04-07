@@ -1,0 +1,12 @@
+services:
+  admin:
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+    restart: always
+    ports:
+      - "3003:3003"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
