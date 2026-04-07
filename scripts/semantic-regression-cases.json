@@ -48,5 +48,55 @@
       "selfJudgment": "待人工确认"
     },
     "expectedRuleId": "R-0010"
+  },
+  {
+    "name": "仓储区干橙片无效期不应命中私人物品",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "仓储区发现干橙片无效期",
+      "description": "在仓储区发现一包干橙片无效期，属于门店原物料，不是私人物品",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0064"
+  },
+  {
+    "name": "麻薯无效期应优先物料无效期",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "麻薯无效期",
+      "description": "巡检时发现两袋米麻薯其中一袋无效期，一袋有效期，监控核实为同时煮制，仅因伙伴理解失误漏打一份效期，本次提醒",
+      "selfJudgment": "仅本次提醒"
+    },
+    "expectedRuleId": "R-0064"
+  },
+  {
+    "name": "淡奶油无效期不应命中个人食用",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "安佳淡奶油无效期",
+      "description": "冰箱里一瓶安佳淡奶油瓶盖有被掀开但未使用，门店反馈早上仅拧开一半后放回，需要正常打效期",
+      "selfJudgment": "提醒门店打效期"
+    },
+    "expectedRuleId": "R-0064"
+  },
+  {
+    "name": "垃圾桶旁过期生椰乳可提醒场景",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "垃圾桶旁边发现过期生椰乳",
+      "description": "门店垃圾桶旁边地面发现一瓶过期生椰乳，监控证实是废弃时丢歪，本次提醒",
+      "selfJudgment": "本次提醒"
+    },
+    "expectedRuleId": "R-0064"
+  },
+  {
+    "name": "奇亚籽原料无效期不应命中水果特殊规则",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "奇亚籽原料无效期",
+      "description": "一包开封无效期的奇亚籽原料与其他开封物料放在一起，门店承认早上使用时忘记打效期，正常扣无效期",
+      "selfJudgment": "扣无效期"
+    },
+    "expectedRuleId": "R-0064"
   }
 ]

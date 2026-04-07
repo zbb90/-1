@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { embedTexts, isEmbeddingConfigured } from "@/lib/embeddings";
 import type {
+  RegularQuestionIntentParse,
   RegularQuestionRequest,
   RuleRow,
   SemanticRuleRecallCandidate,
@@ -30,9 +32,7 @@ function getQdrantApiKey() {
 }
 
 export function getQdrantCollectionName() {
-  return (
-    process.env.QDRANT_COLLECTION_NAME?.trim() || DEFAULT_COLLECTION_NAME
-  );
+  return process.env.QDRANT_COLLECTION_NAME?.trim() || DEFAULT_COLLECTION_NAME;
 }
 
 export function getSemanticRecallLimit() {
@@ -80,13 +80,24 @@ export function buildRuleVectorDocument(rule: RuleRow) {
 
 export function buildRegularQuestionQueryText(
   request: RegularQuestionRequest,
+  intent?: RegularQuestionIntentParse,
 ) {
-  return [
+  const lines = [
     `问题分类：${request.category?.trim() || "-"}`,
     `门店问题：${request.issueTitle?.trim() || "-"}`,
     `问题描述：${request.description?.trim() || "-"}`,
     `自行判断：${request.selfJudgment?.trim() || "-"}`,
-  ].join("\n");
+  ];
+
+  if (intent) {
+    lines.push(`结构化分类：${intent.normalizedCategory || "-"}`);
+    lines.push(`场景标签：${intent.sceneTags.join("、") || "-"}`);
+    lines.push(`对象标签：${intent.objectTags.join("、") || "-"}`);
+    lines.push(`问题标签：${intent.issueTags.join("、") || "-"}`);
+    lines.push(`排除标签：${intent.exclusionTags.join("、") || "-"}`);
+  }
+
+  return lines.join("\n");
 }
 
 function buildRulePayload(rule: RuleRow): RuleVectorPayload {
@@ -101,6 +112,12 @@ function buildRulePayload(rule: RuleRow): RuleVectorPayload {
   };
 }
 
+function buildRulePointId(ruleId: string) {
+  const normalized = ruleId.trim();
+  const hex = createHash("md5").update(normalized).digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 async function ensureCollection(vectorSize: number) {
   const client = getQdrantClient();
   if (!client) {
@@ -109,7 +126,6 @@ async function ensureCollection(vectorSize: number) {
 
   try {
     await client.getCollection(getQdrantCollectionName());
-    return true;
   } catch {
     await client.createCollection(getQdrantCollectionName(), {
       vectors: {
@@ -117,8 +133,19 @@ async function ensureCollection(vectorSize: number) {
         distance: "Cosine",
       },
     });
-    return true;
   }
+
+  try {
+    await client.createPayloadIndex(getQdrantCollectionName(), {
+      wait: true,
+      field_name: "status",
+      field_schema: "keyword",
+    });
+  } catch {
+    // 索引已存在或短暂不可用时忽略，避免影响主流程
+  }
+
+  return true;
 }
 
 export async function upsertRuleVectors(rules: RuleRow[]) {
@@ -146,7 +173,7 @@ export async function upsertRuleVectors(rules: RuleRow[]) {
   await client.upsert(getQdrantCollectionName(), {
     wait: true,
     points: normalizedRules.map((rule, index) => ({
-      id: rule.rule_id,
+      id: buildRulePointId(rule.rule_id),
       vector: embeddings[index],
       payload: buildRulePayload(rule),
     })),
@@ -177,9 +204,10 @@ export async function rebuildRuleVectorIndex(rules: RuleRow[]) {
 
 export async function searchRuleVectors(
   request: RegularQuestionRequest,
+  intent?: RegularQuestionIntentParse,
   limit = getSemanticRecallLimit(),
 ) {
-  const queryText = buildRegularQuestionQueryText(request);
+  const queryText = buildRegularQuestionQueryText(request, intent);
 
   if (!isSemanticSearchConfigured()) {
     return {

@@ -118,6 +118,27 @@ export interface RegularQuestionCandidatePayload {
   vectorBoost?: number;
 }
 
+export interface RegularQuestionIntentParse {
+  normalizedCategory: string;
+  sceneTags: string[];
+  objectTags: string[];
+  issueTags: string[];
+  exclusionTags: string[];
+  needsHumanVerification: boolean;
+  parseMode: "llm" | "heuristic" | "fallback";
+  summary: string;
+}
+
+export type RegularQuestionJudgeMode = "legacy" | "llm" | "heuristic" | "fallback";
+
+export interface RegularQuestionJudgeDecision {
+  judgeMode: RegularQuestionJudgeMode;
+  selectedRuleId: string;
+  confidence: number;
+  judgeReason: string;
+  rejectedRuleIds: string[];
+}
+
 export interface RegularQuestionMatchDebug {
   retrievalMode: "semantic" | "fallback";
   semanticEnabled: boolean;
@@ -125,6 +146,12 @@ export interface RegularQuestionMatchDebug {
   fallbackReason?: string;
   recalled: SemanticRuleRecallCandidate[];
   rerankedTop?: RegularQuestionCandidatePayload[];
+  intentParse?: RegularQuestionIntentParse;
+  judgeMode?: RegularQuestionJudgeMode;
+  judgeSelectedRuleId?: string;
+  judgeReason?: string;
+  judgeConfidence?: number;
+  judgeRejectedRuleIds?: string[];
 }
 
 export type RegularQuestionMatchResult =
@@ -142,10 +169,7 @@ export type RegularQuestionMatchResult =
       debug: RegularQuestionMatchDebug;
     };
 
-export type ReviewTaskType =
-  | "常规问题"
-  | "旧品比对"
-  | "外购查询";
+export type ReviewTaskType = "常规问题" | "旧品比对" | "外购查询";
 
 export type ReviewTaskStatus =
   | "待处理"

@@ -1,12 +1,15 @@
 import type {
   ExternalPurchaseRequest,
   OldItemRequest,
+  RegularQuestionCandidatePayload,
+  RegularQuestionIntentParse,
+  RegularQuestionJudgeDecision,
   RegularQuestionRequest,
 } from "@/lib/types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-const DEFAULT_MODEL_NAME = "qwen-plus";
+const DEFAULT_MODEL_NAME = "qwen3.5-flash";
 const REQUEST_TIMEOUT_MS = 8000;
 
 type RegularQuestionAnswer = {
@@ -20,6 +23,14 @@ type RegularQuestionAnswer = {
   matchedReasons?: string[];
   consensusKeywords?: string;
   consensusApplicableScene?: string;
+};
+
+export type RegularQuestionJudgeCandidate = RegularQuestionCandidatePayload & {
+  shouldDeduct: string;
+  deductScore: string;
+  clauseSnippet: string;
+  explanation: string;
+  matchedReasons?: string[];
 };
 
 type ExternalPurchaseAnswer = {
@@ -50,7 +61,11 @@ function getApiKey() {
   return process.env.DASHSCOPE_API_KEY?.trim();
 }
 
-async function requestDashScopeExplanation(prompt: string) {
+async function requestDashScope(
+  systemPrompt: string,
+  userPrompt: string,
+  options?: { maxTokens?: number; responseFormat?: "text" | "json_object" },
+) {
   const apiKey = getApiKey();
   if (!apiKey) {
     return null;
@@ -69,16 +84,18 @@ async function requestDashScopeExplanation(prompt: string) {
       body: JSON.stringify({
         model: getModelName(),
         temperature: 0,
-        max_tokens: 260,
+        max_tokens: options?.maxTokens ?? 260,
+        ...(options?.responseFormat === "json_object"
+          ? { response_format: { type: "json_object" } }
+          : {}),
         messages: [
           {
             role: "system",
-            content:
-              "你是茶饮稽核助手。你只能根据用户提供的「规则命中结果」中的条款标题、条款片段、原始解释、判定结论、扣分分值、共识关键词与适用场景来组织语言，禁止编造共识文件中未出现的流程、场景、例外或结论。若用户描述与条款文字不完全一致，仍以条款与判定结论为准。输出中文，简洁、适合一线阅读。",
+            content: systemPrompt,
           },
           {
             role: "user",
-            content: prompt,
+            content: userPrompt,
           },
         ],
       }),
@@ -102,10 +119,29 @@ async function requestDashScopeExplanation(prompt: string) {
     const content = data.choices?.[0]?.message?.content?.trim();
     return content || null;
   } catch (error) {
-    console.error("DashScope explanation error", error);
+    console.error("DashScope request error", error);
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function requestDashScopeExplanation(prompt: string) {
+  return requestDashScope(
+    "你是茶饮稽核助手。你只能根据用户提供的「规则命中结果」中的条款标题、条款片段、原始解释、判定结论、扣分分值、共识关键词与适用场景来组织语言，禁止编造共识文件中未出现的流程、场景、例外或结论。若用户描述与条款文字不完全一致，仍以条款与判定结论为准。输出中文，简洁、适合一线阅读。",
+    prompt,
+    { maxTokens: 260, responseFormat: "text" },
+  );
+}
+
+function parseJsonObject<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]) as T;
+  } catch {
+    return null;
   }
 }
 
@@ -116,12 +152,158 @@ function formatMatchedReasons(reasons?: string[]) {
   return reasons.join("；");
 }
 
-function buildDeterministicRegularQuestionExplanation(
-  answer: RegularQuestionAnswer,
-) {
+function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAnswer) {
   const conclusion = normalizeText(answer.shouldDeduct);
   const score = normalizeText(answer.deductScore);
   return `本条命中「${normalizeText(answer.clauseTitle)}」。共识要点见条款解释：${normalizeText(answer.explanation)}。系统判定结论为「${conclusion}」，对应扣分分值为「${score}」。请严格按稽核共识与现场情况执行；如需个案判断请走人工复核。`;
+}
+
+function buildHeuristicJudgeDecision(
+  intent: RegularQuestionIntentParse,
+  candidates: RegularQuestionJudgeCandidate[],
+): RegularQuestionJudgeDecision {
+  const ranked = candidates
+    .map((candidate) => {
+      let bonus = 0;
+      const reasons: string[] = [];
+      const blob = [
+        candidate.clauseTitle,
+        candidate.clauseSnippet,
+        candidate.explanation,
+        ...(candidate.matchedReasons ?? []),
+      ].join(" ");
+
+      const isPrivateRule = /私人物品|个人食用|私人区域/.test(blob);
+      const isGenericExpiryRule = /物料无效期|效期缺失|无效期/.test(blob);
+      const isStorageScene = intent.sceneTags.includes("仓储区");
+      const isPrivateScene = intent.sceneTags.includes("私人物品区");
+      const hasExpiryIssue =
+        intent.issueTags.includes("无效期") || intent.issueTags.includes("过期");
+
+      if (isStorageScene && hasExpiryIssue && isGenericExpiryRule) {
+        bonus += 18;
+        reasons.push("仓储区 + 效期问题更贴近通用物料无效期规则");
+      }
+
+      if (
+        (intent.exclusionTags.includes("非私人物品") ||
+          intent.exclusionTags.includes("非个人食用")) &&
+        isPrivateRule
+      ) {
+        bonus -= 26;
+        reasons.push("已明确排除私人物品/个人食用");
+      }
+
+      if (!isPrivateScene && isPrivateRule) {
+        bonus -= 12;
+        reasons.push("当前未出现私人物品区场景");
+      }
+
+      if (intent.needsHumanVerification && candidate.shouldDeduct === "按场景判定") {
+        bonus += 8;
+        reasons.push("问题需核实，优先保留按场景判定类规则");
+      }
+
+      return {
+        candidate,
+        finalScore: candidate.score + bonus,
+        reasons,
+      };
+    })
+    .sort((left, right) => right.finalScore - left.finalScore);
+
+  const best = ranked[0];
+  return {
+    judgeMode: "heuristic",
+    selectedRuleId: best.candidate.ruleId,
+    confidence: ranked.length > 1 ? 0.72 : 0.64,
+    judgeReason: best.reasons.join("；") || "按结构化场景与问题标签进行启发式裁判。",
+    rejectedRuleIds: ranked.slice(1).map((item) => item.candidate.ruleId),
+  };
+}
+
+type JudgeLlmResult = {
+  selectedRuleId?: string;
+  confidence?: number;
+  judgeReason?: string;
+  rejectedRuleIds?: string[];
+};
+
+export async function judgeRegularQuestionCandidates(
+  request: RegularQuestionRequest,
+  intent: RegularQuestionIntentParse,
+  candidates: RegularQuestionJudgeCandidate[],
+): Promise<RegularQuestionJudgeDecision> {
+  const heuristic = buildHeuristicJudgeDecision(intent, candidates);
+  const apiKey = getApiKey();
+  if (!apiKey || candidates.length <= 1) {
+    return heuristic;
+  }
+
+  const candidateBlock = candidates
+    .map(
+      (item, index) => `候选${index + 1}
+- ruleId: ${item.ruleId}
+- 标题: ${normalizeText(item.clauseTitle)}
+- 判定结论: ${normalizeText(item.shouldDeduct)}
+- 扣分分值: ${normalizeText(item.deductScore)}
+- 条款片段: ${normalizeText(item.clauseSnippet)}
+- 解释: ${normalizeText(item.explanation)}
+- 当前排序分: ${item.score}
+- 命中原因: ${formatMatchedReasons(item.matchedReasons)}`,
+    )
+    .join("\n\n");
+
+  const prompt = `
+请在候选规则中选择最适合当前问题的一条。禁止编造新 ruleId。
+
+用户问题：
+- 分类：${normalizeText(request.category)}
+- 门店问题：${normalizeText(request.issueTitle)}
+- 问题描述：${normalizeText(request.description)}
+- 自行判断：${normalizeText(request.selfJudgment)}
+
+结构化理解：
+- 归一分类：${normalizeText(intent.normalizedCategory)}
+- 场景标签：${intent.sceneTags.join("、") || "无"}
+- 对象标签：${intent.objectTags.join("、") || "无"}
+- 问题标签：${intent.issueTags.join("、") || "无"}
+- 排除标签：${intent.exclusionTags.join("、") || "无"}
+- 是否需人工核实：${intent.needsHumanVerification ? "是" : "否"}
+
+候选规则：
+${candidateBlock}
+
+输出严格 JSON：
+{
+  "selectedRuleId": "候选中的 ruleId",
+  "confidence": 0.0,
+  "judgeReason": "一句中文原因",
+  "rejectedRuleIds": ["被排除的 ruleId"]
+}
+`;
+
+  const raw = await requestDashScope(
+    "你是稽核规则裁判器。你只能从给定候选规则中选一条最合适的 ruleId，不能编造新规则；若问题明确排除了私人物品/个人食用，就不能选择相关规则。只输出 JSON。",
+    prompt,
+    { maxTokens: 240, responseFormat: "json_object" },
+  );
+  const parsed = parseJsonObject<JudgeLlmResult>(raw);
+  const validIds = new Set(candidates.map((item) => item.ruleId));
+  if (!parsed?.selectedRuleId || !validIds.has(parsed.selectedRuleId)) {
+    return heuristic;
+  }
+
+  return {
+    judgeMode: "llm",
+    selectedRuleId: parsed.selectedRuleId,
+    confidence:
+      typeof parsed.confidence === "number"
+        ? Math.max(0, Math.min(parsed.confidence, 1))
+        : 0.78,
+    judgeReason: parsed.judgeReason?.trim() || "LLM 在候选规则中完成裁判。",
+    rejectedRuleIds: (parsed.rejectedRuleIds ?? []).filter((id) => validIds.has(id)),
+  };
 }
 
 export async function generateRegularQuestionAiExplanation(

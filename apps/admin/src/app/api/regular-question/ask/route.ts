@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateRegularQuestionAiExplanation } from "@/lib/ai";
+import { rateLimit } from "@/lib/rate-limit";
 import { matchRegularQuestion } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import {
@@ -21,6 +22,17 @@ function validateBody(body: RegularQuestionRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, "regular-question-ask", 40);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, message: "请求过于频繁，请稍后再试" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   try {
     const payload = getRequesterPayloadFromRequest(
       request,
@@ -60,6 +72,7 @@ export async function POST(request: NextRequest) {
         ok: true,
         data: {
           ...result,
+          matchingDebug: result.debug,
           rejectReason,
           requestSnapshot,
           reviewTask: {
@@ -96,6 +109,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       data: {
         ...result,
+        matchingDebug: result.debug,
         requestSnapshot,
         answer: answerWithAI,
         reviewTask: {
@@ -108,8 +122,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "常规问题检索时发生异常",
+        message: error instanceof Error ? error.message : "常规问题检索时发生异常",
       },
       { status: 500 },
     );

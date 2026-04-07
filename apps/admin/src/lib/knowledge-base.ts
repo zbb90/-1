@@ -1,10 +1,10 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-import { readCsvAsObjects } from "@/lib/csv";
 import {
-  isSemanticSearchConfigured,
-  searchRuleVectors,
-} from "@/lib/vector-store";
+  judgeRegularQuestionCandidates,
+  type RegularQuestionJudgeCandidate,
+} from "@/lib/ai";
+import { isSemanticSearchConfigured, searchRuleVectors } from "@/lib/vector-store";
+import { analyzeRegularQuestionIntent } from "@/lib/llm-intent";
+import { readRows } from "@/lib/knowledge-store";
 import type {
   ConsensusRow,
   ExternalPurchaseRequest,
@@ -12,6 +12,7 @@ import type {
   KnowledgeBase,
   OldItemRequest,
   OldItemRow,
+  RegularQuestionIntentParse,
   RegularQuestionMatchDebug,
   RegularQuestionMatchResult,
   RegularQuestionRequest,
@@ -19,24 +20,6 @@ import type {
 } from "@/lib/types";
 
 let cache: KnowledgeBase | null = null;
-
-function resolveTemplateDir() {
-  const candidates = [
-    resolve(process.cwd(), "../../data/templates"),
-    resolve(process.cwd(), "../../../data/templates"),
-    resolve(process.cwd(), "../../../问答机器人/数据模板"),
-    resolve(process.cwd(), "../问答机器人/数据模板"),
-  ];
-
-  const match = candidates.find((candidate) => existsSync(candidate));
-  if (!match) {
-    throw new Error(
-      "未找到数据模板目录，请确认 `data/templates` 或 `问答机器人/数据模板` 存在。",
-    );
-  }
-
-  return match;
-}
 
 function normalizeText(input?: string) {
   return (input ?? "").trim().toLowerCase();
@@ -72,7 +55,9 @@ function extractCorePhrases(text?: string) {
     }
 
     for (const part of fragment
-      .split(/(?:直接|放在|放置在|放置|发现|出现|使用|张贴|补打|后续|继续|进行|需要|门店|现场|并|且|以及|与|和|按要求|按标准|按照|仍在)/g)
+      .split(
+        /(?:直接|放在|放置在|放置|发现|出现|使用|张贴|补打|后续|继续|进行|需要|门店|现场|并|且|以及|与|和|按要求|按标准|按照|仍在)/g,
+      )
       .map((item) => item.trim())
       .filter((item) => item.length >= 2)) {
       phrases.add(part);
@@ -125,12 +110,7 @@ function buildExternalPurchaseSearchText(item: ExternalPurchaseRow) {
 }
 
 function buildOldItemSearchText(item: OldItemRow) {
-  return [
-    item.物品名称,
-    item.别名或常见叫法,
-    item.命中的清单名称,
-    item.识别备注,
-  ]
+  return [item.物品名称, item.别名或常见叫法, item.命中的清单名称, item.识别备注]
     .join(" ")
     .toLowerCase();
 }
@@ -159,7 +139,8 @@ function detectMaterialExpiryFocus(combined: string): "shangwei" | "feiqi" | "ne
   const hasFeiqi =
     /超废弃|废弃时间|超过废弃|已过废弃|废弃期|废弃日|到废弃|废弃后仍|废弃仍/.test(
       combined,
-    ) || (/废弃/.test(combined) && /超过|已过|超|晚于|拖过/.test(combined));
+    ) ||
+    (/废弃/.test(combined) && /超过|已过|超|晚于|拖过/.test(combined));
 
   if (hasShangwei && !hasFeiqi) {
     return "shangwei";
@@ -187,19 +168,13 @@ function ruleTextBlob(rule: RuleRow) {
 function ruleEmphasizesDiscardDeadline(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
   return (
-    blob.includes("超过废弃") ||
-    blob.includes("废弃时间") ||
-    blob.includes("超废弃")
+    blob.includes("超过废弃") || blob.includes("废弃时间") || blob.includes("超废弃")
   );
 }
 
 function ruleEmphasizesShangweiWindow(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
-  return (
-    blob.includes("赏味") ||
-    blob.includes("超赏味") ||
-    blob.includes("最佳赏味")
-  );
+  return blob.includes("赏味") || blob.includes("超赏味") || blob.includes("最佳赏味");
 }
 
 function detectDamageFocus(combined: string) {
@@ -218,9 +193,24 @@ function detectGroundingFocus(combined: string) {
   const hasGroundingIntent =
     /未离地|没离地|没有离地|不离地|未离地储存|离地不足|未按离地|未上架|没上架|没有上架|落地|直接放地上|放在地上|放地上|放地面|放在地面|贴地|接触地面/.test(
       combined,
-    ) || (/离地/.test(combined) && /仓库|物料|包材|原物料|存放|储存/.test(combined));
+    ) ||
+    (/离地/.test(combined) && /仓库|物料|包材|原物料|存放|储存/.test(combined));
 
   return hasGroundingIntent;
+}
+
+function detectStorageAreaFocus(combined: string) {
+  return /仓储区|仓库|后仓|库房|储藏区|储物间/.test(combined);
+}
+
+function detectPrivateAreaFocus(combined: string) {
+  return /私人物品区|私人物品|私人区域|私人区|个人食用|个人用品|个人物品/.test(
+    combined,
+  );
+}
+
+function detectMaterialIngredientFocus(combined: string) {
+  return /原物料|物料|原料|干橙片|橙片|果干|干果/.test(combined);
 }
 
 function ruleEmphasizesMaterialDamage(rule: RuleRow) {
@@ -254,6 +244,113 @@ function ruleEmphasizesGrounding(rule: RuleRow) {
     blob.includes("楼梯上") ||
     blob.includes("是否可行走活动")
   );
+}
+
+function ruleEmphasizesPrivateAreaOrPersonalUse(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("私人物品区") ||
+    blob.includes("私人物品") ||
+    blob.includes("个人食用") ||
+    blob.includes("私人区域")
+  );
+}
+
+function ruleEmphasizesGenericMaterialExpiry(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    blob.includes("物料无效期") ||
+    blob.includes("效期缺失") ||
+    blob.includes("原物料") ||
+    blob.includes("仓库内")
+  );
+}
+
+function ruleAllowsReminderOrVerification(rule: RuleRow) {
+  return rule.是否扣分 === "否" || rule.是否扣分 === "按场景判定";
+}
+
+function applyIntentSignalScore(
+  rule: RuleRow,
+  intent: RegularQuestionIntentParse | undefined,
+) {
+  if (!intent) {
+    return { score: 0, reasons: [] as string[] };
+  }
+
+  const scoreReasons: string[] = [];
+  let score = 0;
+  const blob = ruleTextBlob(rule);
+
+  if (intent.sceneTags.includes("仓储区")) {
+    if (rule.rule_id === "R-0064" || /仓储区|仓库|后仓|原物料|效期缺失/.test(blob)) {
+      score += 16;
+      scoreReasons.push("意图理解：仓储区场景更贴近原物料/无效期规则");
+    }
+    if (ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
+      score -= 16;
+      scoreReasons.push("意图理解：仓储区与私人物品区语义不一致");
+    }
+  }
+
+  if (intent.sceneTags.includes("阁楼")) {
+    if (/阁楼|楼梯/.test(blob) || rule.rule_id === "R-0052") {
+      score += 28;
+      scoreReasons.push("意图理解：已识别阁楼/楼梯具体场景，提升专属规则");
+    }
+
+    if (rule.rule_id === "R-0018") {
+      score -= 18;
+      scoreReasons.push("意图理解：存在更具体的阁楼场景，降低通用未离地规则");
+    }
+  }
+
+  if (intent.sceneTags.includes("私人物品区") && ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
+    score += 18;
+    scoreReasons.push("意图理解：明确是私人物品区场景");
+  }
+
+  if (intent.objectTags.includes("原物料") && ruleEmphasizesGenericMaterialExpiry(rule)) {
+    score += 12;
+    scoreReasons.push("意图理解：对象为原物料，提升通用物料效期规则");
+  }
+
+  if (
+    intent.issueTags.some((tag) => tag === "无效期" || tag === "过期") &&
+    ruleEmphasizesGenericMaterialExpiry(rule)
+  ) {
+    score += 10;
+    scoreReasons.push("意图理解：问题聚焦无效期/过期");
+  }
+
+  if (
+    intent.exclusionTags.some((tag) => tag === "非私人物品" || tag === "非个人食用") &&
+    ruleEmphasizesPrivateAreaOrPersonalUse(rule)
+  ) {
+    score -= 30;
+    scoreReasons.push("意图理解：已明确排除私人物品/个人食用");
+  }
+
+  if (intent.exclusionTags.includes("非人为") && ruleEmphasizesMaterialDamage(rule)) {
+    score += 8;
+    scoreReasons.push("意图理解：描述提到非人为，更接近破损/个案核实类规则");
+  }
+
+  if (intent.exclusionTags.includes("可提醒") && ruleAllowsReminderOrVerification(rule)) {
+    score += 8;
+    scoreReasons.push("意图理解：用户倾向提醒/核实，提升不扣分或按场景判定规则");
+  }
+
+  if (
+    intent.needsHumanVerification &&
+    ruleAllowsReminderOrVerification(rule) &&
+    !ruleEmphasizesPrivateAreaOrPersonalUse(rule)
+  ) {
+    score += 6;
+    scoreReasons.push("意图理解：该问题需要人工核实，适合保留提醒/按场景判定候选");
+  }
+
+  return { score, reasons: scoreReasons };
 }
 
 type SpecificSceneRuleConfig = {
@@ -326,10 +423,7 @@ function detectSpecificSceneMentions(combined: string) {
   return SPECIFIC_SCENE_RULES.filter((item) => item.requestPattern.test(combined));
 }
 
-function ruleMatchesSpecificScene(
-  rule: RuleRow,
-  scene: SpecificSceneRuleConfig,
-) {
+function ruleMatchesSpecificScene(rule: RuleRow, scene: SpecificSceneRuleConfig) {
   const blob = ruleTextBlob(rule);
   return (
     scene.rulePattern.test(blob) ||
@@ -337,7 +431,11 @@ function ruleMatchesSpecificScene(
   );
 }
 
-function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
+function scoreRuleMatch(
+  rule: RuleRow,
+  request: RegularQuestionRequest,
+  intent?: RegularQuestionIntentParse,
+) {
   const description = normalizeText(request.description);
   const issueTitle = normalizeText(request.issueTitle);
   const category = normalizeText(request.category);
@@ -446,13 +544,13 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
   const damageFocus = detectDamageFocus(combined);
   const labelTamperingFocus = detectLabelTamperingFocus(combined);
   const groundingFocus = detectGroundingFocus(combined);
+  const storageAreaFocus = detectStorageAreaFocus(combined);
+  const privateAreaFocus = detectPrivateAreaFocus(combined);
+  const materialIngredientFocus = detectMaterialIngredientFocus(combined);
   const specificScenes = detectSpecificSceneMentions(combined);
 
   if (expiryFocus === "shangwei") {
-    if (
-      ruleEmphasizesDiscardDeadline(rule) &&
-      !ruleEmphasizesShangweiWindow(rule)
-    ) {
+    if (ruleEmphasizesDiscardDeadline(rule) && !ruleEmphasizesShangweiWindow(rule)) {
       score -= 52;
       reasons.push("区分：表述偏赏味期，降低纯「超废弃/废弃时间」类规则优先级");
     }
@@ -518,10 +616,7 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
       reasons.push("区分：当前问题核心是未离地，降低纯效期/过期类规则优先级");
     }
 
-    if (
-      rule.rule_id === "R-0052" &&
-      !/阁楼|楼梯/.test(combined)
-    ) {
+    if (rule.rule_id === "R-0052" && !/阁楼|楼梯/.test(combined)) {
       score -= 10;
       reasons.push("区分：当前未提到阁楼/楼梯，降低特定场景共识优先级");
     }
@@ -536,16 +631,35 @@ function scoreRuleMatch(rule: RuleRow, request: RegularQuestionRequest) {
         reasons.push(`区分：命中更具体场景「${scene.label}」，提升场景专属规则优先级`);
       }
 
-      if (
-        groundingFocus &&
-        ruleIsGenericGrounding(rule) &&
-        !matchedSpecificScene
-      ) {
+      if (groundingFocus && ruleIsGenericGrounding(rule) && !matchedSpecificScene) {
         score -= 22;
-        reasons.push(`区分：当前已明确具体场景「${scene.label}」，降低通用未离地规则优先级`);
+        reasons.push(
+          `区分：当前已明确具体场景「${scene.label}」，降低通用未离地规则优先级`,
+        );
       }
     }
   }
+
+  if (storageAreaFocus && (expiryFocus !== "neutral" || materialIngredientFocus)) {
+    if (rule.rule_id === "R-0064" || ruleEmphasizesGenericMaterialExpiry(rule)) {
+      score += 30;
+      reasons.push("区分：描述聚焦仓储区/仓库内原物料无效期，提升通用物料无效期规则优先级");
+    }
+
+    if (ruleEmphasizesPrivateAreaOrPersonalUse(rule) && !privateAreaFocus) {
+      score -= 42;
+      reasons.push("区分：当前描述未提到私人物品区/个人食用，降低私人物品类效期规则优先级");
+    }
+  }
+
+  if (privateAreaFocus && ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
+    score += 32;
+    reasons.push("区分：描述明确提到私人物品区/个人食用，提升私人物品类规则优先级");
+  }
+
+  const intentSignal = applyIntentSignalScore(rule, intent);
+  score += intentSignal.score;
+  reasons.push(...intentSignal.reasons);
 
   return { score, reasons };
 }
@@ -622,13 +736,13 @@ export async function loadKnowledgeBase(forceRefresh = false) {
     return cache;
   }
 
-  const templateDir = resolveTemplateDir();
-
   const [rules, consensus, externalPurchases, oldItems] = await Promise.all([
-    readCsvAsObjects<RuleRow>(resolve(templateDir, "03_常规问题规则表.csv")),
-    readCsvAsObjects<ConsensusRow>(resolve(templateDir, "02_共识解释表.csv")),
-    readCsvAsObjects<ExternalPurchaseRow>(resolve(templateDir, "05_外购清单表.csv")),
-    readCsvAsObjects<OldItemRow>(resolve(templateDir, "04_旧品清单表.csv")),
+    readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
+    readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
+    readRows("external-purchases") as Promise<unknown> as Promise<
+      ExternalPurchaseRow[]
+    >,
+    readRows("old-items") as Promise<unknown> as Promise<OldItemRow[]>,
   ]);
 
   cache = {
@@ -648,7 +762,7 @@ export async function getKnowledgeSummary() {
     consensus: knowledgeBase.consensus.length,
     externalPurchases: knowledgeBase.externalPurchases.length,
     oldItems: knowledgeBase.oldItems.length,
-    templateDir: resolveTemplateDir(),
+    templateDir: "Redis / CSV",
   };
 }
 
@@ -656,7 +770,8 @@ export async function matchRegularQuestion(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionMatchResult> {
   const knowledgeBase = await loadKnowledgeBase();
-  const semanticResult = await searchRuleVectors(request);
+  const intentParse = await analyzeRegularQuestionIntent(request);
+  const semanticResult = await searchRuleVectors(request, intentParse);
   const semanticRuleIds = semanticResult.hits.map((item) => item.ruleId);
   const semanticRuleLookup = new Set(semanticRuleIds);
   const semanticRules = knowledgeBase.rules.filter((rule) =>
@@ -667,8 +782,9 @@ export async function matchRegularQuestion(
   );
   const usingSemanticRecall = semanticRules.length > 0;
   const candidatePool = usingSemanticRecall ? semanticRules : knowledgeBase.rules;
-  const retrievalMode: RegularQuestionMatchDebug["retrievalMode"] =
-    usingSemanticRecall ? "semantic" : "fallback";
+  const retrievalMode: RegularQuestionMatchDebug["retrievalMode"] = usingSemanticRecall
+    ? "semantic"
+    : "fallback";
   const debug: RegularQuestionMatchDebug = {
     retrievalMode,
     semanticEnabled: isSemanticSearchConfigured(),
@@ -677,6 +793,7 @@ export async function matchRegularQuestion(
       ? undefined
       : semanticResult.fallbackReason || "语义召回未返回候选，回退整表扫描。",
     recalled: semanticResult.hits,
+    intentParse,
   };
 
   const candidates = candidatePool
@@ -684,6 +801,7 @@ export async function matchRegularQuestion(
       const { score: baseScore, reasons: baseReasons } = scoreRuleMatch(
         rule,
         request,
+        intentParse,
       );
       const vectorScore = vectorScoreByRule.get(rule.rule_id);
       const vectorBoost =
@@ -721,7 +839,6 @@ export async function matchRegularQuestion(
     };
   }
 
-  const best = candidates[0];
   const rerankedTop = candidates.slice(0, 5).map((item) => ({
     ruleId: item.rule.rule_id,
     category: item.rule.问题分类,
@@ -731,10 +848,50 @@ export async function matchRegularQuestion(
     vectorScore: item.vectorScore,
     vectorBoost: item.vectorBoost,
   }));
+
+  let judgeDecision =
+    candidates.length > 1
+      ? await judgeRegularQuestionCandidates(
+          request,
+          intentParse,
+          candidates.slice(0, 5).map((item) => {
+            const linkedConsensus = item.rule.共识来源
+              ? knowledgeBase.consensus.find(
+                  (consensus) => consensus.consensus_id === item.rule.共识来源,
+                )
+              : undefined;
+
+            const judgeCandidate: RegularQuestionJudgeCandidate = {
+              ruleId: item.rule.rule_id,
+              category: item.rule.问题分类,
+              clauseNo: item.rule.条款编号,
+              clauseTitle: item.rule.条款标题,
+              score: item.score,
+              vectorScore: item.vectorScore,
+              vectorBoost: item.vectorBoost,
+              shouldDeduct: item.rule.是否扣分,
+              deductScore: item.rule.扣分分值 || "待人工确认",
+              clauseSnippet: item.rule.条款关键片段,
+              explanation: linkedConsensus?.解释内容 || item.rule.条款解释,
+              matchedReasons: item.reasons,
+            };
+
+            return judgeCandidate;
+          }),
+        )
+      : {
+          judgeMode: "legacy" as const,
+          selectedRuleId: candidates[0].rule.rule_id,
+          confidence: 1,
+          judgeReason: "仅有一个有效候选，沿用旧排序结果。",
+          rejectedRuleIds: [],
+        };
+
+  const best =
+    candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ??
+    candidates[0];
   const linkedConsensus = best.rule.共识来源
-    ? knowledgeBase.consensus.find(
-        (item) => item.consensus_id === best.rule.共识来源,
-      )
+    ? knowledgeBase.consensus.find((item) => item.consensus_id === best.rule.共识来源)
     : undefined;
 
   console.info("[regular-question-match]", {
@@ -742,9 +899,12 @@ export async function matchRegularQuestion(
     fallbackReason: debug.fallbackReason,
     queryText: debug.queryText,
     recalled: debug.recalled,
+    intentParse,
     rerankedTop,
     matched: true,
     bestRuleId: best.rule.rule_id,
+    judgeMode: judgeDecision.judgeMode,
+    judgeReason: judgeDecision.judgeReason,
   });
 
   return {
@@ -770,6 +930,11 @@ export async function matchRegularQuestion(
     debug: {
       ...debug,
       rerankedTop,
+      judgeMode: judgeDecision.judgeMode,
+      judgeSelectedRuleId: judgeDecision.selectedRuleId,
+      judgeReason: judgeDecision.judgeReason,
+      judgeConfidence: judgeDecision.confidence,
+      judgeRejectedRuleIds: judgeDecision.rejectedRuleIds,
     },
   };
 }
