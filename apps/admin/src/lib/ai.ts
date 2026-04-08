@@ -83,7 +83,7 @@ function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAns
 }
 
 function buildDeterministicOperationExplanation(answer: RegularQuestionAnswer) {
-  return `本次命中操作资料「${normalizeText(answer.clauseTitle)}」。可直接按资料中的操作内容与检核要点执行：${normalizeText(answer.explanation)}。如现场版本与资料不一致，请以最新营运资料为准并同步更新知识库。`;
+  return `本次命中操作资料「${normalizeText(answer.clauseTitle)}」。执行时重点关注：${normalizeText(answer.explanation)}。如现场版本与资料不一致，请以最新营运资料为准并同步更新知识库。`;
 }
 
 function buildHeuristicJudgeDecision(

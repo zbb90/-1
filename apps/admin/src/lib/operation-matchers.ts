@@ -27,7 +27,7 @@ function splitTextFragments(text?: string) {
 function extractQuestionObjects(text?: string) {
   return (text ?? "")
     .split(
-      /怎么做|如何做|做法|步骤|操作|怎么处理|如何处理|想确认|确认|请问|是否|要不要|需不需要|可以吗|去冰|少冰|热饮|温饮|补水|加料|检核点|检查表|标准/g,
+      /怎么做|如何做|怎么打|如何打|做法|步骤|操作|怎么处理|如何处理|想确认|确认|请问|是否|要不要|需不需要|可以吗|去冰|少冰|热饮|温饮|补水|加料|检核点|检查表|标准/g,
     )
     .flatMap((part) => splitTextFragments(part))
     .map((item) => normalizeLooseText(item))
@@ -69,7 +69,7 @@ function extractOperationObjectHint(request: RegularQuestionRequest) {
 
 function isOperationQuestion(request: RegularQuestionRequest) {
   const combined = buildOperationQueryText(request);
-  return /操作|配方|怎么做|如何做|步骤|做法|出杯|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴/.test(
+  return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴/.test(
     combined,
   );
 }
@@ -156,7 +156,9 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
 
   if (
     item.资料类型.includes("配方") &&
-    /配方|怎么做|做法|步骤|出杯|加料|克数|ml|毫升|去冰|少冰|热饮|温饮/.test(queryText)
+    /配方|怎么做|如何做|怎么打|如何打|做法|步骤|出杯|加料|克数|ml|毫升|去冰|少冰|热饮|温饮/.test(
+      queryText,
+    )
   ) {
     score += 18;
     reasons.push("问题更接近配方/步骤类资料");
@@ -223,9 +225,7 @@ export async function matchOperationQuestion(
   const best = candidates[0];
   const snippet = extractSnippet(best.item, request);
   const explanation =
-    [best.item.检核要点, best.item.解释说明].filter(Boolean).join("；") ||
-    best.item.操作内容 ||
-    snippet;
+    best.item.检核要点 || best.item.解释说明 || best.item.操作内容 || snippet;
   const rerankedTop = candidates
     .slice(0, 5)
     .map((item) => buildOperationCandidate(item.item, item.score));
