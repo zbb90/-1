@@ -28,6 +28,7 @@ const CSV_FILES: Record<KbTableName, string> = {
 
 export function resolveTemplateDir(): string | null {
   const candidates = [
+    resolve(process.cwd(), "data/templates"),
     resolve(process.cwd(), "../../data/templates"),
     resolve(process.cwd(), "../../../data/templates"),
   ];

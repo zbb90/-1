@@ -12,6 +12,7 @@ RUN npm ci
 COPY apps/admin apps/admin
 COPY packages/shared packages/shared
 COPY scripts scripts
+COPY data data
 
 RUN npm run build --workspace @audit-ai/admin
 
@@ -26,6 +27,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/admin/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/admin/.next/static ./apps/admin/.next/static
+COPY --from=builder --chown=nextjs:nodejs /repo/data ./data
 
 USER nextjs
 EXPOSE 3003
