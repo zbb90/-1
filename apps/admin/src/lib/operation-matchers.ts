@@ -69,7 +69,7 @@ function extractOperationObjectHint(request: RegularQuestionRequest) {
 
 function isOperationQuestion(request: RegularQuestionRequest) {
   const combined = buildOperationQueryText(request);
-  return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴/.test(
+  return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
     combined,
   );
 }
@@ -137,6 +137,18 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
     }
   }
 
+  // 「奶茶」饮品 vs 后厨「奶露」原料：问句含「奶茶」且不是在问奶露工艺时，优先带「古茗奶茶」等茶饮名的条目，避免误命中奶露调制。
+  if (queryLoose.includes("奶茶") && !queryLoose.includes("奶露")) {
+    const titleLoose = normalizeLooseText(item.标题);
+    if (
+      titleLoose.includes("古茗奶茶") ||
+      (titleLoose.includes("奶茶") && !titleLoose.includes("奶露"))
+    ) {
+      score += 30;
+      reasons.push("问法指向调饮奶茶（非奶露原料工艺）");
+    }
+  }
+
   const matchedFragments = fragments.filter((fragment) => {
     const normalizedFragment = normalizeLooseText(fragment);
     return normalizedFragment && searchLoose.includes(normalizedFragment);
@@ -156,7 +168,7 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
 
   if (
     item.资料类型.includes("配方") &&
-    /配方|怎么做|如何做|怎么打|如何打|做法|步骤|出杯|加料|克数|ml|毫升|去冰|少冰|热饮|温饮/.test(
+    /配方|怎么做|如何做|怎么打|如何打|做法|步骤|出杯|加料|克数|ml|毫升|去冰|少冰|热饮|温饮|奶茶|果茶|拿铁|数据|配比|杯型|SOP/.test(
       queryText,
     )
   ) {

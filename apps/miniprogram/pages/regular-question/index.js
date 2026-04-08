@@ -69,7 +69,8 @@ Page({
           storeCode,
           category: categories[categoryIndex],
           selfJudgment,
-          issueTitle: categories[categoryIndex],
+          // 勿把分类名当作「门店问题」重复上传，否则语义向量与打分会被分类词二次放大，容易答非所问。
+          issueTitle: "",
           description,
         },
       });
