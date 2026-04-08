@@ -83,7 +83,10 @@ function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAns
 }
 
 function buildDeterministicOperationExplanation(answer: RegularQuestionAnswer) {
-  return `本次命中操作资料「${normalizeText(answer.clauseTitle)}」。执行时重点关注：${normalizeText(answer.explanation)}。如现场版本与资料不一致，请以最新营运资料为准并同步更新知识库。`;
+  const focus = normalizeText(answer.explanation)
+    .replace(/^重点看/, "")
+    .replace(/[。；，、\s]+$/g, "");
+  return `本次命中操作资料「${normalizeText(answer.clauseTitle)}」。执行时重点看${focus}。如现场版本与资料不一致，请以最新营运资料为准并同步更新知识库。`;
 }
 
 function buildHeuristicJudgeDecision(
