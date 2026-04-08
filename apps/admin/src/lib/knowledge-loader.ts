@@ -19,15 +19,17 @@ export async function loadKnowledgeBase(forceRefresh = false) {
     return cache;
   }
 
-  const [rules, consensus, externalPurchases, oldItems, operations] = await Promise.all([
-    readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
-    readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
-    readRows("external-purchases") as Promise<unknown> as Promise<
-      ExternalPurchaseRow[]
-    >,
-    readRows("old-items") as Promise<unknown> as Promise<OldItemRow[]>,
-    readRows("operations") as Promise<unknown> as Promise<OperationRow[]>,
-  ]);
+  const [rules, consensus, externalPurchases, oldItems, operations] = await Promise.all(
+    [
+      readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
+      readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
+      readRows("external-purchases") as Promise<unknown> as Promise<
+        ExternalPurchaseRow[]
+      >,
+      readRows("old-items") as Promise<unknown> as Promise<OldItemRow[]>,
+      readRows("operations") as Promise<unknown> as Promise<OperationRow[]>,
+    ],
+  );
 
   cache = {
     rules: rules.filter((item) => item.状态 !== "停用"),

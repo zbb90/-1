@@ -80,8 +80,7 @@ Page({
         )}`,
       });
     } catch (error) {
-      const message =
-        error?.message || error?.data?.message || "提交失败，请稍后重试";
+      const message = error?.message || error?.data?.message || "提交失败，请稍后重试";
 
       wx.showToast({
         title: message,

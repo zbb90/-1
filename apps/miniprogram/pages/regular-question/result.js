@@ -24,7 +24,9 @@ Page({
       const parsed = JSON.parse(decodeURIComponent(payload));
       const answer = parsed.answer || null;
       const isOperation = answer?.category === "操作标准";
-      const statusText = isOperation ? "已命中操作资料" : answer?.shouldDeduct || "无依据";
+      const statusText = isOperation
+        ? "已命中操作资料"
+        : answer?.shouldDeduct || "无依据";
       const scoreText = isOperation
         ? answer?.clauseNo || "操作资料"
         : answer?.deductScore

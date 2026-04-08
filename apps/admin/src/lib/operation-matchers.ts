@@ -50,7 +50,12 @@ function buildOperationSearchText(item: OperationRow) {
 }
 
 function buildOperationQueryText(request: RegularQuestionRequest) {
-  return [request.category, request.issueTitle, request.description, request.selfJudgment]
+  return [
+    request.category,
+    request.issueTitle,
+    request.description,
+    request.selfJudgment,
+  ]
     .filter(Boolean)
     .join("\n")
     .trim();
@@ -82,12 +87,18 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
   let score = 0;
   const reasons: string[] = [];
 
-  if (normalizeText(request.description) && searchText.includes(normalizeText(request.description))) {
+  if (
+    normalizeText(request.description) &&
+    searchText.includes(normalizeText(request.description))
+  ) {
     score += 28;
     reasons.push("问题描述与操作资料高度重合");
   }
 
-  if (normalizeText(request.issueTitle) && searchText.includes(normalizeText(request.issueTitle))) {
+  if (
+    normalizeText(request.issueTitle) &&
+    searchText.includes(normalizeText(request.issueTitle))
+  ) {
     score += 18;
     reasons.push("门店问题标题命中操作资料");
   }
@@ -99,7 +110,9 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
 
   if (
     objectHint.length >= 2 &&
-    normalizeLooseText([item.标题, item.适用对象, item.关键词].join(" ")).includes(objectHint)
+    normalizeLooseText([item.标题, item.适用对象, item.关键词].join(" ")).includes(
+      objectHint,
+    )
   ) {
     score += 22;
     reasons.push("命中具体产品或原料对象");
@@ -107,7 +120,9 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
 
   if (
     issueObjects.some((object) =>
-      normalizeLooseText([item.标题, item.适用对象, item.关键词].join(" ")).includes(object),
+      normalizeLooseText([item.标题, item.适用对象, item.关键词].join(" ")).includes(
+        object,
+      ),
     )
   ) {
     score += 18;
@@ -131,7 +146,10 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
     reasons.push("命中操作资料关键词片段");
   }
 
-  if (item.资料类型.includes("检查") && /检核|检查|标准|关键项|食安|品质/.test(queryText)) {
+  if (
+    item.资料类型.includes("检查") &&
+    /检核|检查|标准|关键项|食安|品质/.test(queryText)
+  ) {
     score += 18;
     reasons.push("问题更接近检查标准类资料");
   }
@@ -157,7 +175,10 @@ function extractSnippet(item: OperationRow, request: RegularQuestionRequest) {
       const index = haystack.indexOf(fragment);
       if (index >= 0) {
         const start = Math.max(0, index - 40);
-        const end = Math.min(haystack.length, index + Math.max(fragment.length + 120, 140));
+        const end = Math.min(
+          haystack.length,
+          index + Math.max(fragment.length + 120, 140),
+        );
         return haystack.slice(start, end).replace(/\s+/g, " ").trim();
       }
     }
@@ -166,7 +187,10 @@ function extractSnippet(item: OperationRow, request: RegularQuestionRequest) {
   return (item.操作内容 || item.检核要点 || item.解释说明 || "").slice(0, 180).trim();
 }
 
-function buildOperationCandidate(item: OperationRow, score: number): RegularQuestionCandidatePayload {
+function buildOperationCandidate(
+  item: OperationRow,
+  score: number,
+): RegularQuestionCandidatePayload {
   return {
     ruleId: item.op_id,
     category: "操作标准",
@@ -202,7 +226,9 @@ export async function matchOperationQuestion(
     [best.item.检核要点, best.item.解释说明].filter(Boolean).join("；") ||
     best.item.操作内容 ||
     snippet;
-  const rerankedTop = candidates.slice(0, 5).map((item) => buildOperationCandidate(item.item, item.score));
+  const rerankedTop = candidates
+    .slice(0, 5)
+    .map((item) => buildOperationCandidate(item.item, item.score));
 
   return {
     matched: true,

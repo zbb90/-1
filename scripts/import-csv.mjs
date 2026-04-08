@@ -1,10 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const sourceDir = resolve(
-  process.cwd(),
-  "../问答机器人/数据模板",
-);
+const sourceDir = resolve(process.cwd(), "../问答机器人/数据模板");
 
 if (!existsSync(sourceDir)) {
   console.log("未找到数据模板目录：", sourceDir);

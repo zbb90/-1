@@ -1,7 +1,4 @@
-const {
-  isDevToolsEnvironment,
-  LOCAL_API_ORIGIN,
-} = require("../config");
+const { isDevToolsEnvironment, LOCAL_API_ORIGIN } = require("../config");
 
 /** 开发者工具内：线上 HTTPS 不可达时，仅提示一次可切回本机 */
 let devtoolsLocalSwitchPrompted = false;
@@ -17,8 +14,7 @@ function describeWxRequestFail(error) {
     errMsg.includes("ERR_CONNECTION_RESET")
   ) {
     return {
-      shortMessage:
-        "连接被中断，请检查网络、代理或联系管理员排查服务器 HTTPS/Nginx",
+      shortMessage: "连接被中断，请检查网络、代理或联系管理员排查服务器 HTTPS/Nginx",
       devtoolsDetail:
         "ERR_CONNECTION_CLOSED / ERR_CONNECTION_RESET：多为服务端 443/证书/Nginx、防火墙重置连接，或本机 VPN/代理。请在服务器确认 HTTPS 与反代；联调可在设置页切到 http://127.0.0.1:3003 并本地起后台。",
     };
@@ -54,8 +50,7 @@ function logNetworkFailIfDevtools(scope, error) {
 function isTransportDisconnectError(error) {
   const errMsg = (error && error.errMsg) || "";
   return (
-    errMsg.includes("ERR_CONNECTION_CLOSED") ||
-    errMsg.includes("ERR_CONNECTION_RESET")
+    errMsg.includes("ERR_CONNECTION_CLOSED") || errMsg.includes("ERR_CONNECTION_RESET")
   );
 }
 

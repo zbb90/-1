@@ -1,4 +1,8 @@
-const { LOCAL_API_ORIGIN, isDevToolsEnvironment, getApiBaseUrl } = require("../../config");
+const {
+  LOCAL_API_ORIGIN,
+  isDevToolsEnvironment,
+  getApiBaseUrl,
+} = require("../../config");
 
 Page({
   data: {

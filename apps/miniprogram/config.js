@@ -8,9 +8,7 @@ const LEGACY_PRODUCTION_ORIGINS = new Set([
 
 function isDevToolsEnvironment() {
   try {
-    const info = wx.getAppBaseInfo
-      ? wx.getAppBaseInfo()
-      : wx.getSystemInfoSync();
+    const info = wx.getAppBaseInfo ? wx.getAppBaseInfo() : wx.getSystemInfoSync();
     return info.platform === "devtools";
   } catch (e) {
     return false;
@@ -22,9 +20,7 @@ function getDefaultOrigin() {
 }
 
 function getApiBaseUrl() {
-  const savedOrigin = (wx.getStorageSync("apiOrigin") || "")
-    .trim()
-    .replace(/\/+$/, "");
+  const savedOrigin = (wx.getStorageSync("apiOrigin") || "").trim().replace(/\/+$/, "");
   const normalizedSavedOrigin = LEGACY_PRODUCTION_ORIGINS.has(savedOrigin)
     ? ""
     : savedOrigin;

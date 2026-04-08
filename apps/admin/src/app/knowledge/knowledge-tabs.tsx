@@ -2,12 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type TabKey =
-  | "rules"
-  | "consensus"
-  | "external-purchases"
-  | "old-items"
-  | "operations";
+type TabKey = "rules" | "consensus" | "external-purchases" | "old-items" | "operations";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "rules", label: "常规问题规则" },
