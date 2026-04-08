@@ -1,5 +1,50 @@
 <view class="page">
-  <view wx:if="{{matched && answer}}" class="result-stack">
+  <!-- ========== 操作指引模板 ========== -->
+  <view wx:if="{{matched && answer && isOperation}}" class="result-stack">
+    <view class="hero card op-hero">
+      <view class="op-badge">操作指引</view>
+      <view class="hero-title">{{answer.clauseTitle}}</view>
+      <view class="op-meta">{{answer.deductScore}} · {{answer.source}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">配方 / 操作内容</view>
+      <view class="op-content">{{answer.clauseSnippet}}</view>
+    </view>
+
+    <view wx:if="{{answer.explanation}}" class="card">
+      <view class="section-title">检核要点</view>
+      <view class="op-check">{{answer.explanation}}</view>
+    </view>
+
+    <view wx:if="{{answer.aiExplanation}}" class="card">
+      <view class="section-title">AI 小结</view>
+      <view class="detail-desc">{{answer.aiExplanation}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">人工复核</view>
+      <view class="detail-desc">
+        如果你认为返回的操作资料不准确，可以提交人工复核。
+      </view>
+      <view wx:if="{{reviewTask}}" class="review-tip">
+        已提交人工复核：{{reviewTask.id}}｜{{reviewTask.status}}
+      </view>
+      <button
+        class="primary-button"
+        bindtap="submitManualReview"
+        loading="{{submittingReview}}"
+        disabled="{{submittingReview}}"
+      >
+        {{reviewTask ? "查看复核详情" : "结果不对，提交人工复核"}}
+      </button>
+    </view>
+
+    <button class="secondary-button" bindtap="goBack">返回修改问题</button>
+  </view>
+
+  <!-- ========== 稽核判定模板 ========== -->
+  <view wx:elif="{{matched && answer}}" class="result-stack">
     <view class="hero card">
       <view class="hero-top">
         <view>
@@ -15,7 +60,7 @@
 
       <view class="metric-grid">
         <view class="metric-item">
-          <view class="metric-label">{{scoreLabel}}</view>
+          <view class="metric-label">扣几分</view>
           <view class="metric-value">{{scoreText}}</view>
         </view>
         <view class="metric-item">
@@ -27,10 +72,6 @@
 
     <view class="card detail-card">
       <view class="section-title">依据与解释</view>
-      <view class="detail-item">
-        <view class="detail-label">{{scoreLabel}}</view>
-        <view class="detail-value">{{scoreText}}</view>
-      </view>
       <view class="detail-item">
         <view class="detail-label">依据条款</view>
         <view class="detail-value strong">{{answer.clauseTitle}}</view>
@@ -49,26 +90,6 @@
     <view wx:if="{{answer.aiExplanation}}" class="card detail-card">
       <view class="section-title">AI 解释</view>
       <view class="detail-desc">{{answer.aiExplanation}}</view>
-    </view>
-
-    <view class="card">
-      <view class="section-title">命中原因</view>
-      <view wx:for="{{answer.matchedReasons}}" wx:key="*this" class="reason-item">
-        <view class="reason-dot"></view>
-        <view>{{item}}</view>
-      </view>
-    </view>
-
-    <view class="card">
-      <view class="section-title">候选规则</view>
-      <view wx:for="{{candidates}}" wx:key="ruleId" class="candidate-item">
-        <view class="candidate-top">
-          <view class="strong">{{item.ruleId}}｜{{item.clauseNo}}</view>
-          <view class="candidate-score">匹配分 {{item.score}}</view>
-        </view>
-        <view class="candidate-title">{{item.clauseTitle}}</view>
-        <view class="detail-desc">分类：{{item.category}}</view>
-      </view>
     </view>
 
     <view class="card">
@@ -92,6 +113,7 @@
     <button class="secondary-button" bindtap="goBack">返回修改问题</button>
   </view>
 
+  <!-- ========== 未命中模板 ========== -->
   <view wx:else class="card empty-card">
     <view class="hero-label">未找到明确依据</view>
     <view class="hero-title neutral-text">建议进入人工复核</view>

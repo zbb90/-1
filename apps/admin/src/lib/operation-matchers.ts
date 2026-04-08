@@ -179,28 +179,6 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
   return { score, reasons };
 }
 
-function extractSnippet(item: OperationRow, request: RegularQuestionRequest) {
-  const combined = buildOperationQueryText(request);
-  const haystacks = [item.操作内容, item.检核要点, item.解释说明].filter(Boolean);
-  const fragments = splitTextFragments(combined).sort((a, b) => b.length - a.length);
-
-  for (const haystack of haystacks) {
-    for (const fragment of fragments) {
-      const index = haystack.indexOf(fragment);
-      if (index >= 0) {
-        const start = Math.max(0, index - 40);
-        const end = Math.min(
-          haystack.length,
-          index + Math.max(fragment.length + 120, 140),
-        );
-        return haystack.slice(start, end).replace(/\s+/g, " ").trim();
-      }
-    }
-  }
-
-  return (item.操作内容 || item.检核要点 || item.解释说明 || "").slice(0, 180).trim();
-}
-
 function buildOperationCandidate(
   item: OperationRow,
   score: number,
@@ -235,9 +213,8 @@ export async function matchOperationQuestion(
   }
 
   const best = candidates[0];
-  const snippet = extractSnippet(best.item, request);
-  const explanation =
-    best.item.检核要点 || best.item.解释说明 || best.item.操作内容 || snippet;
+  const operationContent = best.item.操作内容 || "";
+  const checkPoints = best.item.检核要点 || "";
   const rerankedTop = candidates
     .slice(0, 5)
     .map((item) => buildOperationCandidate(item.item, item.score));
@@ -249,11 +226,11 @@ export async function matchOperationQuestion(
       ruleId: best.item.op_id,
       category: "操作标准",
       shouldDeduct: "操作指引",
-      deductScore: "-",
+      deductScore: best.item.资料类型,
       clauseNo: best.item.资料类型,
       clauseTitle: best.item.标题,
-      clauseSnippet: snippet,
-      explanation,
+      clauseSnippet: operationContent,
+      explanation: checkPoints,
       source: `${best.item.资料类型} / ${best.item.来源文件}`,
       matchedReasons: best.reasons,
       consensusKeywords: best.item.关键词,

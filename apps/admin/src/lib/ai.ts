@@ -83,10 +83,7 @@ function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAns
 }
 
 function buildDeterministicOperationExplanation(answer: RegularQuestionAnswer) {
-  const focus = normalizeText(answer.explanation)
-    .replace(/^重点看/, "")
-    .replace(/[。；，、\s]+$/g, "");
-  return `本次命中操作资料「${normalizeText(answer.clauseTitle)}」。执行时重点看${focus}。如现场版本与资料不一致，请以最新营运资料为准并同步更新知识库。`;
+  return `已命中「${normalizeText(answer.clauseTitle)}」。如现场版本与系统资料不一致，请以最新营运资料为准并反馈更新。`;
 }
 
 function buildHeuristicJudgeDecision(
@@ -319,27 +316,18 @@ export async function generateOperationAiExplanation(
   answer: RegularQuestionAnswer,
 ) {
   const prompt = `
-请把下面的操作资料命中结果整理成给门店伙伴看的简短说明。
+用户问了「${normalizeText(request.description)}」，系统已命中操作资料「${normalizeText(answer.clauseTitle)}」。
 
-用户提交信息：
-- 问题分类：${normalizeText(request.category)}
-- 门店问题：${normalizeText(request.issueTitle)}
-- 问题描述：${normalizeText(request.description)}
-- 自行判断：${normalizeText(request.selfJudgment)}
+配方/操作内容和检核要点已经在页面上直接展示了，你不需要重复它们。
+你的任务是写一句简短的执行提醒：告诉伙伴这条资料是否就是他要找的，以及执行时最容易忽略的 1 个点。
 
-资料命中结果：
-- 资料标题：${normalizeText(answer.clauseTitle)}
-- 资料类型：${normalizeText(answer.clauseNo)}
-- 操作片段：${normalizeText(answer.clauseSnippet)}
-- 解释说明：${normalizeText(answer.explanation)}
-- 来源：${normalizeText(answer.source)}
+资料类型：${normalizeText(answer.clauseNo)}
+来源：${normalizeText(answer.source)}
 
 输出要求：
-1. 只依据以上信息，不编造新的配方、克数、流程或例外。
-2. 先说命中了哪份操作资料，再压缩说明应关注的操作/检核点。
-3. 最后补一句执行建议。
-4. 控制在 3 句话以内，70 到 140 字。
-5. 不要使用标题、编号、Markdown。
+1. 不重复配方数据（克数、ml、G几）和操作步骤。
+2. 只写 1 到 2 句话，40 到 80 字。
+3. 不要使用标题、编号、Markdown。
 `;
 
   const llm = await requestDashScopeExplanation(prompt);
