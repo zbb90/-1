@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
+import { getRequesterIdFromRequest } from "@/lib/requester";
 import { getReviewTaskById, updateReviewTask } from "@/lib/review-pool";
 
 /**
  * PATCH /api/conversations
  * 两种调用方：
  *   1. 主管（Basic Auth / session cookie）：直接标记任意任务答错，转为"待处理"
- *   2. 专员（x-requester-id）：仅限标记自己的任务，表示对 AI 答案有异议
+ *   2. 专员（Bearer JWT）：仅限标记自己的任务，表示对 AI 答案有异议
  */
 export async function PATCH(request: NextRequest) {
   const isAdmin = await isAdminSessionOrBasicAuthorized(request);
-
-  const requesterId = request.headers.get("x-requester-id")?.trim() || null;
+  const requesterId = await getRequesterIdFromRequest(request);
 
   if (!isAdmin && !requesterId) {
     return NextResponse.json(
-      { ok: false, message: "需要身份验证（主管登录或携带 x-requester-id）。" },
+      { ok: false, message: "需要身份验证（主管登录或小程序登录态）。" },
       { status: 401 },
     );
   }

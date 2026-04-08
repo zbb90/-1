@@ -9,6 +9,7 @@ const VALID_TABLES: KbTableName[] = [
   "consensus",
   "external-purchases",
   "old-items",
+  "operations",
 ];
 
 function parseExcel(buffer: ArrayBuffer): Record<string, string>[] {

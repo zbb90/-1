@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { AppUser } from "@/lib/user-store";
+import type { PublicAppUser } from "@/lib/user-store";
 
 const roleLabels: Record<string, string> = {
   leader: "负责人",
@@ -22,7 +22,7 @@ export function UserManagement({
   canDelegate,
   primaryPhoneHint,
 }: {
-  initialUsers: AppUser[];
+  initialUsers: PublicAppUser[];
   envSummaries: EnvRow[];
   canDelegate: boolean;
   primaryPhoneHint: string;
@@ -81,16 +81,21 @@ export function UserManagement({
         setName("");
         setPhone("");
         setCreateMode(null);
+        if (data.temporaryPassword) {
+          alert(
+            `${data.user.name} 已创建成功。\n初始临时密码：${data.temporaryPassword}\n请尽快通过“改密码”改成强密码。`,
+          );
+        }
       } catch {
         setError("网络错误，请重试");
       }
     });
   }
 
-  const [resetTarget, setResetTarget] = useState<AppUser | null>(null);
+  const [resetTarget, setResetTarget] = useState<PublicAppUser | null>(null);
   const [newPassword, setNewPassword] = useState("");
 
-  async function toggleStatus(user: AppUser) {
+  async function toggleStatus(user: PublicAppUser) {
     const newStatus = user.status === "active" ? "disabled" : "active";
     startTransition(async () => {
       try {
@@ -141,7 +146,7 @@ export function UserManagement({
     });
   }
 
-  function roleDetailLabel(user: AppUser): string {
+  function roleDetailLabel(user: PublicAppUser): string {
     if (user.role === "leader" && user.leaderKind === "delegated") {
       return "副负责人（主账号授权）";
     }
@@ -173,11 +178,11 @@ export function UserManagement({
           </li>
           <li>
             <span className="font-medium text-slate-800">副负责人</span>
-            ：仅主负责人在本页「添加副负责人」创建，初始密码为手机号，权限与负责人相同（除「授权副负责人」仅主账号可用）。
+            ：仅主负责人在本页「添加副负责人」创建，系统会生成一次性临时密码，权限与负责人相同（除「授权副负责人」仅主账号可用）。
           </li>
           <li>
             <span className="font-medium text-slate-800">主管</span>
-            ：由负责人在此创建，登录 PC 处理复核与知识库。
+            ：由负责人在此创建，系统会生成一次性临时密码，用于登录 PC 处理复核与知识库。
           </li>
           <li>
             <span className="font-medium text-slate-800">专员</span>
@@ -269,13 +274,13 @@ export function UserManagement({
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="11 位手机号（初始密码同手机号）"
+                placeholder="11 位手机号"
                 className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-green-400"
               />
             </label>
           </div>
           <p className="text-xs text-gray-500">
-            初始密码为手机号本身，登录后请及时修改为强密码（后续版本可支持强制改密）。
+            创建成功后会显示一次性临时密码，请立即告知对应人员，并要求首次使用后尽快改密。
           </p>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <button
@@ -446,7 +451,7 @@ export function UserManagement({
                 type="text"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="输入新密码（不少于 6 位）"
+                placeholder="输入新密码（不少于 8 位）"
                 className="rounded-xl border border-gray-200 px-4 py-2.5 outline-none transition focus:border-green-400"
               />
             </label>
@@ -462,7 +467,7 @@ export function UserManagement({
               <button
                 type="button"
                 onClick={handleResetPassword}
-                disabled={isPending || newPassword.trim().length < 6}
+                disabled={isPending || newPassword.trim().length < 8}
                 className="rounded-xl bg-green-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-800 disabled:bg-green-400"
               >
                 {isPending ? "保存中…" : "确认修改"}

@@ -1,27 +1,27 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
+import { getAdminRequestContext } from "@/lib/admin-session";
+import { formatZodError, readJsonBody } from "@/lib/api-utils";
+import { generateTemporaryPassword, hashPassword } from "@/lib/password";
+import { userCreateBodySchema } from "@/lib/schemas";
 import {
   listAllUsers,
   createUser,
   getUserByPhone,
-  isPrimaryLeaderPhone,
+  toPublicUser,
   type AppUser,
 } from "@/lib/user-store";
-
-function isLeaderRole(request: NextRequest): boolean {
-  return request.cookies.get("audit_role")?.value === "leader";
-}
 
 /**
  * GET /api/users — list all users (leader only)
  */
 export async function GET(request: NextRequest) {
-  if (!(await isAdminSessionOrBasicAuthorized(request)) || !isLeaderRole(request)) {
+  const admin = await getAdminRequestContext(request);
+  if (!admin.authorized || !admin.isLeader) {
     return NextResponse.json({ error: "需要负责人权限" }, { status: 403 });
   }
 
   const users = await listAllUsers();
-  return NextResponse.json({ users });
+  return NextResponse.json({ users: users.map(toPublicUser) });
 }
 
 /**
@@ -29,25 +29,22 @@ export async function GET(request: NextRequest) {
  *
  * Body:
  *   { name, phone, type?: "supervisor" | "delegated_leader" }
- *   默认 type=supervisor。副负责人仅主负责人（audit_leader_kind=primary）可创建。
+ *   默认 type=supervisor。副负责人仅主负责人可创建。
  */
 export async function POST(request: NextRequest) {
-  if (!(await isAdminSessionOrBasicAuthorized(request)) || !isLeaderRole(request)) {
+  const admin = await getAdminRequestContext(request);
+  if (!admin.authorized || !admin.isLeader) {
     return NextResponse.json({ error: "需要负责人权限" }, { status: 403 });
   }
 
-  const body = await request.json().catch(() => null);
-  const name = body?.name?.trim();
-  const phone = body?.phone?.trim();
-  const type = body?.type === "delegated_leader" ? "delegated_leader" : "supervisor";
-
-  if (!name || !phone) {
-    return NextResponse.json({ error: "请填写姓名和手机号" }, { status: 400 });
+  const parsed = userCreateBodySchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
   }
+  const { name, phone, type } = parsed.data;
 
   if (type === "delegated_leader") {
-    const loginPhone = request.cookies.get("audit_login_phone")?.value?.trim();
-    if (!loginPhone || !isPrimaryLeaderPhone(loginPhone)) {
+    if (!admin.isPrimaryLeader) {
       return NextResponse.json(
         { error: "仅主负责人可为组织添加副负责人（请使用主账号手机号登录）" },
         { status: 403 },
@@ -61,6 +58,8 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
 
   if (type === "delegated_leader") {
     const user: AppUser = {
@@ -69,12 +68,16 @@ export async function POST(request: NextRequest) {
       leaderKind: "delegated",
       name,
       phone,
+      passwordHash,
       status: "active",
       createdAt: now,
-      createdBy: "primary-leader",
+      createdBy: admin.session?.sub || "primary-leader",
     };
     await createUser(user);
-    return NextResponse.json({ user }, { status: 201 });
+    return NextResponse.json(
+      { user: toPublicUser(user), temporaryPassword },
+      { status: 201 },
+    );
   }
 
   const user: AppUser = {
@@ -82,11 +85,15 @@ export async function POST(request: NextRequest) {
     role: "supervisor",
     name,
     phone,
+    passwordHash,
     status: "active",
     createdAt: now,
-    createdBy: "leader",
+    createdBy: admin.session?.sub || "leader",
   };
 
   await createUser(user);
-  return NextResponse.json({ user }, { status: 201 });
+  return NextResponse.json(
+    { user: toPublicUser(user), temporaryPassword },
+    { status: 201 },
+  );
 }

@@ -1,60 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatZodError, logRouteError, readJsonBody } from "@/lib/api-utils";
 import { createReviewTask } from "@/lib/review-pool";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
-import type { RegularQuestionRequest } from "@/lib/types";
-
-type ManualReviewRequest = RegularQuestionRequest & {
-  answer?: {
-    ruleId?: string;
-    category?: string;
-    shouldDeduct?: string;
-    deductScore?: string;
-    clauseNo?: string;
-    clauseTitle?: string;
-    clauseSnippet?: string;
-    explanation?: string;
-    source?: string;
-    matchedReasons?: string[];
-    aiExplanation?: string;
-  };
-  candidates?: Array<{
-    ruleId?: string;
-    category?: string;
-    clauseNo?: string;
-    clauseTitle?: string;
-    score?: number;
-  }>;
-};
-
-function validateBody(body: ManualReviewRequest) {
-  if (!body.description?.trim() && !body.issueTitle?.trim()) {
-    return "至少需要提供 `问题描述` 或 `门店问题`。";
-  }
-
-  if (!body.category?.trim()) {
-    return "`问题分类` 不能为空。";
-  }
-
-  return null;
-}
+import { manualReviewBodySchema } from "@/lib/schemas";
 
 export async function POST(request: NextRequest) {
   try {
-    const payload = getRequesterPayloadFromRequest(
-      request,
-      (await request.json()) as ManualReviewRequest,
-    );
-    const errorMessage = validateBody(payload);
-
-    if (errorMessage) {
+    const parsed = manualReviewBodySchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) {
       return NextResponse.json(
         {
           ok: false,
-          message: errorMessage,
+          message: formatZodError(parsed.error),
         },
         { status: 400 },
       );
     }
+    const payload = await getRequesterPayloadFromRequest(request, parsed.data);
 
     const reviewTask = await createReviewTask({
       type: "常规问题",
@@ -91,10 +53,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    logRouteError("/api/regular-question/review", error);
     return NextResponse.json(
       {
         ok: false,
-        message: error instanceof Error ? error.message : "创建人工复核任务时发生异常",
+        message: "创建人工复核任务时发生异常，请稍后重试。",
       },
       { status: 500 },
     );

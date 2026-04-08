@@ -56,11 +56,26 @@ export interface OldItemRow {
   备注: string;
 }
 
+export interface OperationRow {
+  op_id: string;
+  资料类型: string;
+  标题: string;
+  适用对象: string;
+  关键词: string;
+  操作内容: string;
+  检核要点: string;
+  解释说明: string;
+  来源文件: string;
+  状态: string;
+  备注: string;
+}
+
 export interface KnowledgeBase {
   rules: RuleRow[];
   consensus: ConsensusRow[];
   externalPurchases: ExternalPurchaseRow[];
   oldItems: OldItemRow[];
+  operations: OperationRow[];
 }
 
 export interface RequesterPayload {
@@ -140,7 +155,7 @@ export interface RegularQuestionJudgeDecision {
 }
 
 export interface RegularQuestionMatchDebug {
-  retrievalMode: "semantic" | "fallback";
+  retrievalMode: "semantic" | "fallback" | "operation";
   semanticEnabled: boolean;
   queryText: string;
   fallbackReason?: string;

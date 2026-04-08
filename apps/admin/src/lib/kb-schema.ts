@@ -1,5 +1,10 @@
 /** 与 [knowledge-csv.ts](knowledge-csv.ts) 中 KbTableName 一致。 */
-export type KbTableName = "rules" | "consensus" | "external-purchases" | "old-items";
+export type KbTableName =
+  | "rules"
+  | "consensus"
+  | "external-purchases"
+  | "old-items"
+  | "operations";
 
 /** 各表 Excel/CSV 首行应包含的列名（与 [knowledge-store](knowledge-store.ts) 默认表头一致）。 */
 export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
@@ -56,6 +61,19 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "备注",
     "状态",
   ],
+  operations: [
+    "op_id",
+    "资料类型",
+    "标题",
+    "适用对象",
+    "关键词",
+    "操作内容",
+    "检核要点",
+    "解释说明",
+    "来源文件",
+    "备注",
+    "状态",
+  ],
 };
 
 const ID_FIELD: Record<KbTableName, string> = {
@@ -63,6 +81,7 @@ const ID_FIELD: Record<KbTableName, string> = {
   consensus: "consensus_id",
   "external-purchases": "item_id",
   "old-items": "item_id",
+  operations: "op_id",
 };
 
 export function validateKnowledgeRowKeys(

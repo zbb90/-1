@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getReviewSummary } from "@/lib/review-pool";
+import { getAdminSessionFromCookies } from "@/lib/admin-session";
 import { listAllUsers } from "@/lib/user-store";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminShell } from "@/components/admin/admin-shell";
@@ -8,7 +9,8 @@ import { AdminShell } from "@/components/admin/admin-shell";
 export default async function HomePage() {
   const reviewSummary = await getReviewSummary();
   const cookieStore = await cookies();
-  const role = cookieStore.get("audit_role")?.value;
+  const session = await getAdminSessionFromCookies(cookieStore);
+  const role = session?.role;
   const isLeader = role === "leader";
 
   let userCounts = { supervisor: 0, specialist: 0 };

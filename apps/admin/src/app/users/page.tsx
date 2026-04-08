@@ -1,10 +1,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  getAdminSessionFromCookies,
+  isPrimaryLeaderSession,
+} from "@/lib/admin-session";
+import {
   listAllUsers,
   getEnvLeaderSummaries,
   getPrimaryLeaderPhone,
-  isPrimaryLeaderPhone,
+  toPublicUser,
 } from "@/lib/user-store";
 import { UserManagement } from "./user-management";
 import { AdminNav } from "@/components/admin/admin-nav";
@@ -13,17 +17,17 @@ import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function UsersPage() {
   const cookieStore = await cookies();
-  const role = cookieStore.get("audit_role")?.value;
+  const session = await getAdminSessionFromCookies(cookieStore);
+  const role = session?.role;
 
   if (role !== "leader") {
     redirect("/reviews");
   }
 
-  const users = await listAllUsers();
+  const users = (await listAllUsers()).map(toPublicUser);
   const envSummaries = getEnvLeaderSummaries();
   const primaryPhone = getPrimaryLeaderPhone();
-  const loginPhone = cookieStore.get("audit_login_phone")?.value?.trim();
-  const canDelegate = Boolean(loginPhone && isPrimaryLeaderPhone(loginPhone));
+  const canDelegate = isPrimaryLeaderSession(session);
 
   return (
     <AdminShell>

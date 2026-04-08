@@ -1,3 +1,6 @@
+import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/password";
+import { getRedis, isRedisConfigured } from "@/lib/redis-client";
+
 /**
  * Three-tier user store backed by Upstash Redis.
  *
@@ -16,7 +19,9 @@ export interface AppUser {
   role: UserRole;
   name: string;
   phone: string;
+  /** 兼容旧数据，迁移完成后不再写入。 */
   password?: string;
+  passwordHash?: string;
   status: "active" | "disabled";
   createdAt: string;
   createdBy: string;
@@ -24,23 +29,7 @@ export interface AppUser {
   leaderKind?: "delegated";
 }
 
-function isRedisConfigured() {
-  return Boolean(
-    process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim(),
-  );
-}
-
-let redisInstance: import("@upstash/redis").Redis | null = null;
-
-async function getRedis() {
-  if (redisInstance) return redisInstance;
-  const { Redis } = await import("@upstash/redis");
-  redisInstance = new Redis({
-    url: process.env.KV_REST_API_URL!,
-    token: process.env.KV_REST_API_TOKEN!,
-  });
-  return redisInstance;
-}
+export type PublicAppUser = Omit<AppUser, "password" | "passwordHash">;
 
 function userKey(openid: string) {
   return `audit:user:${openid}`;
@@ -152,6 +141,11 @@ export async function listAllUsers(): Promise<AppUser[]> {
   return [...leaders, ...supervisors, ...specialists];
 }
 
+export function toPublicUser(user: AppUser): PublicAppUser {
+  const { password: _password, passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Leader accounts from environment variables                         */
 /* ------------------------------------------------------------------ */
@@ -159,6 +153,7 @@ export async function listAllUsers(): Promise<AppUser[]> {
 export interface LeaderAccount {
   phone: string;
   password: string;
+  passwordHash?: string;
 }
 
 export function getLeaderAccounts(): LeaderAccount[] {
@@ -168,7 +163,12 @@ export function getLeaderAccounts(): LeaderAccount[] {
     .split(",")
     .map((entry) => {
       const [phone, ...rest] = entry.trim().split(":");
-      return { phone: phone?.trim() || "", password: rest.join(":").trim() };
+      const secret = rest.join(":").trim();
+      return {
+        phone: phone?.trim() || "",
+        password: secret,
+        passwordHash: isPasswordHash(secret) ? secret : undefined,
+      };
     })
     .filter((a) => a.phone && a.password);
 }
@@ -177,8 +177,22 @@ export function isLeaderPhone(phone: string): boolean {
   return getLeaderAccounts().some((a) => a.phone === phone);
 }
 
-export function verifyLeaderCredentials(phone: string, password: string): boolean {
-  return getLeaderAccounts().some((a) => a.phone === phone && a.password === password);
+export async function verifyLeaderCredentials(phone: string, password: string) {
+  for (const account of getLeaderAccounts()) {
+    if (account.phone !== phone) {
+      continue;
+    }
+    if (account.passwordHash) {
+      if (await verifyPassword(password, account.passwordHash)) {
+        return true;
+      }
+      continue;
+    }
+    if (account.password === password) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** 主负责人手机号：优先 PRIMARY_LEADER_PHONE，否则为 LEADER_ACCOUNTS 中第一条 */
@@ -216,6 +230,49 @@ export type ResolvePcLoginResult =
   | { ok: true; role: "supervisor"; name: string }
   | { ok: false };
 
+async function upgradeLegacyPasswordIfNeeded(
+  user: AppUser,
+  plainPassword: string,
+  usedLegacyField: boolean,
+) {
+  if (!usedLegacyField) {
+    return;
+  }
+
+  const nextHash = await hashPassword(plainPassword);
+  await updateUser(user.openid, {
+    passwordHash: nextHash,
+    password: undefined,
+  });
+}
+
+async function verifyManagedUserPassword(user: AppUser, password: string) {
+  const candidate = password.trim();
+  if (!candidate) {
+    return false;
+  }
+
+  if (user.passwordHash) {
+    return verifyPassword(candidate, user.passwordHash);
+  }
+
+  const legacyPassword = user.password?.trim();
+  if (legacyPassword) {
+    if (candidate !== legacyPassword) {
+      return false;
+    }
+    await upgradeLegacyPasswordIfNeeded(user, candidate, true);
+    return true;
+  }
+
+  if (candidate === user.phone.trim()) {
+    await upgradeLegacyPasswordIfNeeded(user, candidate, true);
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * PC 端登录：环境负责人 → Redis 副负责人 → 主管
  */
@@ -224,7 +281,7 @@ export async function resolvePcLogin(
   password: string,
 ): Promise<ResolvePcLoginResult> {
   const p = phone.trim();
-  if (verifyLeaderCredentials(p, password)) {
+  if (await verifyLeaderCredentials(p, password)) {
     const leaderSessionKind = isPrimaryLeaderPhone(p) ? "primary" : "env";
     return {
       ok: true,
@@ -235,13 +292,8 @@ export async function resolvePcLogin(
   }
 
   const user = await getUserByPhone(p);
-  if (user?.status === "active") {
-    const userPwd = user.password?.trim() || user.phone;
-    if (
-      user.role === "leader" &&
-      user.leaderKind === "delegated" &&
-      password === userPwd
-    ) {
+  if (user?.status === "active" && (await verifyManagedUserPassword(user, password))) {
+    if (user.role === "leader" && user.leaderKind === "delegated") {
       return {
         ok: true,
         role: "leader",
@@ -249,7 +301,7 @@ export async function resolvePcLogin(
         name: user.name || "副负责人",
       };
     }
-    if (user.role === "supervisor" && password === userPwd) {
+    if (user.role === "supervisor") {
       return { ok: true, role: "supervisor", name: user.name };
     }
   }

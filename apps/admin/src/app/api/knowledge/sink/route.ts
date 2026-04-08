@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { formatZodError, logRouteError, readJsonBody } from "@/lib/api-utils";
 import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
 import { getReviewTaskById, updateReviewTask } from "@/lib/review-pool";
 import { loadKnowledgeBase } from "@/lib/knowledge-base";
 import { appendCsvRow, readCsvHeaders } from "@/lib/csv-writer";
+import { knowledgeSinkBodySchema } from "@/lib/schemas";
 import { upsertRuleVectors } from "@/lib/vector-store";
 import type { ReviewTask, ReviewTaskType, RuleRow } from "@/lib/types";
 
@@ -222,13 +224,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as { taskId: string };
-    if (!body.taskId?.trim()) {
+    const parsed = knowledgeSinkBodySchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, message: "缺少 taskId。" },
+        { ok: false, message: formatZodError(parsed.error) },
         { status: 400 },
       );
     }
+    const body = parsed.data;
 
     const task = await getReviewTaskById(body.taskId);
     if (!task) {
@@ -282,10 +285,11 @@ export async function POST(request: NextRequest) {
       newId,
     });
   } catch (error) {
+    logRouteError("/api/knowledge/sink", error);
     return NextResponse.json(
       {
         ok: false,
-        message: error instanceof Error ? error.message : "知识沉淀操作失败",
+        message: "知识沉淀操作失败，请稍后重试。",
       },
       { status: 500 },
     );

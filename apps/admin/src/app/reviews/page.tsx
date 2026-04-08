@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { getAdminSessionFromCookies } from "@/lib/admin-session";
 import { listReviewTasks } from "@/lib/review-pool";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
@@ -8,7 +9,8 @@ import { AdminShell } from "@/components/admin/admin-shell";
 export default async function ReviewsPage() {
   const tasks = await listReviewTasks();
   const cookieStore = await cookies();
-  const isLeader = cookieStore.get("audit_role")?.value === "leader";
+  const session = await getAdminSessionFromCookies(cookieStore);
+  const isLeader = session?.role === "leader";
 
   return (
     <AdminShell>

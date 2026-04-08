@@ -2,13 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type TabKey = "rules" | "consensus" | "external-purchases" | "old-items";
+type TabKey =
+  | "rules"
+  | "consensus"
+  | "external-purchases"
+  | "old-items"
+  | "operations";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "rules", label: "常规问题规则" },
   { key: "consensus", label: "共识解释" },
   { key: "external-purchases", label: "外购清单" },
   { key: "old-items", label: "旧品清单" },
+  { key: "operations", label: "操作知识" },
 ];
 
 type Row = Record<string, string>;
@@ -77,11 +83,17 @@ export function KnowledgeTabs() {
       ? "rule_id"
       : tab === "consensus"
         ? "consensus_id"
-        : "item_id";
+        : tab === "operations"
+          ? "op_id"
+          : "item_id";
   }
 
   function primaryField(tab: TabKey) {
-    return tab === "rules" ? "条款标题" : tab === "consensus" ? "标题" : "物品名称";
+    return tab === "rules"
+      ? "条款标题"
+      : tab === "consensus" || tab === "operations"
+        ? "标题"
+        : "物品名称";
   }
 
   function closeEdit() {
@@ -558,6 +570,17 @@ const FIELD_DEFS: Record<
     { key: "命中的清单名称", label: "命中的清单名称" },
     { key: "识别备注", label: "识别备注", multiline: true },
     { key: "参考图片名称", label: "参考图片名称" },
+    { key: "备注", label: "备注" },
+  ],
+  operations: [
+    { key: "资料类型", label: "资料类型", required: true },
+    { key: "标题", label: "标题", required: true },
+    { key: "适用对象", label: "适用对象" },
+    { key: "关键词", label: "关键词" },
+    { key: "操作内容", label: "操作内容", multiline: true },
+    { key: "检核要点", label: "检核要点", multiline: true },
+    { key: "解释说明", label: "解释说明", multiline: true },
+    { key: "来源文件", label: "来源文件" },
     { key: "备注", label: "备注" },
   ],
 };

@@ -10,6 +10,7 @@ Page({
     requestSnapshot: null,
     statusText: "无依据",
     scoreText: "待人工确认",
+    scoreLabel: "扣几分",
     submittingReview: false,
   },
 
@@ -22,10 +23,14 @@ Page({
     try {
       const parsed = JSON.parse(decodeURIComponent(payload));
       const answer = parsed.answer || null;
-      const statusText = answer?.shouldDeduct || "无依据";
-      const scoreText = answer?.deductScore
-        ? `${answer.deductScore}｜${answer.clauseNo || "无条款编号"}`
-        : "待人工确认";
+      const isOperation = answer?.category === "操作标准";
+      const statusText = isOperation ? "已命中操作资料" : answer?.shouldDeduct || "无依据";
+      const scoreText = isOperation
+        ? answer?.clauseNo || "操作资料"
+        : answer?.deductScore
+          ? `${answer.deductScore}｜${answer.clauseNo || "无条款编号"}`
+          : "待人工确认";
+      const scoreLabel = isOperation ? "资料类型" : "扣几分";
 
       this.setData({
         matched: parsed.matched,
@@ -36,6 +41,7 @@ Page({
         requestSnapshot: parsed.requestSnapshot || null,
         statusText,
         scoreText,
+        scoreLabel,
       });
     } catch (error) {
       this.setData({

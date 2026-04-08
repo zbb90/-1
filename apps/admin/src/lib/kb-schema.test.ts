@@ -7,6 +7,11 @@ describe("validateKnowledgeRowKeys", () => {
     expect(validateKnowledgeRowKeys("rules", keys)).toEqual({ ok: true });
   });
 
+  it("passes when all required columns exist for operations", () => {
+    const keys = [...KB_TABLE_HEADERS.operations];
+    expect(validateKnowledgeRowKeys("operations", keys)).toEqual({ ok: true });
+  });
+
   it("fails when a column is missing", () => {
     const keys = KB_TABLE_HEADERS.rules.filter((h) => h !== "条款标题");
     const r = validateKnowledgeRowKeys("rules", keys);

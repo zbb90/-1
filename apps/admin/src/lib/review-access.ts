@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
+import { getRequesterIdFromRequest } from "@/lib/requester";
 
 function normalizeValue(value?: string | null) {
   const normalized = value?.trim();
@@ -30,7 +31,7 @@ export async function getReviewReadScope(
     };
   }
 
-  const requesterId = normalizeValue(request.headers.get("x-requester-id"));
+  const requesterId = normalizeValue(await getRequesterIdFromRequest(request));
   if (requesterId) {
     return {
       kind: "requester",
@@ -40,6 +41,6 @@ export async function getReviewReadScope(
 
   return {
     kind: "unauthorized",
-    message: "请携带 x-requester-id，或使用主管后台登录后访问复核记录。",
+    message: "请先完成小程序登录，或使用主管后台登录后访问复核记录。",
   };
 }

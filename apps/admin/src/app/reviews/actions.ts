@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { getAdminCredentials, isAuthorizedAdminRequest } from "@/lib/admin-auth";
 import {
   ADMIN_SESSION_COOKIE,
+  LEGACY_ADMIN_COOKIES,
+  getAdminSessionCookieOptions,
+  getAdminSessionFromCookies,
   signAdminSessionValue,
-  verifyAdminSessionCookieValue,
 } from "@/lib/admin-session";
 import { updateReviewTask } from "@/lib/review-pool";
 import { resolvePcLogin } from "@/lib/user-store";
@@ -16,11 +18,9 @@ async function assertAdminSessionOrBasic() {
   const cookieStore = await cookies();
   const headerList = await headers();
 
-  const cookieOk = await verifyAdminSessionCookieValue(
-    cookieStore.get(ADMIN_SESSION_COOKIE)?.value,
-  );
+  const session = await getAdminSessionFromCookies(cookieStore);
 
-  if (cookieOk || isAuthorizedAdminRequest(headerList).ok) {
+  if (session || isAuthorizedAdminRequest(headerList).ok) {
     return true;
   }
 
@@ -56,39 +56,19 @@ export async function adminLoginAction(
     return { ok: false, message: "手机号或密码不正确。" };
   }
 
-  const role = login.role;
-  const leaderKindCookie = login.role === "leader" ? login.leaderSessionKind : "none";
-
-  const value = await signAdminSessionValue();
+  const leaderKind = login.role === "leader" ? login.leaderSessionKind : "none";
+  const value = await signAdminSessionValue({
+    sub: login.role === "leader" ? `pc-leader:${phone}` : `pc-supervisor:${phone}`,
+    role: login.role,
+    leaderKind,
+    phone: phone.trim(),
+    name: login.name,
+  });
   const cookieStore = await cookies();
-  cookieStore.set(ADMIN_SESSION_COOKIE, value, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  cookieStore.set("audit_role", role, {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  cookieStore.set("audit_leader_kind", leaderKindCookie, {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  cookieStore.set("audit_login_phone", phone.trim(), {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  cookieStore.set(ADMIN_SESSION_COOKIE, value, getAdminSessionCookieOptions());
+  for (const legacyName of LEGACY_ADMIN_COOKIES) {
+    cookieStore.delete(legacyName);
+  }
 
   redirect(next);
 }
@@ -149,9 +129,9 @@ export async function saveReviewTaskAction(
 export async function adminLogoutAction() {
   const cookieStore = await cookies();
   cookieStore.delete(ADMIN_SESSION_COOKIE);
-  cookieStore.delete("audit_role");
-  cookieStore.delete("audit_leader_kind");
-  cookieStore.delete("audit_login_phone");
+  for (const legacyName of LEGACY_ADMIN_COOKIES) {
+    cookieStore.delete(legacyName);
+  }
   redirect("/reviews/login");
 }
 

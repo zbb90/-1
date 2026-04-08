@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isAuthorizedAdminRequest } from "@/lib/admin-auth";
-import { verifyAdminSessionFromRequest } from "@/lib/admin-session";
+import { getAdminRequestContext } from "@/lib/admin-session";
 
 function isLoginPath(pathname: string) {
   return pathname === "/reviews/login" || pathname.startsWith("/reviews/login/");
@@ -60,9 +60,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSession = await verifyAdminSessionFromRequest(request);
+  const admin = await getAdminRequestContext(request);
 
-  if (!hasSession) {
+  if (!admin.authorized) {
     if (isPage) {
       const login = new URL("/reviews/login", request.url);
       login.searchParams.set(
@@ -85,8 +85,7 @@ export async function middleware(request: NextRequest) {
     pathname === "/api/users" ||
     pathname.startsWith("/api/users/")
   ) {
-    const role = request.cookies.get("audit_role")?.value;
-    if (role !== "leader") {
+    if (!admin.isLeader) {
       if (isPage) {
         return NextResponse.redirect(new URL("/reviews", request.url));
       }

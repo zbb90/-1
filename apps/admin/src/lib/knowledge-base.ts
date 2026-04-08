@@ -2,9 +2,11 @@ import {
   judgeRegularQuestionCandidates,
   type RegularQuestionJudgeCandidate,
 } from "@/lib/ai";
+import { matchExternalPurchase, matchOldItem } from "@/lib/catalog-matchers";
+import { getKnowledgeSummary, loadKnowledgeBase } from "@/lib/knowledge-loader";
+import { matchOperationQuestion } from "@/lib/operation-matchers";
 import { isSemanticSearchConfigured, searchRuleVectors } from "@/lib/vector-store";
 import { analyzeRegularQuestionIntent } from "@/lib/llm-intent";
-import { readRows } from "@/lib/knowledge-store";
 import type {
   ConsensusRow,
   ExternalPurchaseRequest,
@@ -19,7 +21,13 @@ import type {
   RuleRow,
 } from "@/lib/types";
 
-let cache: KnowledgeBase | null = null;
+export {
+  getKnowledgeSummary,
+  loadKnowledgeBase,
+  matchExternalPurchase,
+  matchOldItem,
+  matchOperationQuestion,
+};
 
 function normalizeText(input?: string) {
   return (input ?? "").trim().toLowerCase();
@@ -872,41 +880,6 @@ function scoreOldItemMatch(item: OldItemRow, request: OldItemRequest) {
   return { score, reasons };
 }
 
-export async function loadKnowledgeBase(forceRefresh = false) {
-  if (cache && !forceRefresh) {
-    return cache;
-  }
-
-  const [rules, consensus, externalPurchases, oldItems] = await Promise.all([
-    readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
-    readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
-    readRows("external-purchases") as Promise<unknown> as Promise<
-      ExternalPurchaseRow[]
-    >,
-    readRows("old-items") as Promise<unknown> as Promise<OldItemRow[]>,
-  ]);
-
-  cache = {
-    rules: rules.filter((item) => item.状态 !== "停用"),
-    consensus: consensus.filter((item) => item.状态 !== "停用"),
-    externalPurchases: externalPurchases.filter((item) => item.状态 !== "停用"),
-    oldItems: oldItems.filter((item) => item.状态 !== "停用"),
-  };
-
-  return cache;
-}
-
-export async function getKnowledgeSummary() {
-  const knowledgeBase = await loadKnowledgeBase();
-  return {
-    rules: knowledgeBase.rules.length,
-    consensus: knowledgeBase.consensus.length,
-    externalPurchases: knowledgeBase.externalPurchases.length,
-    oldItems: knowledgeBase.oldItems.length,
-    templateDir: "Redis / CSV",
-  };
-}
-
 export async function matchRegularQuestion(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionMatchResult> {
@@ -1093,83 +1066,5 @@ export async function matchRegularQuestion(
       judgeConfidence: judgeDecision.confidence,
       judgeRejectedRuleIds: judgeDecision.rejectedRuleIds,
     },
-  };
-}
-
-export async function matchExternalPurchase(request: ExternalPurchaseRequest) {
-  const knowledgeBase = await loadKnowledgeBase();
-  const candidates = knowledgeBase.externalPurchases
-    .map((item) => {
-      const { score, reasons } = scoreExternalPurchaseMatch(item, request);
-      return { item, score, reasons };
-    })
-    .filter((item) => item.score >= 16)
-    .sort((left, right) => right.score - left.score);
-
-  if (candidates.length === 0) {
-    return {
-      matched: false,
-      rejectReason: "未找到明确外购依据，建议补充更具体名称或进入人工复核。",
-      candidates: [],
-    };
-  }
-
-  const best = candidates[0];
-  return {
-    matched: true,
-    answer: {
-      itemId: best.item.item_id,
-      name: best.item.物品名称,
-      canPurchase: best.item.是否允许外购,
-      sourceName: best.item.命中的清单或共识名称,
-      sourceFile: best.item.依据来源,
-      explanation: best.item.说明,
-      matchedReasons: best.reasons,
-    },
-    candidates: candidates.slice(0, 5).map((item) => ({
-      itemId: item.item.item_id,
-      name: item.item.物品名称,
-      canPurchase: item.item.是否允许外购,
-      score: item.score,
-    })),
-  };
-}
-
-export async function matchOldItem(request: OldItemRequest) {
-  const knowledgeBase = await loadKnowledgeBase();
-  const candidates = knowledgeBase.oldItems
-    .map((item) => {
-      const { score, reasons } = scoreOldItemMatch(item, request);
-      return { item, score, reasons };
-    })
-    .filter((item) => item.score >= 16)
-    .sort((left, right) => right.score - left.score);
-
-  if (candidates.length === 0) {
-    return {
-      matched: false,
-      rejectReason: "未在旧品清单中找到明确命中，请补充更清晰名称或图片说明。",
-      candidates: [],
-    };
-  }
-
-  const best = candidates[0];
-  return {
-    matched: true,
-    answer: {
-      itemId: best.item.item_id,
-      name: best.item.物品名称,
-      isOldItem: best.item.是否旧品,
-      sourceName: best.item.命中的清单名称,
-      remark: best.item.识别备注,
-      imageRef: best.item.参考图片名称,
-      matchedReasons: best.reasons,
-    },
-    candidates: candidates.slice(0, 5).map((item) => ({
-      itemId: item.item.item_id,
-      name: item.item.物品名称,
-      isOldItem: item.item.是否旧品,
-      score: item.score,
-    })),
   };
 }

@@ -1,3 +1,8 @@
+import {
+  getDashScopeApiKey,
+  parseJsonObject,
+  requestDashScopeChat,
+} from "@/lib/dashscope-client";
 import type {
   ExternalPurchaseRequest,
   OldItemRequest,
@@ -6,11 +11,6 @@ import type {
   RegularQuestionJudgeDecision,
   RegularQuestionRequest,
 } from "@/lib/types";
-
-const DASHSCOPE_API_URL =
-  "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-const DEFAULT_MODEL_NAME = "qwen3.5-flash";
-const REQUEST_TIMEOUT_MS = 8000;
 
 type RegularQuestionAnswer = {
   shouldDeduct: string;
@@ -53,77 +53,12 @@ function normalizeText(value?: string) {
   return value?.trim() || "未提供";
 }
 
-function getModelName() {
-  return process.env.MODEL_NAME?.trim() || DEFAULT_MODEL_NAME;
-}
-
-function getApiKey() {
-  return process.env.DASHSCOPE_API_KEY?.trim();
-}
-
 async function requestDashScope(
   systemPrompt: string,
   userPrompt: string,
   options?: { maxTokens?: number; responseFormat?: "text" | "json_object" },
 ) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    return null;
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(DASHSCOPE_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: getModelName(),
-        temperature: 0,
-        max_tokens: options?.maxTokens ?? 260,
-        ...(options?.responseFormat === "json_object"
-          ? { response_format: { type: "json_object" } }
-          : {}),
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
-      }),
-      signal: controller.signal,
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      console.error("DashScope request failed", response.status);
-      return null;
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{
-        message?: {
-          content?: string;
-        };
-      }>;
-    };
-
-    const content = data.choices?.[0]?.message?.content?.trim();
-    return content || null;
-  } catch (error) {
-    console.error("DashScope request error", error);
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return requestDashScopeChat(systemPrompt, userPrompt, options);
 }
 
 async function requestDashScopeExplanation(prompt: string) {
@@ -132,17 +67,6 @@ async function requestDashScopeExplanation(prompt: string) {
     prompt,
     { maxTokens: 260, responseFormat: "text" },
   );
-}
-
-function parseJsonObject<T>(raw: string | null): T | null {
-  if (!raw) return null;
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try {
-    return JSON.parse(match[0]) as T;
-  } catch {
-    return null;
-  }
 }
 
 function formatMatchedReasons(reasons?: string[]) {
@@ -156,6 +80,10 @@ function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAns
   const conclusion = normalizeText(answer.shouldDeduct);
   const score = normalizeText(answer.deductScore);
   return `本条命中「${normalizeText(answer.clauseTitle)}」。共识要点见条款解释：${normalizeText(answer.explanation)}。系统判定结论为「${conclusion}」，对应扣分分值为「${score}」。请严格按稽核共识与现场情况执行；如需个案判断请走人工复核。`;
+}
+
+function buildDeterministicOperationExplanation(answer: RegularQuestionAnswer) {
+  return `本次命中操作资料「${normalizeText(answer.clauseTitle)}」。可直接按资料中的操作内容与检核要点执行：${normalizeText(answer.explanation)}。如现场版本与资料不一致，请以最新营运资料为准并同步更新知识库。`;
 }
 
 function buildHeuristicJudgeDecision(
@@ -266,7 +194,7 @@ export async function judgeRegularQuestionCandidates(
   candidates: RegularQuestionJudgeCandidate[],
 ): Promise<RegularQuestionJudgeDecision> {
   const heuristic = buildHeuristicJudgeDecision(request, intent, candidates);
-  const apiKey = getApiKey();
+  const apiKey = getDashScopeApiKey();
   if (!apiKey || candidates.length <= 1) {
     return heuristic;
   }
@@ -381,6 +309,42 @@ export async function generateRegularQuestionAiExplanation(
   }
 
   return buildDeterministicRegularQuestionExplanation(answer);
+}
+
+export async function generateOperationAiExplanation(
+  request: RegularQuestionRequest,
+  answer: RegularQuestionAnswer,
+) {
+  const prompt = `
+请把下面的操作资料命中结果整理成给门店伙伴看的简短说明。
+
+用户提交信息：
+- 问题分类：${normalizeText(request.category)}
+- 门店问题：${normalizeText(request.issueTitle)}
+- 问题描述：${normalizeText(request.description)}
+- 自行判断：${normalizeText(request.selfJudgment)}
+
+资料命中结果：
+- 资料标题：${normalizeText(answer.clauseTitle)}
+- 资料类型：${normalizeText(answer.clauseNo)}
+- 操作片段：${normalizeText(answer.clauseSnippet)}
+- 解释说明：${normalizeText(answer.explanation)}
+- 来源：${normalizeText(answer.source)}
+
+输出要求：
+1. 只依据以上信息，不编造新的配方、克数、流程或例外。
+2. 先说命中了哪份操作资料，再压缩说明应关注的操作/检核点。
+3. 最后补一句执行建议。
+4. 控制在 3 句话以内，70 到 140 字。
+5. 不要使用标题、编号、Markdown。
+`;
+
+  const llm = await requestDashScopeExplanation(prompt);
+  if (llm) {
+    return llm;
+  }
+
+  return buildDeterministicOperationExplanation(answer);
 }
 
 export async function generateExternalPurchaseAiExplanation(

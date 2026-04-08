@@ -9,6 +9,7 @@ const VALID_TABLES: KbTableName[] = [
   "consensus",
   "external-purchases",
   "old-items",
+  "operations",
 ];
 
 const TABLE_NAMES: Record<KbTableName, string> = {
@@ -16,6 +17,7 @@ const TABLE_NAMES: Record<KbTableName, string> = {
   consensus: "共识解释表",
   "external-purchases": "外购清单表",
   "old-items": "旧品清单表",
+  operations: "操作知识表",
 };
 
 export async function GET(request: NextRequest) {

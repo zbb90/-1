@@ -1,5 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { signAdminSessionValue, ADMIN_SESSION_COOKIE } from "@/lib/admin-session";
+import {
+  ADMIN_SESSION_COOKIE,
+  LEGACY_ADMIN_COOKIES,
+  getAdminSessionCookieOptions,
+  signAdminSessionValue,
+} from "@/lib/admin-session";
+import { formatZodError, readJsonBody } from "@/lib/api-utils";
+import { pcLoginBodySchema } from "@/lib/schemas";
 import { rateLimit } from "@/lib/rate-limit";
 import { getAdminCredentials } from "@/lib/admin-auth";
 import { resolvePcLogin } from "@/lib/user-store";
@@ -21,13 +28,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => null);
-  const phone = body?.phone?.trim();
-  const password = body?.password;
-
-  if (!phone || !password) {
-    return NextResponse.json({ error: "请输入手机号和密码" }, { status: 400 });
+  const parsed = pcLoginBodySchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
   }
+  const { phone, password } = parsed.data;
 
   let login = await resolvePcLogin(phone, password);
 
@@ -47,47 +52,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "手机号或密码不正确" }, { status: 401 });
   }
 
-  const leaderKindCookie = login.role === "leader" ? login.leaderSessionKind : "none";
+  const leaderKind = login.role === "leader" ? login.leaderSessionKind : "none";
 
-  const sessionValue = await signAdminSessionValue();
+  const sessionValue = await signAdminSessionValue({
+    sub: login.role === "leader" ? `pc-leader:${phone}` : `pc-supervisor:${phone}`,
+    role: login.role,
+    leaderKind,
+    phone,
+    name: login.name,
+  });
 
   const response = NextResponse.json({
     ok: true,
     role: login.role,
     name: login.role === "leader" ? login.name : login.name,
-    leaderKind: leaderKindCookie,
+    leaderKind,
   });
-  response.cookies.set(ADMIN_SESSION_COOKIE, sessionValue, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
-
-  response.cookies.set("audit_role", login.role, {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
-
-  response.cookies.set("audit_leader_kind", leaderKindCookie, {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
-
-  response.cookies.set("audit_login_phone", phone, {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
+  response.cookies.set(
+    ADMIN_SESSION_COOKIE,
+    sessionValue,
+    getAdminSessionCookieOptions(),
+  );
+  for (const legacyName of LEGACY_ADMIN_COOKIES) {
+    response.cookies.delete(legacyName);
+  }
 
   return response;
 }

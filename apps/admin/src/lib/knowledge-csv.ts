@@ -6,10 +6,11 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { readCsvAsObjects } from "@/lib/csv";
-import { loadKnowledgeBase } from "@/lib/knowledge-base";
+import { invalidateKnowledgeBaseCache } from "@/lib/knowledge-loader";
 import type {
   ConsensusRow,
   ExternalPurchaseRow,
+  OperationRow,
   OldItemRow,
   RuleRow,
 } from "@/lib/types";
@@ -22,6 +23,7 @@ const CSV_FILES: Record<KbTableName, string> = {
   consensus: "02_共识解释表.csv",
   "external-purchases": "05_外购清单表.csv",
   "old-items": "04_旧品清单表.csv",
+  operations: "06_操作知识表.csv",
 };
 
 export function resolveTemplateDir(): string | null {
@@ -44,12 +46,17 @@ export async function readTable(
   table: "external-purchases",
 ): Promise<ExternalPurchaseRow[]>;
 export async function readTable(table: "old-items"): Promise<OldItemRow[]>;
+export async function readTable(table: "operations"): Promise<OperationRow[]>;
 export async function readTable(
   table: KbTableName,
-): Promise<RuleRow[] | ConsensusRow[] | ExternalPurchaseRow[] | OldItemRow[]>;
+): Promise<
+  RuleRow[] | ConsensusRow[] | ExternalPurchaseRow[] | OldItemRow[] | OperationRow[]
+>;
 export async function readTable(
   table: KbTableName,
-): Promise<RuleRow[] | ConsensusRow[] | ExternalPurchaseRow[] | OldItemRow[]> {
+): Promise<
+  RuleRow[] | ConsensusRow[] | ExternalPurchaseRow[] | OldItemRow[] | OperationRow[]
+> {
   const path = getCsvPath(table);
   if (!path) return [];
   switch (table) {
@@ -61,12 +68,15 @@ export async function readTable(
       return readCsvAsObjects<ExternalPurchaseRow>(path);
     case "old-items":
       return readCsvAsObjects<OldItemRow>(path);
+    case "operations":
+      return readCsvAsObjects<OperationRow>(path);
   }
 }
 
 function idField(table: KbTableName): string {
   if (table === "rules") return "rule_id";
   if (table === "consensus") return "consensus_id";
+  if (table === "operations") return "op_id";
   return "item_id";
 }
 
@@ -107,7 +117,7 @@ export async function patchRowStatus(
 
   rows[idx] = { ...rows[idx], 状态: status };
   await writeFile(path, serializeCsv(headers, rows), "utf-8");
-  await loadKnowledgeBase(true);
+  invalidateKnowledgeBaseCache();
   return rows[idx];
 }
 
@@ -130,7 +140,9 @@ export async function appendRow(
           ? "C"
           : table === "external-purchases"
             ? "EP"
-            : "OI";
+            : table === "old-items"
+              ? "OI"
+              : "OP";
     row[field] = `${prefix}-${String(rows.length + 1).padStart(4, "0")}`;
   }
 
@@ -141,6 +153,6 @@ export async function appendRow(
   rows.push(normalizedRow);
 
   await writeFile(path, serializeCsv(headers, rows), "utf-8");
-  await loadKnowledgeBase(true);
+  invalidateKnowledgeBaseCache();
   return normalizedRow;
 }

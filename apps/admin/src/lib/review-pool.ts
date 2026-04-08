@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { getRedis, isRedisConfigured } from "@/lib/redis-client";
 import type {
   ExternalPurchaseRequest,
   OldItemRequest,
@@ -13,24 +14,6 @@ import type {
 /* ------------------------------------------------------------------ */
 /*  Storage backend detection                                          */
 /* ------------------------------------------------------------------ */
-
-function isRedisConfigured() {
-  return Boolean(
-    process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim(),
-  );
-}
-
-let redisInstance: import("@upstash/redis").Redis | null = null;
-
-async function getRedis() {
-  if (redisInstance) return redisInstance;
-  const { Redis } = await import("@upstash/redis");
-  redisInstance = new Redis({
-    url: process.env.KV_REST_API_URL!,
-    token: process.env.KV_REST_API_TOKEN!,
-  });
-  return redisInstance;
-}
 
 /* ------------------------------------------------------------------ */
 /*  Redis key schema (v2 – per-task keys + sorted-set index)           */

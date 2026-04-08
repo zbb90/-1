@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { formatZodError, logRouteError, readJsonBody } from "@/lib/api-utils";
 import { signJwt } from "@/lib/jwt";
 import { rateLimit } from "@/lib/rate-limit";
+import { wxLoginBodySchema } from "@/lib/schemas";
 import { getUserByOpenid, createUser, type AppUser } from "@/lib/user-store";
 
 /**
@@ -25,10 +27,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => null);
-  if (!body?.code) {
-    return NextResponse.json({ error: "缺少微信 code 参数" }, { status: 400 });
+  const parsed = wxLoginBodySchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
   }
+  const body = parsed.data;
 
   const appId = process.env.WX_APPID?.trim();
   const appSecret = process.env.WX_APP_SECRET?.trim();
@@ -60,10 +63,9 @@ export async function POST(request: NextRequest) {
     }
     openid = wxData.openid;
   } catch (err) {
+    logRouteError("/api/auth/wx-login", err);
     return NextResponse.json(
-      {
-        error: `微信接口调用失败: ${err instanceof Error ? err.message : String(err)}`,
-      },
+      { error: "微信登录服务暂时不可用，请稍后重试。" },
       { status: 502 },
     );
   }

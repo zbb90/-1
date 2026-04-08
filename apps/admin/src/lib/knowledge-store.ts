@@ -1,7 +1,7 @@
 /**
  * Redis-backed knowledge store — enables online editing in production (Vercel).
  *
- * Key schema per table (rules / consensus / external-purchases / old-items):
+ * Key schema per table (rules / consensus / external-purchases / old-items / operations):
  *   audit:kb:{table}:rows   — String (JSON array of row objects)
  *   audit:kb:{table}:ver    — Number (incremented on every write)
  *
@@ -11,25 +11,8 @@
 import type { KbTableName } from "@/lib/knowledge-csv";
 import { KB_TABLE_HEADERS } from "@/lib/kb-schema";
 import { readTable as readCsvTable, getCsvPath } from "@/lib/knowledge-csv";
-import { loadKnowledgeBase } from "@/lib/knowledge-base";
-
-function isRedisConfigured() {
-  return Boolean(
-    process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim(),
-  );
-}
-
-let redisInstance: import("@upstash/redis").Redis | null = null;
-
-async function getRedis() {
-  if (redisInstance) return redisInstance;
-  const { Redis } = await import("@upstash/redis");
-  redisInstance = new Redis({
-    url: process.env.KV_REST_API_URL!,
-    token: process.env.KV_REST_API_TOKEN!,
-  });
-  return redisInstance;
-}
+import { invalidateKnowledgeBaseCache } from "@/lib/knowledge-loader";
+import { getRedis, isRedisConfigured } from "@/lib/redis-client";
 
 function rowsKey(table: KbTableName) {
   return `audit:kb:${table}:rows`;
@@ -69,12 +52,13 @@ async function persistRows(table: KbTableName, rows: Row[]) {
     const redis = await getRedis();
     await redis.set(rowsKey(table), JSON.stringify(rows));
   }
-  await loadKnowledgeBase(true);
+  invalidateKnowledgeBaseCache();
 }
 
 function idField(table: KbTableName): string {
   if (table === "rules") return "rule_id";
   if (table === "consensus") return "consensus_id";
+  if (table === "operations") return "op_id";
   return "item_id";
 }
 
@@ -86,7 +70,9 @@ function nextId(table: KbTableName, rows: Row[]): string {
         ? "C"
         : table === "external-purchases"
           ? "EP"
-          : "OI";
+          : table === "old-items"
+            ? "OI"
+            : "OP";
   return `${prefix}-${String(rows.length + 1).padStart(4, "0")}`;
 }
 

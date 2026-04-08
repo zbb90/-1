@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatZodError, logRouteError, readJsonBody } from "@/lib/api-utils";
 import { generateOldItemAiExplanation } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { matchOldItem } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
+import { oldItemBodySchema } from "@/lib/schemas";
 import {
   createReviewTaskFromAnswer,
   createReviewTaskFromOldItem,
 } from "@/lib/review-pool";
-import type { OldItemRequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   const limited = rateLimit(request, "old-item-ask", 40);
@@ -22,20 +23,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = getRequesterPayloadFromRequest(
-      request,
-      (await request.json()) as OldItemRequest,
-    );
-
-    if (!body.name?.trim() && !body.remark?.trim()) {
+    const parsed = oldItemBodySchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) {
       return NextResponse.json(
         {
           ok: false,
-          message: "至少需要提供物品名称或备注说明。",
+          message: formatZodError(parsed.error),
         },
         { status: 400 },
       );
     }
+    const body = await getRequesterPayloadFromRequest(request, parsed.data);
 
     const result = await matchOldItem(body);
     if (!result.matched) {
@@ -85,10 +83,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    logRouteError("/api/old-item/ask", error);
     return NextResponse.json(
       {
         ok: false,
-        message: error instanceof Error ? error.message : "旧品比对时发生异常",
+        message: "旧品比对时发生异常，请稍后重试。",
       },
       { status: 500 },
     );

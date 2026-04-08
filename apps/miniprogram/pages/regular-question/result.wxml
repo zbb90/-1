@@ -15,7 +15,7 @@
 
       <view class="metric-grid">
         <view class="metric-item">
-          <view class="metric-label">扣几分</view>
+          <view class="metric-label">{{scoreLabel}}</view>
           <view class="metric-value">{{scoreText}}</view>
         </view>
         <view class="metric-item">
@@ -28,7 +28,7 @@
     <view class="card detail-card">
       <view class="section-title">依据与解释</view>
       <view class="detail-item">
-        <view class="detail-label">扣几分</view>
+        <view class="detail-label">{{scoreLabel}}</view>
         <view class="detail-value">{{scoreText}}</view>
       </view>
       <view class="detail-item">

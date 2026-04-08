@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatZodError, logRouteError, readJsonBody } from "@/lib/api-utils";
 import { generateExternalPurchaseAiExplanation } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { matchExternalPurchase } from "@/lib/knowledge-base";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
+import { externalPurchaseBodySchema } from "@/lib/schemas";
 import {
   createReviewTaskFromAnswer,
   createReviewTaskFromExternalPurchase,
 } from "@/lib/review-pool";
-import type { ExternalPurchaseRequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   const limited = rateLimit(request, "external-purchase-ask", 40);
@@ -22,20 +23,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = getRequesterPayloadFromRequest(
-      request,
-      (await request.json()) as ExternalPurchaseRequest,
-    );
-
-    if (!body.name?.trim() && !body.description?.trim()) {
+    const parsed = externalPurchaseBodySchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) {
       return NextResponse.json(
         {
           ok: false,
-          message: "至少需要提供物品名称或补充描述。",
+          message: formatZodError(parsed.error),
         },
         { status: 400 },
       );
     }
+    const body = await getRequesterPayloadFromRequest(request, parsed.data);
 
     const result = await matchExternalPurchase(body);
     if (!result.matched) {
@@ -88,10 +86,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    logRouteError("/api/external-purchase/ask", error);
     return NextResponse.json(
       {
         ok: false,
-        message: error instanceof Error ? error.message : "外购查询时发生异常",
+        message: "外购查询时发生异常，请稍后重试。",
       },
       { status: 500 },
     );
