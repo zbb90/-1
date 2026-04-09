@@ -144,7 +144,12 @@ export interface RegularQuestionIntentParse {
   summary: string;
 }
 
-export type RegularQuestionJudgeMode = "legacy" | "llm" | "heuristic" | "fallback";
+export type RegularQuestionJudgeMode =
+  | "legacy"
+  | "llm"
+  | "heuristic"
+  | "fallback"
+  | "score-gap";
 
 export interface RegularQuestionJudgeDecision {
   judgeMode: RegularQuestionJudgeMode;

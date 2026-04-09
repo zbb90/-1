@@ -1052,7 +1052,7 @@ export async function matchRegularQuestion(
         }),
       )
     : {
-        judgeMode: (topGap >= 12 ? "score-gap" : "legacy") as "score-gap" | "legacy",
+        judgeMode: topGap >= 12 ? ("score-gap" as const) : ("legacy" as const),
         selectedRuleId: candidates[0].rule.rule_id,
         confidence: topGap >= 12 ? 0.9 : 1,
         judgeReason:
