@@ -506,6 +506,26 @@ function calculateVectorBoost(vectorScore: number) {
   return 6;
 }
 
+function detectSemanticCategoryHint(
+  hits: Array<{ ruleId: string; vectorScore: number }>,
+  rules: RuleRow[],
+  userCategory: string,
+): string | null {
+  if (hits.length < 3) return null;
+  const topHits = hits.slice(0, 5);
+  const ruleMap = new Map(rules.map((r) => [r.rule_id, r]));
+  const counts: Record<string, number> = {};
+  for (const hit of topHits) {
+    const rule = ruleMap.get(hit.ruleId);
+    if (rule) counts[rule.问题分类] = (counts[rule.问题分类] || 0) + 1;
+  }
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (sorted.length === 0) return null;
+  const [topCat, topCount] = sorted[0];
+  if (topCat !== userCategory && topCount >= 3) return topCat;
+  return null;
+}
+
 function ruleIsGenericGrounding(rule: RuleRow) {
   return rule.rule_id === "R-0018";
 }
@@ -526,6 +546,7 @@ function scoreRuleMatch(
   rule: RuleRow,
   request: RegularQuestionRequest,
   intent?: RegularQuestionIntentParse,
+  semanticCategoryHint?: string | null,
 ) {
   const description = normalizeText(request.description);
   const issueTitle = normalizeText(request.issueTitle);
@@ -546,8 +567,18 @@ function scoreRuleMatch(
   const reasons: string[] = [];
 
   if (request.category && rule.问题分类 === request.category) {
-    score += 30;
-    reasons.push("命中同一问题分类");
+    if (semanticCategoryHint && semanticCategoryHint !== request.category) {
+      score += 10;
+      reasons.push("命中用户选定分类（语义召回提示分类可能偏差，已降权）");
+    } else {
+      score += 30;
+      reasons.push("命中同一问题分类");
+    }
+  }
+
+  if (semanticCategoryHint && rule.问题分类 === semanticCategoryHint) {
+    score += 20;
+    reasons.push(`语义召回集中指向「${semanticCategoryHint}」，跨分类加权`);
   }
 
   for (const keyword of keywords) {
@@ -806,6 +837,19 @@ function scoreRuleMatch(
     reasons.push("区分：描述明确提到私人物品区/个人食用，提升私人物品类规则优先级");
   }
 
+  const moldCleaningFocus = /发霉|霉变|积垢|霉斑|清洁不到位|器具脏|油垢/.test(combined);
+  if (moldCleaningFocus) {
+    const ruleBlob = ruleTextBlob(rule);
+    if (/发霉|霉变|积垢|器具|清洁|霉斑|霉/.test(ruleBlob)) {
+      score += 26;
+      reasons.push("区分：描述聚焦发霉/霉变/积垢，提升器具清洁/霉变类规则");
+    }
+    if (ruleEmphasizesPureExpiry(rule) && !/发霉|霉变|积垢|霉/.test(ruleBlob)) {
+      score -= 30;
+      reasons.push("区分：当前问题核心是发霉/积垢，降低纯效期类规则");
+    }
+  }
+
   const intentSignal = applyIntentSignalScore(rule, intent);
   score += intentSignal.score;
   reasons.push(...intentSignal.reasons);
@@ -910,12 +954,21 @@ export async function matchRegularQuestion(
     intentParse,
   };
 
+  const semanticCategoryHint = usingSemanticRecall
+    ? detectSemanticCategoryHint(
+        semanticResult.hits,
+        knowledgeBase.rules,
+        request.category || "",
+      )
+    : null;
+
   const candidates = candidatePool
     .map((rule) => {
       const { score: baseScore, reasons: baseReasons } = scoreRuleMatch(
         rule,
         request,
         intentParse,
+        semanticCategoryHint,
       );
       const vectorScore = vectorScoreByRule.get(rule.rule_id);
       const vectorBoost =
