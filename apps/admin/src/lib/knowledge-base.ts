@@ -849,17 +849,19 @@ function scoreRuleMatch(
   const personalFoodClaim = /自己吃|伙伴.*吃|个人食用|反馈.*私人|门店反馈.*个人/.test(
     combined,
   );
-  if (noPrivateLabelMentioned && personalFoodClaim) {
+  if (noPrivateLabelMentioned || (personalFoodClaim && !privateAreaFocus)) {
     const ruleBlob = ruleTextBlob(rule);
-    if (/反馈.*个人食用|门店反馈|未张贴禁用标识/.test(ruleBlob)) {
-      score += 30;
-      reasons.push(
-        "区分：声称个人食用但无私人物品标识，提升'反馈个人食用但无标识'规则",
-      );
+    if (/反馈.*个人食用|门店反馈.*个人|未张贴禁用标识/.test(ruleBlob)) {
+      score += 45;
+      reasons.push("区分：声称个人食用但无私人物品标识，强力提升'反馈个人食用'规则");
     }
     if (/私人物品区出现/.test(ruleBlob) && !/未张贴/.test(ruleBlob)) {
-      score -= 30;
+      score -= 35;
       reasons.push("区分：无私人物品标识不等于在私人物品区，降低纯私人物品区规则");
+    }
+    if (personalFoodClaim && !/个人食用|私人物品|门店反馈|禁用标识/.test(ruleBlob)) {
+      score -= 16;
+      reasons.push("区分：问题核心是个人食用+无标识，降低不涉及该场景的规则");
     }
   }
 
