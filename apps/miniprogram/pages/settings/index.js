@@ -1,23 +1,21 @@
+const { request } = require("../../utils/request");
 const {
   LOCAL_API_ORIGIN,
   isDevToolsEnvironment,
-  getApiBaseUrl,
 } = require("../../config");
 
 Page({
   data: {
     displayName: "",
     requesterId: "",
+    isLoggedIn: false,
     isSupervisor: false,
     supervisorUser: "",
     supervisorPass: "",
     showSupervisorForm: false,
     apiOriginInput: "",
     isDevTools: false,
-  },
-
-  onLoad() {
-    this.loadProfile();
+    saving: false,
   },
 
   onShow() {
@@ -25,14 +23,18 @@ Page({
   },
 
   loadProfile() {
-    const profile = wx.getStorageSync("requesterProfile") || {};
+    const app = getApp();
+    const user = app ? app.getUserInfo() : null;
+    const localProfile = wx.getStorageSync("requesterProfile") || {};
     const supervisorAuth = wx.getStorageSync("supervisorAuth") || null;
     const savedOrigin = wx.getStorageSync("apiOrigin") || "";
     const isDevTools = isDevToolsEnvironment();
+    const isLoggedIn = Boolean(user && user.openid);
 
     this.setData({
-      displayName: profile.requesterName || "",
-      requesterId: profile.requesterId || "",
+      displayName: isLoggedIn ? user.name || "" : localProfile.requesterName || "",
+      requesterId: isLoggedIn ? user.openid : localProfile.requesterId || "",
+      isLoggedIn,
       isSupervisor: Boolean(supervisorAuth && supervisorAuth.user),
       showSupervisorForm: false,
       supervisorUser: "",
@@ -46,20 +48,41 @@ Page({
     this.setData({ displayName: e.detail.value });
   },
 
-  saveName() {
+  async saveName() {
     const name = this.data.displayName.trim();
     if (!name) {
-      wx.showToast({ title: "请输入昵称", icon: "none" });
+      wx.showToast({ title: "请输入你的真实姓名", icon: "none" });
       return;
     }
-    const profile = wx.getStorageSync("requesterProfile") || {};
-    profile.requesterName = name;
-    wx.setStorageSync("requesterProfile", profile);
-    const app = getApp();
-    if (app) {
-      app.globalData.requesterProfile = profile;
+    if (this.data.saving) return;
+    this.setData({ saving: true });
+
+    try {
+      if (this.data.isLoggedIn) {
+        const res = await request({
+          url: "/auth/update-profile",
+          method: "POST",
+          data: { name },
+        });
+        if (res.token && res.user) {
+          const app = getApp();
+          app.globalData.token = res.token;
+          app.globalData.userInfo = res.user;
+          wx.setStorageSync("auth_token", res.token);
+          wx.setStorageSync("auth_user", res.user);
+        }
+      }
+
+      const profile = wx.getStorageSync("requesterProfile") || {};
+      profile.requesterName = name;
+      wx.setStorageSync("requesterProfile", profile);
+
+      wx.showToast({ title: "姓名已保存", icon: "success" });
+    } catch {
+      wx.showToast({ title: "保存失败，请重试", icon: "none" });
+    } finally {
+      this.setData({ saving: false });
     }
-    wx.showToast({ title: "昵称已保存", icon: "success" });
   },
 
   toggleSupervisorForm() {

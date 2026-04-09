@@ -1,229 +1,244 @@
+.page {
+  padding: 24rpx 28rpx;
+}
+
 .result-stack {
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
+/* ---- Hero 卡片 ---- */
 .hero {
-  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+  background: linear-gradient(145deg, #f0f9f4, #ffffff);
+  padding: 32rpx;
 }
 
 .hero-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16rpx;
 }
 
-.hero-label,
-.result-label,
-.section-title {
-  font-size: 26rpx;
-  color: #6b7280;
+.hero-label {
+  font-size: 24rpx;
+  color: #86868b;
+  font-weight: 500;
 }
 
 .hero-title {
-  margin-top: 12rpx;
-  font-size: 44rpx;
-  font-weight: 700;
-  color: #111827;
+  margin-top: 8rpx;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #1d1d1f;
+  letter-spacing: -0.02em;
 }
 
-.section-title {
+.result-status {
+  border-radius: 12rpx;
+  padding: 10rpx 22rpx;
+  font-size: 26rpx;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
+.danger {
+  background: #ffe5e5;
+  color: #d12c2c;
+}
+
+.safe {
+  background: #e3f9e5;
+  color: #1a7a3a;
+}
+
+.neutral {
+  background: #f0f0f5;
+  color: #48484a;
+}
+
+/* ---- 指标网格 ---- */
 .metric-grid {
-  margin-top: 28rpx;
+  margin-top: 24rpx;
   display: flex;
-  gap: 20rpx;
+  gap: 12rpx;
 }
 
 .metric-item {
   flex: 1;
-  border-radius: 20rpx;
-  background: rgba(255, 255, 255, 0.8);
-  padding: 20rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 18rpx 20rpx;
+  border: 1rpx solid rgba(0, 0, 0, 0.04);
 }
 
 .metric-label {
-  font-size: 24rpx;
-  color: #6b7280;
+  font-size: 22rpx;
+  color: #86868b;
+  font-weight: 500;
 }
 
 .metric-value {
-  margin-top: 10rpx;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #111827;
-}
-
-.result-status {
-  border-radius: 999rpx;
-  padding: 14rpx 26rpx;
+  margin-top: 6rpx;
   font-size: 28rpx;
   font-weight: 700;
+  color: #1d1d1f;
 }
 
-.danger {
-  background: #fee2e2;
-  color: #b91c1c;
+/* ---- 详情卡片 ---- */
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  padding: 28rpx;
 }
 
-.safe {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.neutral {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.detail-card,
 .detail-item {
   display: flex;
   flex-direction: column;
 }
 
 .detail-item + .detail-item {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #f0f0f5;
 }
 
 .detail-label {
-  font-size: 26rpx;
-  color: #6b7280;
+  font-size: 22rpx;
+  color: #86868b;
+  font-weight: 500;
+  letter-spacing: 0.04em;
 }
 
 .detail-value {
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   font-size: 30rpx;
-  color: #111827;
+  color: #1d1d1f;
 }
 
 .detail-desc {
-  margin-top: 10rpx;
-  color: #4b5563;
-  line-height: 1.7;
+  margin-top: 8rpx;
+  color: #48484a;
+  line-height: 1.8;
+  font-size: 28rpx;
 }
 
 .strong {
   font-weight: 700;
-  color: #111827;
+  color: #1d1d1f;
 }
 
-.reason-item {
-  margin-top: 16rpx;
-  display: flex;
-  gap: 12rpx;
-  align-items: flex-start;
-  color: #374151;
-  line-height: 1.7;
-}
-
-.reason-dot {
-  margin-top: 14rpx;
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 999rpx;
-  background: #166534;
-  flex-shrink: 0;
-}
-
-.candidate-item {
-  margin-top: 16rpx;
-  padding-top: 16rpx;
-  border-top: 2rpx solid #f3f4f6;
-  color: #374151;
-  line-height: 1.7;
-}
-
-.candidate-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.candidate-title {
-  margin-top: 10rpx;
+/* ---- 按钮 ---- */
+.primary-button {
+  background: linear-gradient(135deg, #34c759, #30b350) !important;
+  color: #ffffff !important;
+  border-radius: 14rpx;
   font-weight: 600;
-  color: #111827;
+  font-size: 30rpx;
+  margin-top: 16rpx;
 }
 
-.candidate-score {
-  flex-shrink: 0;
-  font-size: 24rpx;
-  color: #166534;
-  background: #dcfce7;
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
+.primary-button::after {
+  border: none;
 }
 
 .secondary-button {
-  background: #ffffff;
-  color: #166534;
-  border: 2rpx solid #bbf7d0;
-  border-radius: 16rpx;
+  background: #ffffff !important;
+  color: #34c759 !important;
+  border: 2rpx solid #b8e6c8 !important;
+  border-radius: 14rpx;
+  font-weight: 600;
+  font-size: 30rpx;
 }
 
-.primary-button {
-  background: #166534;
-  color: #ffffff;
-  border-radius: 16rpx;
+.secondary-button::after {
+  border: none;
+}
+
+/* ---- 操作指引专属 ---- */
+.op-hero {
+  background: linear-gradient(145deg, #ecfdf5, #f0fdf4);
+}
+
+.op-badge {
+  display: inline-block;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1a7a3a;
+  background: #d4edda;
+  padding: 6rpx 18rpx;
+  border-radius: 8rpx;
+  margin-bottom: 12rpx;
+}
+
+.op-meta {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #86868b;
+}
+
+.op-content {
+  margin-top: 12rpx;
+  color: #1d1d1f;
+  line-height: 2.0;
+  font-size: 28rpx;
+  white-space: pre-wrap;
+  background: #fafafa;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #f0f0f5;
+}
+
+.op-check {
+  margin-top: 12rpx;
+  color: #8b5c10;
+  background: #fef9ec;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  line-height: 1.8;
+  font-size: 28rpx;
+  border-left: 6rpx solid #f5a623;
+}
+
+/* ---- 复核提示 ---- */
+.review-tip {
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: #eef2ff;
+  color: #3538cd;
+  line-height: 1.7;
+  font-size: 26rpx;
+  margin-bottom: 8rpx;
 }
 
 .empty-card {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 16rpx;
+  padding: 32rpx;
 }
 
 .neutral-text {
-  color: #374151;
+  color: #48484a;
 }
 
-.review-tip {
-  padding: 18rpx 20rpx;
-  border-radius: 16rpx;
-  background: #eff6ff;
-  color: #1d4ed8;
+/* ---- 命中原因（隐藏调试细节） ---- */
+.reason-item {
+  margin-top: 12rpx;
+  display: flex;
+  gap: 12rpx;
+  align-items: flex-start;
+  color: #48484a;
   line-height: 1.7;
+  font-size: 26rpx;
 }
 
-.op-hero {
-  background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
-}
-
-.op-badge {
-  display: inline-block;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #166534;
-  background: #dcfce7;
-  padding: 8rpx 20rpx;
+.reason-dot {
+  margin-top: 12rpx;
+  width: 8rpx;
+  height: 8rpx;
   border-radius: 999rpx;
-  margin-bottom: 16rpx;
-}
-
-.op-meta {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #6b7280;
-}
-
-.op-content {
-  margin-top: 12rpx;
-  color: #111827;
-  line-height: 2;
-  font-size: 30rpx;
-  white-space: pre-wrap;
-}
-
-.op-check {
-  margin-top: 12rpx;
-  color: #92400e;
-  background: #fef3c7;
-  padding: 20rpx;
-  border-radius: 16rpx;
-  line-height: 1.8;
-  font-size: 28rpx;
+  background: #34c759;
+  flex-shrink: 0;
 }

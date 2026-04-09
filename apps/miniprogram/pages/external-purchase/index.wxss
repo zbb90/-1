@@ -1,32 +1,20 @@
-.section-title {
+.page {
+  padding: 24rpx 28rpx;
+}
+
+.card {
+  padding: 28rpx;
+}
+
+.form-header {
   font-size: 34rpx;
   font-weight: 700;
+  color: #1d1d1f;
 }
 
-.field {
-  margin-top: 24rpx;
-}
-
-.label {
-  margin-bottom: 12rpx;
-  color: #374151;
-  font-size: 26rpx;
-}
-
-.input,
-.textarea {
-  width: 100%;
-  border: 2rpx solid #e5e7eb;
-  border-radius: 16rpx;
-  background: #fff;
-  padding: 20rpx;
-}
-
-.textarea {
-  min-height: 220rpx;
-}
-
-.submit {
-  margin-top: 32rpx;
-  background: #166534;
+.form-sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #86868b;
+  line-height: 1.5;
 }

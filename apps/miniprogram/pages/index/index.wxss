@@ -1,23 +1,15 @@
 .page {
-  padding: 32rpx;
+  padding: 24rpx 28rpx;
   min-height: 100vh;
-  background: #f7f8fa;
 }
 
-/* 全局 card */
-.card {
-  background: #ffffff;
-  border-radius: 24rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
-}
-
-/* 用户身份卡片 */
 .profile-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28rpx 32rpx;
-  margin-bottom: 32rpx;
+  padding: 28rpx;
+  margin-bottom: 28rpx;
+  background: linear-gradient(135deg, #f5faf6, #ffffff);
 }
 
 .profile-left {
@@ -29,10 +21,10 @@
 }
 
 .profile-avatar {
-  width: 80rpx;
-  height: 80rpx;
+  width: 84rpx;
+  height: 84rpx;
   border-radius: 50%;
-  background: #15803d;
+  background: linear-gradient(135deg, #34c759, #30b350);
   color: #ffffff;
   font-size: 36rpx;
   font-weight: 700;
@@ -47,9 +39,9 @@
 }
 
 .profile-name {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #111827;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1d1d1f;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -57,12 +49,12 @@
 
 .profile-id {
   font-size: 22rpx;
-  color: #9ca3af;
-  font-family: monospace;
+  color: #aeaeb2;
+  font-family: "SF Mono", "Menlo", monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 4rpx;
+  margin-top: 6rpx;
 }
 
 .profile-right {
@@ -74,46 +66,65 @@
 
 .role-badge {
   border-radius: 999rpx;
-  padding: 6rpx 20rpx;
-  font-size: 24rpx;
+  padding: 6rpx 18rpx;
+  font-size: 22rpx;
   font-weight: 600;
 }
 
 .role-supervisor {
-  background: #dcfce7;
-  color: #15803d;
+  background: #e8f8ee;
+  color: #1a7a3a;
 }
 
 .role-specialist {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: #e8f0fe;
+  color: #1a56db;
 }
 
 .settings-icon {
-  font-size: 40rpx;
-  color: #9ca3af;
+  font-size: 36rpx;
+  color: #c7c7cc;
   line-height: 1;
 }
 
-/* 功能入口列表 */
 .entry-list {
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
 .entry {
   display: flex;
   align-items: center;
-  padding: 28rpx 32rpx;
+  padding: 26rpx 28rpx;
   gap: 20rpx;
 }
 
 .entry-icon {
-  font-size: 48rpx;
   width: 72rpx;
-  text-align: center;
+  height: 72rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
   flex-shrink: 0;
+}
+
+.entry-icon-green {
+  background: #e8f8ee;
+}
+
+.entry-icon-blue {
+  background: #e8f0fe;
+}
+
+.entry-icon-orange {
+  background: #fff3e0;
+}
+
+.entry-icon-purple {
+  background: #f3e8ff;
 }
 
 .entry-body {
@@ -122,21 +133,21 @@
 }
 
 .entry-title {
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 600;
-  color: #111827;
+  color: #1d1d1f;
 }
 
 .entry-desc {
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  color: #6b7280;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #86868b;
   line-height: 1.5;
 }
 
 .entry-arrow {
-  font-size: 40rpx;
-  color: #9ca3af;
+  font-size: 32rpx;
+  color: #c7c7cc;
   flex-shrink: 0;
   line-height: 1;
 }

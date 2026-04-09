@@ -1,37 +1,36 @@
 <view class="page">
 
-  <!-- 专员身份 -->
   <view class="section-title">我的身份</view>
-  <view class="card">
+  <view class="card settings-card">
     <view class="field-row">
       <view class="field-label">专员 ID</view>
       <view class="field-value id-text">{{requesterId}}</view>
     </view>
     <view class="field-row mt">
-      <view class="field-label">显示昵称</view>
+      <view class="field-label">真实姓名</view>
       <input
         class="input"
         value="{{displayName}}"
-        placeholder="输入你的姓名或工号"
+        placeholder="请输入你的真实姓名"
         bindinput="handleNameInput"
         confirm-type="done"
         bindconfirm="saveName"
       />
     </view>
-    <button class="btn btn-primary mt" bindtap="saveName">保存昵称</button>
+    <view class="name-tip">保存后，后台可看到你的姓名</view>
+    <button class="btn btn-primary mt" bindtap="saveName" loading="{{saving}}">保存姓名</button>
   </view>
 
-  <!-- 主管模式 -->
   <view class="section-title">主管模式</view>
-  <view class="card">
+  <view class="card settings-card">
     <view wx:if="{{isSupervisor}}" class="supervisor-active">
       <view class="supervisor-badge">主管模式已开启</view>
-      <view class="supervisor-tip">你现在可以在「我的复核」中查看全部专员的复核任务。</view>
+      <view class="supervisor-tip">你可以在「我的复核」中查看全部专员的复核任务。</view>
       <button class="btn btn-danger mt" bindtap="exitSupervisorMode">退出主管模式</button>
     </view>
 
     <view wx:else>
-      <view class="supervisor-tip">主管登录后可在小程序查看所有复核任务（与 PC 端后台数据相同）。</view>
+      <view class="supervisor-tip">主管登录后可查看所有复核任务。</view>
       <button
         class="btn btn-outline mt"
         bindtap="toggleSupervisorForm"
@@ -43,7 +42,7 @@
           <input
             class="input"
             value="{{supervisorUser}}"
-            placeholder="主管账号（填写手机号）"
+            placeholder="填写手机号"
             bindinput="handleSupervisorUserInput"
           />
         </view>
@@ -53,7 +52,7 @@
             class="input"
             password
             value="{{supervisorPass}}"
-            placeholder="主管密码（填写当前账号密码）"
+            placeholder="填写密码"
             bindinput="handleSupervisorPassInput"
           />
         </view>
@@ -62,11 +61,10 @@
     </view>
   </view>
 
-  <!-- 开发调试（仅在开发者工具中显示） -->
   <view wx:if="{{isDevTools}}">
     <view class="section-title">开发调试</view>
-    <view class="card">
-      <view class="supervisor-tip">当前默认接口地址为线上服务器。如需联调本地服务，可手动切换。</view>
+    <view class="card settings-card">
+      <view class="supervisor-tip">联调本地服务或切换接口地址。</view>
       <view class="field-row mt">
         <view class="field-label">接口地址</view>
         <input
