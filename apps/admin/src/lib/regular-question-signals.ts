@@ -252,10 +252,14 @@ export function applyIntentSignalScore(
       const blob = ruleTextBlob(rule);
       if (/反馈.*个人食用|门店反馈|未张贴禁用标识/.test(blob)) {
         score += 28;
-        scoreReasons.push("意图理解：无私人物品标识 + 门店反馈个人食用场景，提升 R-0063 类规则");
+        scoreReasons.push(
+          "意图理解：无私人物品标识 + 门店反馈个人食用场景，提升 R-0063 类规则",
+        );
       } else {
         score -= 35;
-        scoreReasons.push("意图理解：无私人物品标识，不在私人物品区，降低纯私人物品区规则");
+        scoreReasons.push(
+          "意图理解：无私人物品标识，不在私人物品区，降低纯私人物品区规则",
+        );
       }
     }
   }
