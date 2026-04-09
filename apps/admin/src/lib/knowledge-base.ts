@@ -927,9 +927,11 @@ function scoreOldItemMatch(item: OldItemRow, request: OldItemRequest) {
 export async function matchRegularQuestion(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionMatchResult> {
-  const knowledgeBase = await loadKnowledgeBase();
   const intentParse = await analyzeRegularQuestionIntent(request);
-  const semanticResult = await searchRuleVectors(request, intentParse);
+  const [knowledgeBase, semanticResult] = await Promise.all([
+    loadKnowledgeBase(),
+    searchRuleVectors(request, intentParse),
+  ]);
   const semanticRuleIds = semanticResult.hits.map((item) => item.ruleId);
   const semanticRuleLookup = new Set(semanticRuleIds);
   const semanticRules = knowledgeBase.rules.filter((rule) =>
@@ -1016,43 +1018,49 @@ export async function matchRegularQuestion(
     vectorBoost: item.vectorBoost,
   }));
 
-  let judgeDecision =
-    candidates.length > 1
-      ? await judgeRegularQuestionCandidates(
-          request,
-          intentParse,
-          candidates.slice(0, 5).map((item) => {
-            const linkedConsensus = item.rule.共识来源
-              ? knowledgeBase.consensus.find(
-                  (consensus) => consensus.consensus_id === item.rule.共识来源,
-                )
-              : undefined;
+  const topGap =
+    candidates.length >= 2 ? candidates[0].score - candidates[1].score : Infinity;
+  const needsLlmJudge = candidates.length > 1 && topGap < 12;
 
-            const judgeCandidate: RegularQuestionJudgeCandidate = {
-              ruleId: item.rule.rule_id,
-              category: item.rule.问题分类,
-              clauseNo: item.rule.条款编号,
-              clauseTitle: item.rule.条款标题,
-              score: item.score,
-              vectorScore: item.vectorScore,
-              vectorBoost: item.vectorBoost,
-              shouldDeduct: item.rule.是否扣分,
-              deductScore: item.rule.扣分分值 || "待人工确认",
-              clauseSnippet: item.rule.条款关键片段,
-              explanation: linkedConsensus?.解释内容 || item.rule.条款解释,
-              matchedReasons: item.reasons,
-            };
+  let judgeDecision = needsLlmJudge
+    ? await judgeRegularQuestionCandidates(
+        request,
+        intentParse,
+        candidates.slice(0, 5).map((item) => {
+          const linkedConsensus = item.rule.共识来源
+            ? knowledgeBase.consensus.find(
+                (consensus) => consensus.consensus_id === item.rule.共识来源,
+              )
+            : undefined;
 
-            return judgeCandidate;
-          }),
-        )
-      : {
-          judgeMode: "legacy" as const,
-          selectedRuleId: candidates[0].rule.rule_id,
-          confidence: 1,
-          judgeReason: "仅有一个有效候选，沿用旧排序结果。",
-          rejectedRuleIds: [],
-        };
+          const judgeCandidate: RegularQuestionJudgeCandidate = {
+            ruleId: item.rule.rule_id,
+            category: item.rule.问题分类,
+            clauseNo: item.rule.条款编号,
+            clauseTitle: item.rule.条款标题,
+            score: item.score,
+            vectorScore: item.vectorScore,
+            vectorBoost: item.vectorBoost,
+            shouldDeduct: item.rule.是否扣分,
+            deductScore: item.rule.扣分分值 || "待人工确认",
+            clauseSnippet: item.rule.条款关键片段,
+            explanation: linkedConsensus?.解释内容 || item.rule.条款解释,
+            matchedReasons: item.reasons,
+          };
+
+          return judgeCandidate;
+        }),
+      )
+    : {
+        judgeMode: (topGap >= 12 ? "score-gap" : "legacy") as "score-gap" | "legacy",
+        selectedRuleId: candidates[0].rule.rule_id,
+        confidence: topGap >= 12 ? 0.9 : 1,
+        judgeReason:
+          topGap >= 12
+            ? `首位与次位分差 ${topGap} ≥ 12，跳过 LLM 裁判直接采用最高分。`
+            : "仅有一个有效候选，沿用旧排序结果。",
+        rejectedRuleIds: candidates.slice(1).map((item) => item.rule.rule_id),
+      };
 
   const selectedCandidate =
     candidates.find((item) => item.rule.rule_id === judgeDecision.selectedRuleId) ??

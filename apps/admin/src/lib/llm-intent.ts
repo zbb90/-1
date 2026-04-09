@@ -130,27 +130,5 @@ function mergeUnique(left: string[], right: string[]) {
 export async function analyzeRegularQuestionIntent(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionIntentParse> {
-  const heuristic = buildHeuristicIntent(request);
-  const llmResult = await requestIntentFromLlm(request);
-
-  if (!llmResult) {
-    return heuristic;
-  }
-
-  const llmIntent = {
-    normalizedCategory:
-      normalizeText(llmResult.normalizedCategory) || heuristic.normalizedCategory,
-    sceneTags: mergeUnique(heuristic.sceneTags, llmResult.sceneTags ?? []),
-    objectTags: mergeUnique(heuristic.objectTags, llmResult.objectTags ?? []),
-    issueTags: mergeUnique(heuristic.issueTags, llmResult.issueTags ?? []),
-    exclusionTags: mergeUnique(heuristic.exclusionTags, llmResult.exclusionTags ?? []),
-    needsHumanVerification:
-      Boolean(llmResult.needsHumanVerification) || heuristic.needsHumanVerification,
-    parseMode: "llm" as const,
-  };
-
-  return {
-    ...llmIntent,
-    summary: buildSummary(llmIntent),
-  };
+  return buildHeuristicIntent(request);
 }

@@ -312,29 +312,9 @@ export async function generateRegularQuestionAiExplanation(
 }
 
 export async function generateOperationAiExplanation(
-  request: RegularQuestionRequest,
+  _request: RegularQuestionRequest,
   answer: RegularQuestionAnswer,
 ) {
-  const prompt = `
-用户问了「${normalizeText(request.description)}」，系统已命中操作资料「${normalizeText(answer.clauseTitle)}」。
-
-配方/操作内容和检核要点已经在页面上直接展示了，你不需要重复它们。
-你的任务是写一句简短的执行提醒：告诉伙伴这条资料是否就是他要找的，以及执行时最容易忽略的 1 个点。
-
-资料类型：${normalizeText(answer.clauseNo)}
-来源：${normalizeText(answer.source)}
-
-输出要求：
-1. 不重复配方数据（克数、ml、G几）和操作步骤。
-2. 只写 1 到 2 句话，40 到 80 字。
-3. 不要使用标题、编号、Markdown。
-`;
-
-  const llm = await requestDashScopeExplanation(prompt);
-  if (llm) {
-    return llm;
-  }
-
   return buildDeterministicOperationExplanation(answer);
 }
 

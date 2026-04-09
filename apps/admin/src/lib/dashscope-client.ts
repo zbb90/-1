@@ -53,6 +53,7 @@ export async function requestDashScopeChat(
         model: getDashScopeModelName(),
         temperature: 0,
         max_tokens: options?.maxTokens ?? 260,
+        enable_thinking: false,
         ...(options?.responseFormat === "json_object"
           ? { response_format: { type: "json_object" } }
           : {}),
