@@ -5,7 +5,11 @@ import { listReviewTasks } from "@/lib/review-pool";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminShell } from "@/components/admin/admin-shell";
-import type { ReviewTask, ReviewTaskStatus } from "@/lib/types";
+import type {
+  RegularQuestionMatchDebug,
+  ReviewTask,
+  ReviewTaskStatus,
+} from "@/lib/types";
 import { MarkWrongButton } from "./mark-wrong-button";
 
 const STATUS_LABELS: Record<ReviewTaskStatus, string> = {
@@ -42,6 +46,37 @@ function parseAutoAnswer(task: ReviewTask) {
   }
 }
 
+function parseMatchingDebug(task: ReviewTask): RegularQuestionMatchDebug | null {
+  try {
+    const payload = JSON.parse(task.sourcePayload);
+    return payload?.matchingDebug ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function bump(map: Map<string, number>, key: string) {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function topEntries(map: Map<string, number>, limit = 5) {
+  return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+}
+
+function deriveQuestionPattern(
+  task: ReviewTask,
+  debug: RegularQuestionMatchDebug | null,
+) {
+  if (debug?.lowConfidenceReason) return "低置信度转人工";
+  if (debug?.intentParse?.negationTags?.length) return "否定语境";
+  if (debug?.intentParse?.claimTags?.length) return "带主张问法";
+  if (task.description.includes("但是") || task.description.includes("不是"))
+    return "转折问法";
+  if (task.description && task.selfJudgment && task.selfJudgment !== "-")
+    return "描述+自行判断";
+  return "普通描述";
+}
+
 export default async function ConversationsPage({
   searchParams,
 }: {
@@ -56,6 +91,45 @@ export default async function ConversationsPage({
   const tasks = filterStatus
     ? allTasks.filter((t) => t.status === filterStatus)
     : allTasks;
+  const ruleStats = new Map<string, number>();
+  const categoryStats = new Map<string, number>();
+  const sceneStats = new Map<string, number>();
+  const storeStats = new Map<string, number>();
+  const patternStats = new Map<string, number>();
+  const judgeModeStats = new Map<string, number>();
+  const retrievalStats = new Map<string, number>();
+  let usedComplexModelCount = 0;
+  let escalatedCount = 0;
+  let lowConfidenceCount = 0;
+  let debugSnapshotCount = 0;
+
+  for (const task of allTasks) {
+    const autoAnswer = parseAutoAnswer(task);
+    const debug = parseMatchingDebug(task);
+    if (debug) {
+      debugSnapshotCount += 1;
+      if (debug.usedComplexModel) usedComplexModelCount += 1;
+      if (debug.escalatedToReview) escalatedCount += 1;
+      if (debug.lowConfidenceReason) lowConfidenceCount += 1;
+      bump(judgeModeStats, debug.judgeMode || "未记录");
+      const sources =
+        debug.retrievalSources?.length && debug.retrievalSources.length > 0
+          ? debug.retrievalSources
+          : [debug.retrievalMode];
+      sources.forEach((item) => bump(retrievalStats, item));
+      const scenes =
+        debug.intentParse?.sceneTags?.length && debug.intentParse.sceneTags.length > 0
+          ? debug.intentParse.sceneTags
+          : ["未识别场景"];
+      scenes.forEach((item) => bump(sceneStats, item));
+    }
+    if (autoAnswer?.ruleId || autoAnswer?.clauseTitle) {
+      bump(ruleStats, autoAnswer.ruleId || autoAnswer.clauseTitle);
+    }
+    bump(categoryStats, task.category || "未分类");
+    bump(storeStats, task.storeCode || "未填写门店");
+    bump(patternStats, deriveQuestionPattern(task, debug));
+  }
 
   return (
     <AdminShell>
@@ -70,7 +144,31 @@ export default async function ConversationsPage({
         }
         actions={<AdminNav current="conversations" showUsersLink={isLeader} />}
         footer={
-          <div className="flex flex-wrap gap-3">
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3">
+              <div className="rounded-xl bg-slate-50 px-4 py-2 text-sm ring-1 ring-slate-200">
+                <span className="text-slate-500">带调试快照：</span>
+                <span className="font-semibold text-slate-800">
+                  {debugSnapshotCount}
+                </span>
+              </div>
+              <div className="rounded-xl bg-violet-50 px-4 py-2 text-sm ring-1 ring-violet-200">
+                <span className="text-violet-500">强模型触发：</span>
+                <span className="font-semibold text-violet-800">
+                  {usedComplexModelCount}
+                </span>
+              </div>
+              <div className="rounded-xl bg-amber-50 px-4 py-2 text-sm ring-1 ring-amber-200">
+                <span className="text-amber-600">低置信度转人工：</span>
+                <span className="font-semibold text-amber-800">
+                  {lowConfidenceCount}
+                </span>
+              </div>
+              <div className="rounded-xl bg-rose-50 px-4 py-2 text-sm ring-1 ring-rose-200">
+                <span className="text-rose-500">已升级复核：</span>
+                <span className="font-semibold text-rose-800">{escalatedCount}</span>
+              </div>
+            </div>
             {FILTER_OPTIONS.filter((o) => o.value).map((opt) => {
               const count = allTasks.filter((t) => t.status === opt.value).length;
               return (
@@ -86,6 +184,45 @@ export default async function ConversationsPage({
           </div>
         }
       />
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          { title: "高频命中规则", data: topEntries(ruleStats) },
+          { title: "高频问题分类", data: topEntries(categoryStats) },
+          { title: "高频场景标签", data: topEntries(sceneStats) },
+          { title: "高频门店", data: topEntries(storeStats) },
+          { title: "提问方式", data: topEntries(patternStats) },
+          {
+            title: "裁判模式 / 召回来源",
+            data: [...topEntries(judgeModeStats, 3), ...topEntries(retrievalStats, 3)],
+          },
+        ].map((panel) => (
+          <div
+            key={panel.title}
+            className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200"
+          >
+            <p className="text-xs font-medium tracking-wide text-gray-500">
+              错判分析视图
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-gray-900">{panel.title}</h2>
+            <div className="mt-4 space-y-2">
+              {panel.data.length === 0 ? (
+                <p className="text-sm text-gray-500">暂无样本</p>
+              ) : (
+                panel.data.map(([label, count]) => (
+                  <div
+                    key={`${panel.title}-${label}`}
+                    className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                  >
+                    <span className="truncate text-gray-700">{label}</span>
+                    <span className="font-semibold text-gray-900">{count}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ))}
+      </section>
 
       <div className="flex flex-wrap gap-2">
         {FILTER_OPTIONS.map((opt) => (
@@ -115,6 +252,7 @@ export default async function ConversationsPage({
         ) : (
           tasks.map((task) => {
             const autoAnswer = parseAutoAnswer(task);
+            const debug = parseMatchingDebug(task);
             return (
               <div
                 key={task.id}
@@ -187,6 +325,54 @@ export default async function ConversationsPage({
                           {autoAnswer.aiExplanation}
                         </p>
                       )}
+                    </div>
+                  )}
+
+                  {debug && (
+                    <div className="md:col-span-2 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                      <p className="mb-2 text-xs font-medium text-slate-600">
+                        匹配调试快照
+                      </p>
+                      <div className="grid gap-2 text-sm md:grid-cols-2">
+                        <div>
+                          <span className="text-xs text-slate-500">裁判模式：</span>
+                          <span className="font-medium text-slate-900">
+                            {debug.judgeMode || "未记录"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-500">召回来源：</span>
+                          <span className="font-medium text-slate-900">
+                            {debug.retrievalSources?.join(" / ") ||
+                              debug.retrievalMode ||
+                              "未记录"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-500">强模型：</span>
+                          <span className="font-medium text-slate-900">
+                            {debug.usedComplexModel ? "已触发" : "未触发"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-500">低置信度兜底：</span>
+                          <span className="font-medium text-slate-900">
+                            {debug.lowConfidenceReason || "未触发"}
+                          </span>
+                        </div>
+                        <div className="md:col-span-2">
+                          <span className="text-xs text-slate-500">意图摘要：</span>
+                          <span className="ml-1 text-slate-800">
+                            {debug.intentParse?.summary || "未记录"}
+                          </span>
+                        </div>
+                        <div className="md:col-span-2">
+                          <span className="text-xs text-slate-500">裁判原因：</span>
+                          <span className="ml-1 text-slate-800">
+                            {debug.judgeReason || "未记录"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

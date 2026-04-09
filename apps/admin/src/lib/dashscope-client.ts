@@ -7,6 +7,10 @@ export function getDashScopeModelName() {
   return process.env.MODEL_NAME?.trim() || DEFAULT_MODEL_NAME;
 }
 
+export function getDashScopeComplexModelName() {
+  return process.env.COMPLEX_MODEL_NAME?.trim() || getDashScopeModelName();
+}
+
 export function getDashScopeApiKey() {
   return process.env.DASHSCOPE_API_KEY?.trim();
 }
@@ -32,6 +36,8 @@ export async function requestDashScopeChat(
   options?: {
     maxTokens?: number;
     responseFormat?: "text" | "json_object";
+    modelName?: string;
+    timeoutMs?: number;
   },
 ) {
   const apiKey = getDashScopeApiKey();
@@ -40,7 +46,10 @@ export async function requestDashScopeChat(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+  );
 
   try {
     const response = await fetch(DASHSCOPE_API_URL, {
@@ -50,7 +59,7 @@ export async function requestDashScopeChat(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: getDashScopeModelName(),
+        model: options?.modelName || getDashScopeModelName(),
         temperature: 0,
         max_tokens: options?.maxTokens ?? 260,
         enable_thinking: false,

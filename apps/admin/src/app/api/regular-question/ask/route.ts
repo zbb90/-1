@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       const reviewTask = await createReviewTaskFromRegularQuestion(
         payload,
         rejectReason,
+        result.debug,
       );
 
       return NextResponse.json({
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
       request: payload,
       answer: answerWithAI,
       aiExplanation,
+      matchingDebug: result.debug,
       storeCode: payload.storeCode,
       category: payload.category,
       selfJudgment: payload.selfJudgment,

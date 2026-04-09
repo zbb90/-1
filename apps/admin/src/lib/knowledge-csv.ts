@@ -157,3 +157,23 @@ export async function appendRow(
   invalidateKnowledgeBaseCache();
   return normalizedRow;
 }
+
+export async function writeTableRows(
+  table: KbTableName,
+  rows: Record<string, string>[],
+): Promise<void> {
+  const path = getCsvPath(table);
+  if (!path) throw new Error("当前部署环境无本地 CSV 文件，无法写入。");
+
+  const headers = await readCsvHeaders(path);
+  const normalizedRows = rows.map((row) => {
+    const normalizedRow: Record<string, string> = {};
+    for (const h of headers) {
+      normalizedRow[h] = row[h] ?? "";
+    }
+    return normalizedRow;
+  });
+
+  await writeFile(path, serializeCsv(headers, normalizedRows), "utf-8");
+  invalidateKnowledgeBaseCache();
+}

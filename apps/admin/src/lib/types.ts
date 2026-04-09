@@ -138,7 +138,11 @@ export interface RegularQuestionIntentParse {
   sceneTags: string[];
   objectTags: string[];
   issueTags: string[];
+  claimTags: string[];
   exclusionTags: string[];
+  negationTags: string[];
+  complexitySignals: string[];
+  isComplex: boolean;
   needsHumanVerification: boolean;
   parseMode: "llm" | "heuristic" | "fallback";
   summary: string;
@@ -165,6 +169,14 @@ export interface RegularQuestionMatchDebug {
   queryText: string;
   fallbackReason?: string;
   recalled: SemanticRuleRecallCandidate[];
+  keywordRecalled?: Array<{
+    ruleId: string;
+    category: string;
+    clauseTitle: string;
+    lexicalScore: number;
+  }>;
+  gatedRuleIds?: string[];
+  retrievalSources?: string[];
   rerankedTop?: RegularQuestionCandidatePayload[];
   intentParse?: RegularQuestionIntentParse;
   judgeMode?: RegularQuestionJudgeMode;
@@ -172,6 +184,9 @@ export interface RegularQuestionMatchDebug {
   judgeReason?: string;
   judgeConfidence?: number;
   judgeRejectedRuleIds?: string[];
+  usedComplexModel?: boolean;
+  escalatedToReview?: boolean;
+  lowConfidenceReason?: string;
 }
 
 export type RegularQuestionMatchResult =

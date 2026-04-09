@@ -32,6 +32,9 @@ jobs:
       - name: Test admin
         run: npm run test
 
+      - name: Verify semantic regression cases
+        run: npm run verify:semantic-cases
+
       - name: Build admin
         run: npm run build:admin
 

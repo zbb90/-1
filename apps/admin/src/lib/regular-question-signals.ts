@@ -60,13 +60,24 @@ export function detectStorageAreaFocus(combined: string) {
 }
 
 export function detectPrivateAreaFocus(combined: string) {
-  return /私人物品区|私人物品|私人区域|私人区|个人食用|个人用品|个人物品/.test(
-    combined,
-  );
+  if (
+    /没有私人物品标识|无私人物品标识|未贴私人物品标识|未张贴私人物品标识|没有私人.*标识|没贴私人|未标注私人/.test(
+      combined,
+    )
+  ) {
+    return false;
+  }
+  return /私人物品区|私人区域|私人区|私人物品柜/.test(combined);
 }
 
 export function detectMaterialIngredientFocus(combined: string) {
   return /原物料|物料|原料|干橙片|橙片|果干|干果/.test(combined);
+}
+
+export function detectPersonalUseClaim(combined: string) {
+  return /自己吃|自己喝|伙伴自己|伙伴.*吃|个人食用|门店反馈.*个人食用|反馈.*自己吃/.test(
+    combined,
+  );
 }
 
 export function ruleEmphasizesDiscardDeadline(rule: RuleRow) {
@@ -262,9 +273,22 @@ export function applyIntentSignalScore(
         );
       }
     }
-    if (!ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
-      score -= 8;
-      scoreReasons.push("意图理解：无私人物品标识场景，轻微降低无关规则");
+  }
+
+  if (
+    intent.claimTags.includes("个人食用主张") &&
+    !intent.sceneTags.includes("私人物品区") &&
+    ruleEmphasizesPrivateAreaOrPersonalUse(rule)
+  ) {
+    const blob = ruleTextBlob(rule);
+    if (/反馈.*个人食用|门店反馈.*个人|未张贴禁用标识/.test(blob)) {
+      score += 18;
+      scoreReasons.push(
+        "意图理解：个人食用主张但未落在私人物品区，更贴近反馈个人食用规则",
+      );
+    } else if (/私人物品区出现/.test(blob)) {
+      score -= 24;
+      scoreReasons.push("意图理解：个人食用主张不等于处于私人物品区");
     }
   }
 

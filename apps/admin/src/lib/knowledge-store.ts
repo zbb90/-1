@@ -10,7 +10,7 @@
 
 import type { KbTableName } from "@/lib/knowledge-csv";
 import { KB_TABLE_HEADERS } from "@/lib/kb-schema";
-import { readTable as readCsvTable, getCsvPath } from "@/lib/knowledge-csv";
+import { readTable as readCsvTable, writeTableRows } from "@/lib/knowledge-csv";
 import { invalidateKnowledgeBaseCache } from "@/lib/knowledge-loader";
 import { getRedis, isRedisConfigured } from "@/lib/redis-client";
 
@@ -51,6 +51,8 @@ async function persistRows(table: KbTableName, rows: Row[]) {
   if (isRedisConfigured()) {
     const redis = await getRedis();
     await redis.set(rowsKey(table), JSON.stringify(rows));
+  } else {
+    await writeTableRows(table, rows);
   }
   invalidateKnowledgeBaseCache();
 }

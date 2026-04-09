@@ -94,7 +94,9 @@ export function buildRegularQuestionQueryText(
     lines.push(`场景标签：${intent.sceneTags.join("、") || "-"}`);
     lines.push(`对象标签：${intent.objectTags.join("、") || "-"}`);
     lines.push(`问题标签：${intent.issueTags.join("、") || "-"}`);
+    lines.push(`主张标签：${intent.claimTags.join("、") || "-"}`);
     lines.push(`排除标签：${intent.exclusionTags.join("、") || "-"}`);
+    lines.push(`否定标签：${intent.negationTags.join("、") || "-"}`);
   }
 
   return lines.join("\n");

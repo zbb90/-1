@@ -10,6 +10,7 @@ import {
   getAdminSessionFromCookies,
   signAdminSessionValue,
 } from "@/lib/admin-session";
+import { sinkReviewTaskToKnowledge } from "@/lib/knowledge-sink";
 import { updateReviewTask } from "@/lib/review-pool";
 import { resolvePcLogin } from "@/lib/user-store";
 import type { ReviewTaskStatus } from "@/lib/types";
@@ -155,7 +156,6 @@ export async function saveAndSinkReviewTaskAction(
   const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
 
   const updated = await updateReviewTask(id, {
-    status: "已加入知识库",
     processor,
     finalConclusion,
     finalScore,
@@ -168,20 +168,22 @@ export async function saveAndSinkReviewTaskAction(
   }
 
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_ADMIN_URL ||
-      (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3003");
-
-    await fetch(`${baseUrl}/api/knowledge/sink`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId: id }),
-    });
-  } catch {
-    // 知识沉淀失败不阻断主流程，只记录
+    const result = await sinkReviewTaskToKnowledge(id);
+    const vectorStatus =
+      result.audit.vectorSync === "synced"
+        ? "已同步向量索引"
+        : `已写入知识库，向量同步跳过：${result.audit.vectorSyncReason || "未配置"}`;
+    return {
+      ok: true,
+      message: `已保存并加入知识库（${result.audit.table} / ${result.audit.newId}，${vectorStatus}）。`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? `主管结论已保存，但加入知识库失败：${error.message}`
+          : "主管结论已保存，但加入知识库失败。",
+    };
   }
-
-  return { ok: true, message: "已保存并加入知识库。" };
 }

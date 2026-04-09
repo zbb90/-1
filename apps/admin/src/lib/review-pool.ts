@@ -344,6 +344,7 @@ export async function createReviewTaskFromAnswer(params: {
   request: RegularQuestionRequest | ExternalPurchaseRequest | OldItemRequest;
   answer: object;
   aiExplanation?: string;
+  matchingDebug?: object;
   storeCode?: string;
   category?: string;
   selfJudgment?: string;
@@ -382,6 +383,7 @@ export async function createReviewTaskFromAnswer(params: {
         request: params.request,
         autoAnswer: params.answer,
         aiExplanation: params.aiExplanation,
+        matchingDebug: params.matchingDebug,
       },
       null,
       2,
@@ -393,6 +395,7 @@ export async function createReviewTaskFromAnswer(params: {
 export async function createReviewTaskFromRegularQuestion(
   request: RegularQuestionRequest,
   rejectReason: string,
+  matchingDebug?: object,
 ) {
   return createReviewTask({
     type: "常规问题",
@@ -403,7 +406,10 @@ export async function createReviewTaskFromRegularQuestion(
     selfJudgment: request.selfJudgment,
     description: request.description || request.issueTitle,
     rejectReason,
-    sourcePayload: request,
+    sourcePayload: {
+      request,
+      matchingDebug,
+    },
   });
 }
 

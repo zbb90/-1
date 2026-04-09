@@ -1,5 +1,6 @@
 import {
   getDashScopeApiKey,
+  getDashScopeComplexModelName,
   parseJsonObject,
   requestDashScopeChat,
 } from "@/lib/dashscope-client";
@@ -56,7 +57,12 @@ function normalizeText(value?: string) {
 async function requestDashScope(
   systemPrompt: string,
   userPrompt: string,
-  options?: { maxTokens?: number; responseFormat?: "text" | "json_object" },
+  options?: {
+    maxTokens?: number;
+    responseFormat?: "text" | "json_object";
+    modelName?: string;
+    timeoutMs?: number;
+  },
 ) {
   return requestDashScopeChat(systemPrompt, userPrompt, options);
 }
@@ -116,6 +122,8 @@ function buildHeuristicJudgeDecision(
       const isStorageScene = intent.sceneTags.includes("仓储区");
       const isWasteScene = intent.sceneTags.includes("垃圾桶");
       const isPrivateScene = intent.sceneTags.includes("私人物品区");
+      const hasPersonalUseClaim = intent.claimTags.includes("个人食用主张");
+      const hasPrivateLabelGap = intent.negationTags.includes("私人标识缺失");
       const hasExpiryIssue =
         intent.issueTags.includes("无效期") || intent.issueTags.includes("过期");
 
@@ -141,6 +149,26 @@ function buildHeuristicJudgeDecision(
       if (!isPrivateScene && isPrivateRule) {
         bonus -= 12;
         reasons.push("当前未出现私人物品区场景");
+      }
+
+      if (
+        isPrivateScene &&
+        !intent.negationTags.includes("私人标识缺失") &&
+        /私人物品区出现/.test(blob)
+      ) {
+        bonus += 18;
+        reasons.push("已明确处于私人物品区，优先私人物品区专属规则");
+      }
+
+      if (hasPersonalUseClaim && hasPrivateLabelGap) {
+        if (/反馈.*个人食用|门店反馈.*个人|未张贴禁用标识/.test(blob)) {
+          bonus += 24;
+          reasons.push("存在个人食用主张且缺少私人标识，更贴近反馈个人食用类规则");
+        }
+        if (/私人物品区出现/.test(blob) && !/未张贴/.test(blob)) {
+          bonus -= 24;
+          reasons.push("缺少私人标识不等于处于私人物品区");
+        }
       }
 
       if (hasExpiryIssue && isDamageRule && !intent.issueTags.includes("破损")) {
@@ -227,7 +255,10 @@ export async function judgeRegularQuestionCandidates(
 - 场景标签：${intent.sceneTags.join("、") || "无"}
 - 对象标签：${intent.objectTags.join("、") || "无"}
 - 问题标签：${intent.issueTags.join("、") || "无"}
+- 主张标签：${intent.claimTags.join("、") || "无"}
 - 排除标签：${intent.exclusionTags.join("、") || "无"}
+- 否定标签：${intent.negationTags.join("、") || "无"}
+- 复杂信号：${intent.complexitySignals.join("、") || "无"}
 - 是否需人工核实：${intent.needsHumanVerification ? "是" : "否"}
 
 候选规则：
@@ -243,9 +274,14 @@ ${candidateBlock}
 `;
 
   const raw = await requestDashScope(
-    "你是稽核规则裁判器。你只能从给定候选规则中选一条最合适的 ruleId，不能编造新规则；若问题明确排除了私人物品/个人食用，就不能选择相关规则。只输出 JSON。",
+    "你是稽核规则裁判器。你只能从给定候选规则中选一条最合适的 ruleId，不能编造新规则；若问题明确排除了私人物品/个人食用，或只是声称个人食用但缺少私人标识/私人物品区场景，就不能直接套用纯私人物品区豁免规则。只输出 JSON。",
     prompt,
-    { maxTokens: 240, responseFormat: "json_object" },
+    {
+      maxTokens: 240,
+      responseFormat: "json_object",
+      modelName: intent.isComplex ? getDashScopeComplexModelName() : undefined,
+      timeoutMs: intent.isComplex ? 12_000 : undefined,
+    },
   );
   const parsed = parseJsonObject<JudgeLlmResult>(raw);
   const validIds = new Set(candidates.map((item) => item.ruleId));

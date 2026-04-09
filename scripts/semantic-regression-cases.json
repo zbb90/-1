@@ -138,5 +138,25 @@
       "selfJudgment": "扣无效期"
     },
     "expectedRuleId": "R-0064"
+  },
+  {
+    "name": "个人食用但无私人标识应优先反馈个人食用规则",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "伙伴自己吃的草莓无效期",
+      "description": "伙伴自己吃的草莓，放在冰箱里面，但没有效期，也没有私人物品标识",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0063"
+  },
+  {
+    "name": "明确私人物品区才允许命中私人物品区豁免规则",
+    "input": {
+      "category": "物料效期问题",
+      "issueTitle": "私人物品区草莓过期",
+      "description": "私人物品区内发现伙伴自己带来的草莓已过期，现场有私人物品区标识",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": "R-0076"
   }
 ]
