@@ -212,6 +212,9 @@ function detectStorageAreaFocus(combined: string) {
 }
 
 function detectPrivateAreaFocus(combined: string) {
+  if (/没有私人物品标识|无私人物品标识|未贴私人物品标识|未张贴私人物品标识|没有私人.*标识|没贴私人|未标注私人/.test(combined)) {
+    return false;
+  }
   return /私人物品区|私人物品|私人区域|私人区|个人食用|个人用品|个人物品/.test(
     combined,
   );
@@ -835,6 +838,22 @@ function scoreRuleMatch(
   if (privateAreaFocus && ruleEmphasizesPrivateAreaOrPersonalUse(rule)) {
     score += 32;
     reasons.push("区分：描述明确提到私人物品区/个人食用，提升私人物品类规则优先级");
+  }
+
+  const noPrivateLabelMentioned =
+    /没有私人物品标识|无私人物品标识|未贴私人|未张贴私人|没贴私人/.test(combined);
+  const personalFoodClaim =
+    /自己吃|伙伴.*吃|个人食用|反馈.*私人|门店反馈.*个人/.test(combined);
+  if (noPrivateLabelMentioned && personalFoodClaim) {
+    const ruleBlob = ruleTextBlob(rule);
+    if (/反馈.*个人食用|门店反馈|未张贴禁用标识/.test(ruleBlob)) {
+      score += 30;
+      reasons.push("区分：声称个人食用但无私人物品标识，提升'反馈个人食用但无标识'规则");
+    }
+    if (/私人物品区出现/.test(ruleBlob) && !/未张贴/.test(ruleBlob)) {
+      score -= 30;
+      reasons.push("区分：无私人物品标识不等于在私人物品区，降低纯私人物品区规则");
+    }
   }
 
   const moldCleaningFocus = /发霉|霉变|积垢|霉斑|清洁不到位|器具脏|油垢/.test(combined);

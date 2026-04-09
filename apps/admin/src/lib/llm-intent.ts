@@ -36,6 +36,7 @@ const ISSUE_TAG_RULES: IntentTagRule[] = [
 const EXCLUSION_TAG_RULES: IntentTagRule[] = [
   { tag: "非私人物品", pattern: /不是私人物品|非私人物品|属于门店原物料/ },
   { tag: "非个人食用", pattern: /不是个人食用|非个人食用/ },
+  { tag: "无私人物品标识", pattern: /没有私人物品标识|无私人物品标识|未贴私人物品标识|未张贴私人物品标识|缺少私人物品标识|没有私人.*标识|没贴私人|未标注私人/ },
   { tag: "非人为", pattern: /非人为|不是人为|非人为原因/ },
   { tag: "已核实", pattern: /已核实|监控核实|经监控回溯|核实为/ },
   { tag: "可提醒", pattern: /可提醒|提醒|本次提醒|报备提醒|先报备/ },
@@ -80,12 +81,19 @@ function buildHeuristicIntent(
     .filter(Boolean)
     .join("\n");
 
+  let sceneTags = collectTags(combined, SCENE_TAG_RULES);
+  const exclusionTags = collectTags(combined, EXCLUSION_TAG_RULES);
+
+  if (exclusionTags.includes("无私人物品标识")) {
+    sceneTags = sceneTags.filter((t) => t !== "私人物品区");
+  }
+
   const baseIntent = {
     normalizedCategory: normalizeCategory(request, combined),
-    sceneTags: collectTags(combined, SCENE_TAG_RULES),
+    sceneTags,
     objectTags: collectTags(combined, OBJECT_TAG_RULES),
     issueTags: collectTags(combined, ISSUE_TAG_RULES),
-    exclusionTags: collectTags(combined, EXCLUSION_TAG_RULES),
+    exclusionTags,
     needsHumanVerification: /核实|监控|报备|非人为|需确认|待确认/.test(combined),
     parseMode: "heuristic" as const,
   };
