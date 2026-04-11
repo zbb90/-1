@@ -524,6 +524,32 @@ function ruleEmphasizesPureExpiry(rule: RuleRow) {
   );
 }
 
+/**
+ * Content relevance gate: prevents matches that rely solely on category +
+ * generic bigram noise without any meaningful content overlap with the rule.
+ */
+function hasMeaningfulContentSignal(
+  reasons: string[],
+  vectorScore?: number,
+  totalScore?: number,
+) {
+  if (totalScore !== undefined && totalScore >= 80) return true;
+  if (vectorScore !== undefined && vectorScore >= 0.75) return true;
+
+  const CONTENT_SIGNALS = [
+    /命中关键词：/,
+    /命中规则关键词片段/,
+    /问题描述与规则高度重合/,
+    /门店问题标题命中规则/,
+    /场景描述或示例问法接近/,
+    /区分：/,
+    /意图理解：/,
+    /语义召回集中指向/,
+  ];
+
+  return reasons.some((r) => CONTENT_SIGNALS.some((p) => p.test(r)));
+}
+
 function calculateVectorBoost(vectorScore: number) {
   if (vectorScore >= 0.95) {
     return 36;
@@ -540,7 +566,10 @@ function calculateVectorBoost(vectorScore: number) {
   if (vectorScore >= 0.75) {
     return 12;
   }
-  return 6;
+  if (vectorScore >= 0.6) {
+    return 6;
+  }
+  return 0;
 }
 
 function detectSemanticCategoryHint(
@@ -1240,8 +1269,10 @@ export async function matchRegularQuestion(
   semanticRules.forEach((rule) => candidatePoolMap.set(rule.rule_id, rule));
   keywordRules.forEach((rule) => candidatePoolMap.set(rule.rule_id, rule));
   gatedRules.forEach((item) => candidatePoolMap.set(item.rule.rule_id, item.rule));
-  const candidatePool =
-    candidatePoolMap.size > 0 ? [...candidatePoolMap.values()] : knowledgeBase.rules;
+  const isFullTableFallback = candidatePoolMap.size === 0;
+  const candidatePool = isFullTableFallback
+    ? knowledgeBase.rules
+    : [...candidatePoolMap.values()];
   const retrievalMode: RegularQuestionMatchDebug["retrievalMode"] = usingSemanticRecall
     ? "semantic"
     : "fallback";
@@ -1300,7 +1331,13 @@ export async function matchRegularQuestion(
             ];
       return { rule, score, reasons, vectorScore, vectorBoost };
     })
-    .filter((item) => item.score >= 20)
+    .filter((item) => {
+      const minScore = isFullTableFallback ? 35 : 20;
+      return (
+        item.score >= minScore &&
+        hasMeaningfulContentSignal(item.reasons, item.vectorScore, item.score)
+      );
+    })
     .sort((left, right) => right.score - left.score);
 
   if (candidates.length === 0) {
@@ -1314,7 +1351,7 @@ export async function matchRegularQuestion(
     });
     return {
       matched: false,
-      rejectReason: "未在规则表中找到足够明确的依据，建议进入人工复核池。",
+      rejectReason: "未在知识库中找到与该问题直接相关的规则，建议进入人工复核池。",
       candidates: [],
       debug: {
         ...debug,

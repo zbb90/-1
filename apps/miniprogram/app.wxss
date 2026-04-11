@@ -36,15 +36,21 @@ page {
 
 .input,
 .textarea {
+  display: block;
   width: 100%;
   border: 2rpx solid #e8e8ed;
   border-radius: 14rpx;
   background: #fafafa;
-  padding: 20rpx 22rpx;
   font-size: 28rpx;
-  color: #1d1d1f;
+  color: #1d1d1f !important;
   transition: border-color 0.2s;
   box-sizing: border-box;
+}
+
+.input {
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 22rpx;
 }
 
 .input:focus,
@@ -53,6 +59,7 @@ page {
 }
 
 .textarea {
+  padding: 20rpx 22rpx;
   min-height: 200rpx;
   line-height: 1.6;
 }

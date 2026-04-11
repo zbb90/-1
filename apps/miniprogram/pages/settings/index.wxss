@@ -13,6 +13,11 @@
   gap: 16rpx;
 }
 
+.field-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
 .field-row.mt {
   margin-top: 20rpx;
 }

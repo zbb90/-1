@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 /**
- * PC 端后台统一页面容器：背景、最大宽度、内边距与纵向节奏一致。
+ * 统一页面容器：桌面与移动端均可使用。
+ * 移动端底部预留固定 Tab 栏空间。
  */
 export function AdminShell({
   children,
@@ -13,7 +14,7 @@ export function AdminShell({
   return (
     <main className="min-h-screen bg-gray-50">
       <div
-        className={`mx-auto space-y-6 px-4 py-6 md:space-y-8 md:px-8 md:py-8 ${maxWidthClass}`}
+        className={`mx-auto space-y-6 px-4 py-6 pb-24 md:space-y-8 md:px-8 md:py-8 md:pb-8 ${maxWidthClass}`}
       >
         {children}
       </div>

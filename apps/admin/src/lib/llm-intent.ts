@@ -36,6 +36,9 @@ const ISSUE_TAG_RULES: IntentTagRule[] = [
   { tag: "废弃时间", pattern: /废弃时间|超废弃|废弃期/ },
   { tag: "破损", pattern: /破损|破口|裂口|漏液|漏汁|胀包/ },
   { tag: "离地", pattern: /未离地|没有离地|放在地上|落地|离地不足/ },
+  { tag: "打卡考勤", pattern: /打卡|考勤|出勤|签到|迟到|早退|排班/ },
+  { tag: "设备故障", pattern: /设备坏|机器坏|报修|设备故障|无法使用/ },
+  { tag: "发霉积垢", pattern: /发霉|霉变|积垢|霉斑|油垢/ },
 ];
 
 const CLAIM_TAG_RULES: IntentTagRule[] = [
@@ -85,7 +88,10 @@ function normalizeCategory(request: RegularQuestionRequest, combined: string) {
   if (/离地|上架|落地|仓储/.test(combined)) return "储存与离地问题";
   if (/消杀|虫害|封堵/.test(combined)) return "虫害与消杀问题";
   if (/净水器|发霉|不洁|积垢/.test(combined)) return "设备器具清洁/霉变/积垢";
-  return "物料效期问题";
+  if (/效期|过期|无效期|赏味|废弃/.test(combined)) return "物料效期问题";
+  if (/证照|健康证|许可证|营业执照/.test(combined)) return "证照/记录/人员规范";
+  if (/打卡|考勤|出勤|签到|排班|班次/.test(combined)) return "人员规范";
+  return "";
 }
 
 function collectTags(combined: string, rules: IntentTagRule[]) {
