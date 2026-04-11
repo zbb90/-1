@@ -31,7 +31,13 @@
 
   <view wx:elif="{{filteredReviews.length === 0}}" class="card empty-card">
     <view class="empty-title">当前没有任务</view>
-    <view class="empty-desc">所选状态下还没有对应的复核记录。</view>
+    <view wx:if="{{isSupervisor && activeTab === 'processing'}}" class="empty-desc">
+      当前没有待处理任务，你可以切换到“全部问题”查看历史专员问题并直接回复。
+    </view>
+    <view wx:elif="{{isSupervisor}}" class="empty-desc">
+      当前筛选条件下没有记录，请切换其他页签查看。
+    </view>
+    <view wx:else class="empty-desc">所选状态下还没有对应的复核记录。</view>
   </view>
 
   <view wx:else class="review-list">

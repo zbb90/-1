@@ -1,7 +1,13 @@
 const { request } = require("../../utils/request");
 
 const POLL_INTERVAL = 15000;
-const TABS = [
+const SPECIALIST_TABS = [
+  { key: "processing", label: "处理中" },
+  { key: "replied", label: "主管已回复" },
+  { key: "needMore", label: "待补充" },
+];
+const SUPERVISOR_TABS = [
+  { key: "all", label: "全部问题" },
   { key: "processing", label: "处理中" },
   { key: "replied", label: "主管已回复" },
   { key: "needMore", label: "待补充" },
@@ -52,7 +58,7 @@ function compareReviews(left, right) {
 
 Page({
   data: {
-    tabs: TABS,
+    tabs: SPECIALIST_TABS,
     activeTab: "processing",
     loading: false,
     reviews: [],
@@ -79,6 +85,8 @@ Page({
     this._isSupervisor = Boolean(supervisorAuth && supervisorAuth.user);
     this.setData({
       isSupervisor: this._isSupervisor,
+      tabs: this._isSupervisor ? SUPERVISOR_TABS : SPECIALIST_TABS,
+      activeTab: this._isSupervisor ? "all" : "processing",
     });
     this.loadReviews();
     this._pollTimer = setInterval(() => {
@@ -145,6 +153,9 @@ Page({
 
   applyFilter(tab, reviews) {
     const filteredReviews = reviews.filter((item) => {
+      if (tab === "all") {
+        return true;
+      }
       if (tab === "processing") {
         return !item.hasReply && (item.status === "待处理" || item.status === "AI已自动回答");
       }
