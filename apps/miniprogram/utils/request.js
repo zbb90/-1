@@ -80,7 +80,10 @@ function request({ url, method = "GET", data, header = {}, adminAuth = false }) 
           return;
         }
 
-        if (res.statusCode === 401 || res.statusCode === 403) {
+        if (
+          (res.statusCode === 401 || res.statusCode === 403) &&
+          !adminCreds
+        ) {
           if (app && typeof app.wxLogin === "function") {
             app.logout();
             app.wxLogin();
