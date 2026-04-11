@@ -207,7 +207,9 @@ export function hasUnreadRequesterReply(task: ReviewTask) {
   }
 
   const replyAt = Date.parse(task.replyPublishedAt);
-  const viewedAt = task.requesterLastViewedAt ? Date.parse(task.requesterLastViewedAt) : 0;
+  const viewedAt = task.requesterLastViewedAt
+    ? Date.parse(task.requesterLastViewedAt)
+    : 0;
 
   if (!Number.isFinite(replyAt)) {
     return false;
