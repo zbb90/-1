@@ -83,14 +83,15 @@ Page({
     this.stopPolling();
     const supervisorAuth = wx.getStorageSync("supervisorAuth") || null;
     this._isSupervisor = Boolean(supervisorAuth && supervisorAuth.user);
+    this._activeTab = this._isSupervisor ? "all" : "processing";
     this.setData({
       isSupervisor: this._isSupervisor,
       tabs: this._isSupervisor ? SUPERVISOR_TABS : SPECIALIST_TABS,
-      activeTab: this._isSupervisor ? "all" : "processing",
+      activeTab: this._activeTab,
     });
-    this.loadReviews();
+    this.loadReviews({ activeTab: this._activeTab });
     this._pollTimer = setInterval(() => {
-      this.loadReviews({ silent: true });
+      this.loadReviews({ silent: true, activeTab: this._activeTab });
     }, POLL_INTERVAL);
   },
 
@@ -102,8 +103,9 @@ Page({
   },
 
   async loadReviews(options = {}) {
-    const { silent = false } = options;
+    const { silent = false, activeTab } = options;
     const isSupervisor = Boolean(this._isSupervisor || this.data.isSupervisor);
+    const currentTab = activeTab || this._activeTab || this.data.activeTab;
     if (!silent) {
       this.setData({ loading: true });
     }
@@ -121,7 +123,7 @@ Page({
       const prevUnreadReplyCount = this.data.unreadReplyCount || 0;
 
       this.setData({ reviews, unreadReplyCount });
-      this.applyFilter(this.data.activeTab, reviews);
+      this.applyFilter(currentTab, reviews);
 
       if (silent && this._loadedOnce && unreadReplyCount > prevUnreadReplyCount) {
         wx.vibrateShort({ type: "light" });
@@ -148,6 +150,7 @@ Page({
 
   handleTabChange(event) {
     const { tab } = event.currentTarget.dataset;
+    this._activeTab = tab;
     this.applyFilter(tab, this.data.reviews);
   },
 
