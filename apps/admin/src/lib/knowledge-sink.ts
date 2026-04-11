@@ -9,6 +9,7 @@ type SinkAudit = {
   newId: string;
   vectorSync: "synced" | "skipped";
   vectorSyncReason?: string;
+  verifyResult?: "matched" | "mismatch" | "pending";
 };
 
 export class KnowledgeSinkError extends Error {
@@ -64,23 +65,52 @@ function buildKnowledgeExplanation(task: ReviewTask) {
   return "-";
 }
 
+function extractKeywords(text: string) {
+  const stops =
+    /^(的|了|在|是|有|没有|一个|这个|那个|可以|不|我|你|他|它|门店|伙伴|问题|请问)$/;
+  return [
+    ...new Set(
+      text
+        .replace(/[，。！？、；：""''（）\s]+/g, "|")
+        .split("|")
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 2 && !stops.test(s)),
+    ),
+  ]
+    .slice(0, 6)
+    .join("|");
+}
+
 function buildRuleRow(task: ReviewTask): Record<string, string> {
   const { clauseCode, reason } = splitClauseAndReason(task);
   const explanation = buildKnowledgeExplanation(task);
+  const desc = normalizeText(task.description);
+  const conclusion = normalizeText(task.finalConclusion);
+  const finalExplanation = normalizeText(task.finalExplanation);
+
+  const keywords = extractKeywords(desc);
+  const sceneDesc = reason || conclusion || desc;
+  const exampleQuestion =
+    desc !== sceneDesc ? desc : `${task.category || ""}相关：${desc}`;
+  const clauseSnippet = finalExplanation || reason || conclusion || desc;
 
   return {
     问题分类: task.category || "-",
-    问题子类或关键词: task.description || "-",
-    场景描述: task.description || "-",
-    触发条件: reason || "-",
-    是否扣分: task.finalConclusion?.includes("扣分") ? "是" : "否",
+    问题子类或关键词: keywords || desc,
+    场景描述: sceneDesc,
+    触发条件: reason || conclusion || "-",
+    是否扣分: conclusion.includes("扣分")
+      ? "是"
+      : conclusion.includes("不扣")
+        ? "否"
+        : "按场景判定",
     扣分分值: task.finalScore || "0",
     条款编号: clauseCode,
-    条款标题: task.finalConclusion || "-",
-    条款关键片段: reason || task.description || "-",
+    条款标题: conclusion || "-",
+    条款关键片段: clauseSnippet,
     条款解释: explanation,
     共识来源: `复核任务 ${task.id}`,
-    示例问法: task.description || "-",
+    示例问法: exampleQuestion,
     状态: "启用",
     备注: `由主管 ${task.processor || "-"} 于 ${new Date().toLocaleDateString("zh-CN")} 沉淀`,
   };
@@ -152,12 +182,29 @@ export async function sinkReviewTaskToKnowledge(taskId: string): Promise<{
   let vectorSync: SinkAudit["vectorSync"] = "skipped";
   let vectorSyncReason: string | undefined;
   if (target.table === "rules") {
-    const syncResult = await upsertRuleVectors([inserted as unknown as RuleRow]);
-    if (syncResult.ok) {
-      vectorSync = "synced";
-    } else {
+    const MAX_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const syncResult = await upsertRuleVectors([inserted as unknown as RuleRow]);
+      if (syncResult.ok) {
+        vectorSync = "synced";
+        break;
+      }
       vectorSyncReason = syncResult.reason;
-      console.warn("rule vector sync skipped after sink", syncResult.reason);
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+    if (vectorSync === "skipped") {
+      console.warn(
+        `rule vector sync failed after ${MAX_RETRIES + 1} attempts, marking as 待向量同步`,
+        vectorSyncReason,
+      );
+      try {
+        const { patchRowStatus } = await import("@/lib/knowledge-csv");
+        await patchRowStatus("rules", inserted.rule_id ?? "", "待向量同步");
+      } catch (patchErr) {
+        console.warn("failed to mark rule as 待向量同步", patchErr);
+      }
     }
   }
 
@@ -173,6 +220,15 @@ export async function sinkReviewTaskToKnowledge(taskId: string): Promise<{
         ? inserted.item_id
         : "-";
 
+  let verifyResult: SinkAudit["verifyResult"] = undefined;
+  if (target.table === "rules" && vectorSync === "synced" && task.description) {
+    verifyMatchAfterSink({
+      description: task.description,
+      category: task.category,
+      expectedRuleId: newId || "",
+    }).catch(() => {});
+  }
+
   return {
     task: updatedTask,
     audit: {
@@ -180,6 +236,34 @@ export async function sinkReviewTaskToKnowledge(taskId: string): Promise<{
       newId: newId || "-",
       vectorSync,
       vectorSyncReason,
+      verifyResult,
     },
   };
+}
+
+async function verifyMatchAfterSink(params: {
+  description: string;
+  category?: string;
+  expectedRuleId: string;
+}) {
+  try {
+    const { matchRegularQuestion } = await import("@/lib/knowledge-base");
+    const result = await matchRegularQuestion({
+      description: params.description,
+      category: params.category,
+    });
+
+    if (result.matched && result.answer.ruleId === params.expectedRuleId) {
+      console.info(
+        `[sink-verify] OK: "${params.description}" → ${params.expectedRuleId}`,
+      );
+    } else {
+      const actualId = result.matched ? result.answer.ruleId : "none";
+      console.warn(
+        `[sink-verify] MISMATCH: "${params.description}" expected ${params.expectedRuleId}, got ${actualId}`,
+      );
+    }
+  } catch (err) {
+    console.warn("[sink-verify] verification failed", err);
+  }
 }

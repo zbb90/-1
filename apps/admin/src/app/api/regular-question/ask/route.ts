@@ -78,9 +78,10 @@ export async function POST(request: NextRequest) {
     }
 
     const aiExplanation =
-      result.answer.category === "操作标准"
+      result.answer.aiExplanation ||
+      (result.answer.category === "操作标准"
         ? await generateOperationAiExplanation(payload, result.answer)
-        : await generateRegularQuestionAiExplanation(payload, result.answer);
+        : await generateRegularQuestionAiExplanation(payload, result.answer));
 
     const answerWithAI = { ...result.answer, aiExplanation };
 

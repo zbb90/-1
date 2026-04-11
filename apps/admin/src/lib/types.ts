@@ -121,6 +121,7 @@ export interface RegularQuestionAnswerPayload {
   matchedReasons?: string[];
   consensusKeywords?: string;
   consensusApplicableScene?: string;
+  aiExplanation?: string;
 }
 
 export interface RegularQuestionCandidatePayload {

@@ -3,6 +3,7 @@ const { request } = require("../../utils/request");
 Page({
   data: {
     categories: [
+      "请选择（可选）",
       "物料效期问题",
       "储存与离地问题",
       "交叉污染问题",
@@ -67,9 +68,8 @@ Page({
         method: "POST",
         data: {
           storeCode,
-          category: categories[categoryIndex],
+          category: categoryIndex === 0 ? "" : categories[categoryIndex],
           selfJudgment,
-          // 勿把分类名当作「门店问题」重复上传，否则语义向量与打分会被分类词二次放大，容易答非所问。
           issueTitle: "",
           description,
         },

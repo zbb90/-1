@@ -26,7 +26,7 @@ export const regularQuestionBodySchema = z
   .object({
     ...requesterFields,
     storeCode: z.string().trim().max(64).optional(),
-    category: z.string().trim().min(1, "`问题分类` 不能为空。").max(64),
+    category: z.string().trim().max(64).optional().default(""),
     selfJudgment: z.string().trim().max(200).optional(),
     issueTitle: optionalDescriptionSchema,
     description: optionalDescriptionSchema,

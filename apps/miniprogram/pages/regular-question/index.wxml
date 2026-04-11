@@ -20,7 +20,7 @@
         value="{{categoryIndex}}"
         bindchange="handleCategoryChange"
       >
-        <view class="input picker">{{categories[categoryIndex]}}</view>
+        <view class="input picker {{categoryIndex === 0 ? 'placeholder' : ''}}">{{categories[categoryIndex]}}</view>
       </picker>
     </view>
 
