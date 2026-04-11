@@ -1,4 +1,5 @@
 import { matchExternalPurchase, matchOldItem } from "@/lib/catalog-matchers";
+import { matchRegularQuestionFallback } from "@/lib/knowledge-base-fallback";
 import { getKnowledgeSummary, loadKnowledgeBase } from "@/lib/knowledge-loader";
 import {
   recordRetrieved,
@@ -115,10 +116,19 @@ async function ragJudgeAndAnswer(
 export async function matchRegularQuestion(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionMatchResult> {
+  if (!isSemanticSearchConfigured()) {
+    return matchRegularQuestionFallback(request);
+  }
+
   const [knowledgeBase, semanticResult] = await Promise.all([
     loadKnowledgeBase(),
     searchRuleVectors(request),
   ]);
+
+  if (semanticResult.hits.length === 0 && semanticResult.fallbackReason) {
+    return matchRegularQuestionFallback(request);
+  }
+
   const ruleMap = new Map(knowledgeBase.rules.map((r) => [r.rule_id, r]));
   const vectorHits = semanticResult.hits
     .map((hit) => {
