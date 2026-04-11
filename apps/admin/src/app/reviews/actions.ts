@@ -79,6 +79,45 @@ export type SaveReviewFormState =
   | { ok: false; message: string }
   | null;
 
+function buildRequesterReplyPatch(params: {
+  status: ReviewTaskStatus;
+  finalConclusion: string;
+  finalExplanation: string;
+}) {
+  const shouldNotifyRequester =
+    params.status === "已处理" ||
+    params.status === "已加入知识库" ||
+    params.status === "待补充" ||
+    Boolean(params.finalConclusion.trim()) ||
+    Boolean(params.finalExplanation.trim());
+
+  if (!shouldNotifyRequester) {
+    return {};
+  }
+
+  return {
+    replyPublishedAt: new Date().toISOString(),
+  };
+}
+
+function resolveFinalTaskStatus(params: {
+  status: ReviewTaskStatus;
+  finalConclusion: string;
+  finalExplanation: string;
+}) {
+  const hasManualReply =
+    Boolean(params.finalConclusion.trim()) || Boolean(params.finalExplanation.trim());
+
+  if (
+    hasManualReply &&
+    (params.status === "待处理" || params.status === "AI已自动回答")
+  ) {
+    return "已处理" as const;
+  }
+
+  return params.status;
+}
+
 export async function saveReviewTaskAction(
   _prev: SaveReviewFormState,
   formData: FormData,
@@ -92,12 +131,17 @@ export async function saveReviewTaskAction(
     return { ok: false, message: "缺少任务编号。" };
   }
 
-  const status = String(formData.get("status") ?? "").trim() as ReviewTaskStatus;
+  const rawStatus = String(formData.get("status") ?? "").trim() as ReviewTaskStatus;
   const processor = String(formData.get("processor") ?? "").trim();
   const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
   const finalScore = String(formData.get("finalScore") ?? "").trim();
   const finalClause = String(formData.get("finalClause") ?? "").trim();
   const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
+  const status = resolveFinalTaskStatus({
+    status: rawStatus,
+    finalConclusion,
+    finalExplanation,
+  });
 
   const allowed: ReviewTaskStatus[] = [
     "待处理",
@@ -118,6 +162,11 @@ export async function saveReviewTaskAction(
     finalScore,
     finalClause,
     finalExplanation,
+    ...buildRequesterReplyPatch({
+      status,
+      finalConclusion,
+      finalExplanation,
+    }),
   });
 
   if (!updated) {
@@ -150,17 +199,29 @@ export async function saveAndSinkReviewTaskAction(
   }
 
   const processor = String(formData.get("processor") ?? "").trim();
+  const rawStatus = String(formData.get("status") ?? "").trim() as ReviewTaskStatus;
   const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
   const finalScore = String(formData.get("finalScore") ?? "").trim();
   const finalClause = String(formData.get("finalClause") ?? "").trim();
   const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
+  const status = resolveFinalTaskStatus({
+    status: rawStatus,
+    finalConclusion,
+    finalExplanation,
+  });
 
   const updated = await updateReviewTask(id, {
+    status,
     processor,
     finalConclusion,
     finalScore,
     finalClause,
     finalExplanation,
+    ...buildRequesterReplyPatch({
+      status,
+      finalConclusion,
+      finalExplanation,
+    }),
   });
 
   if (!updated) {

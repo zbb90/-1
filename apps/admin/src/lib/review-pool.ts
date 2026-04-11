@@ -189,6 +189,33 @@ async function persistNewTask(task: ReviewTask) {
   return task;
 }
 
+export function isRequesterReplyReady(task: ReviewTask) {
+  if (task.status === "待补充") {
+    return true;
+  }
+
+  if (task.status === "已处理" || task.status === "已加入知识库") {
+    return true;
+  }
+
+  return Boolean(task.finalConclusion?.trim() || task.finalExplanation?.trim());
+}
+
+export function hasUnreadRequesterReply(task: ReviewTask) {
+  if (!isRequesterReplyReady(task) || !task.replyPublishedAt) {
+    return false;
+  }
+
+  const replyAt = Date.parse(task.replyPublishedAt);
+  const viewedAt = task.requesterLastViewedAt ? Date.parse(task.requesterLastViewedAt) : 0;
+
+  if (!Number.isFinite(replyAt)) {
+    return false;
+  }
+
+  return !Number.isFinite(viewedAt) || replyAt > viewedAt;
+}
+
 export async function listReviewTasks(filters?: { requesterId?: string }) {
   const requesterId = filters?.requesterId?.trim();
 
@@ -241,6 +268,12 @@ export async function updateReviewTask(
   tasks[index] = updated;
   await writeToFile(tasks);
   return updated;
+}
+
+export async function markReviewTaskRequesterRead(id: string) {
+  return updateReviewTask(id, {
+    requesterLastViewedAt: new Date().toISOString(),
+  });
 }
 
 export async function getReviewSummary() {
@@ -305,6 +338,8 @@ function createBaseTask(params: {
     status: "待处理",
     createdAt: now,
     updatedAt: now,
+    replyPublishedAt: "",
+    requesterLastViewedAt: "",
     requesterId: requester.requesterId,
     requester: requester.requester,
     storeCode: params.storeCode || "-",
@@ -364,6 +399,8 @@ export async function createReviewTaskFromAnswer(params: {
     status: "AI已自动回答",
     createdAt: now,
     updatedAt: now,
+    replyPublishedAt: "",
+    requesterLastViewedAt: "",
     requesterId: reqNorm.requesterId,
     requester: reqNorm.requester,
     storeCode: params.storeCode || req.storeCode || "-",

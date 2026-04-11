@@ -10,11 +10,20 @@
   </view>
 
   <view wx:elif="{{review}}" class="detail-stack">
+    <view wx:if="{{hasUnreadReply}}" class="card reply-arrived-card">
+      <view class="notice-icon">📨</view>
+      <view class="notice-title">主管刚刚回复了你</view>
+      <view class="notice-desc">当前页面会自动刷新，下面就是最新处理结果。</view>
+    </view>
+
     <!-- 状态头部 -->
     <view class="card hero-card">
       <view class="hero-label">当前状态</view>
       <view class="hero-title">{{statusLabel}}</view>
       <view class="hero-desc">{{review.type}}｜{{review.category}}</view>
+      <view wx:if="{{review.replyPublishedAt}}" class="hero-reply-time">
+        最新回复时间：{{review.replyPublishedAt}}
+      </view>
     </view>
 
     <!-- 待处理：主管处理中提示 -->
@@ -76,6 +85,10 @@
     <!-- 原始问题 -->
     <view class="card">
       <view class="section-title">原始问题</view>
+      <view class="detail-item" wx:if="{{isSupervisor}}">
+        <view class="detail-label">提问人</view>
+        <view class="detail-value">{{review.requester || '-'}}</view>
+      </view>
       <view class="detail-item">
         <view class="detail-label">门店编码</view>
         <view class="detail-value">{{review.storeCode}}</view>
@@ -113,6 +126,83 @@
         <view class="detail-label">处理人</view>
         <view class="detail-value">{{review.processor || '暂未处理'}}</view>
       </view>
+    </view>
+
+    <view wx:if="{{isSupervisor}}" class="card">
+      <view class="section-title">主管回复专员</view>
+      <view class="detail-desc supervisor-tip">
+        在小程序里直接回复后，专员端会自动收到更新提醒。
+      </view>
+
+      <view class="field">
+        <view class="label">处理状态</view>
+        <picker
+          range="{{statusOptions}}"
+          value="{{statusIndex}}"
+          bindchange="handleStatusChange"
+        >
+          <view class="picker-box">{{statusOptions[statusIndex]}}</view>
+        </picker>
+      </view>
+
+      <view class="field">
+        <view class="label">处理人</view>
+        <input
+          class="input"
+          value="{{processorInput}}"
+          placeholder="例如：张主管"
+          bindinput="handleProcessorInput"
+        />
+      </view>
+
+      <view class="field">
+        <view class="label">最终结论</view>
+        <input
+          class="input"
+          value="{{finalConclusionInput}}"
+          placeholder="例如：扣分 / 不扣分 / 按场景判定"
+          bindinput="handleConclusionInput"
+        />
+      </view>
+
+      <view class="field">
+        <view class="label">最终分值</view>
+        <input
+          class="input"
+          value="{{finalScoreInput}}"
+          placeholder="扣分填具体分值，不扣分可填 0"
+          bindinput="handleScoreInput"
+        />
+      </view>
+
+      <view class="field">
+        <view class="label">判定依据</view>
+        <input
+          class="input"
+          value="{{finalClauseInput}}"
+          placeholder="写清判断依据即可"
+          bindinput="handleClauseInput"
+        />
+      </view>
+
+      <view class="field">
+        <view class="label">回复内容</view>
+        <textarea
+          class="textarea"
+          value="{{finalExplanationInput}}"
+          placeholder="直接写给专员看的处理意见和整改要求"
+          bindinput="handleExplanationInput"
+        />
+      </view>
+
+      <button
+        class="btn btn-primary mt"
+        loading="{{submittingReply}}"
+        disabled="{{submittingReply}}"
+        bindtap="submitSupervisorReply"
+      >
+        {{submittingReply ? '提交中...' : '提交回复'}}
+      </button>
     </view>
   </view>
 </view>

@@ -219,6 +219,8 @@ export interface ReviewTask {
   status: ReviewTaskStatus;
   createdAt: string;
   updatedAt: string;
+  replyPublishedAt?: string;
+  requesterLastViewedAt?: string;
   requesterId?: string;
   requester: string;
   storeCode: string;

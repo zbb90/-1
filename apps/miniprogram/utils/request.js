@@ -25,7 +25,32 @@ const {
   maybeOfferLocalApiInDevtools,
 } = require("./network-help");
 
-function request({ url, method = "GET", data, header = {} }) {
+function encodeBasicAuth(value) {
+  const bytes = new Uint8Array(
+    String(value)
+      .split("")
+      .map((char) => char.charCodeAt(0)),
+  );
+  return wx.arrayBufferToBase64(bytes.buffer);
+}
+
+function resolveAdminAuth(adminAuth) {
+  if (!adminAuth) {
+    return null;
+  }
+
+  if (adminAuth === true) {
+    return wx.getStorageSync("supervisorAuth") || null;
+  }
+
+  if (typeof adminAuth === "object" && adminAuth.user && adminAuth.pass) {
+    return adminAuth;
+  }
+
+  return null;
+}
+
+function request({ url, method = "GET", data, header = {}, adminAuth = false }) {
   return new Promise((resolve, reject) => {
     const app = getApp();
     const apiBaseUrl =
@@ -35,6 +60,12 @@ function request({ url, method = "GET", data, header = {} }) {
     const token = app && typeof app.getToken === "function" ? app.getToken() : null;
     if (token) {
       reqHeader["Authorization"] = "Bearer " + token;
+    }
+
+    const adminCreds = resolveAdminAuth(adminAuth);
+    if (adminCreds && adminCreds.user && adminCreds.pass) {
+      reqHeader["Authorization"] =
+        "Basic " + encodeBasicAuth(`${adminCreds.user}:${adminCreds.pass}`);
     }
 
     wx.request({

@@ -1,38 +1,140 @@
 const { request } = require("../../utils/request");
 
-const TABS = ["处理中", "已处理", "待补充"];
+const POLL_INTERVAL = 15000;
+const TABS = [
+  { key: "processing", label: "处理中" },
+  { key: "replied", label: "主管已回复" },
+  { key: "needMore", label: "待补充" },
+];
+
+function isReplyReady(item) {
+  if (!item) return false;
+  return (
+    item.status === "已处理" ||
+    item.status === "已加入知识库" ||
+    item.status === "待补充" ||
+    Boolean((item.finalConclusion || "").trim()) ||
+    Boolean((item.finalExplanation || "").trim())
+  );
+}
+
+function hasUnreadReply(item) {
+  if (!isReplyReady(item) || !item.replyPublishedAt) return false;
+  const replyAt = new Date(item.replyPublishedAt).getTime();
+  const viewedAt = item.requesterLastViewedAt
+    ? new Date(item.requesterLastViewedAt).getTime()
+    : 0;
+  if (!Number.isFinite(replyAt)) return false;
+  return !Number.isFinite(viewedAt) || replyAt > viewedAt;
+}
+
+function normalizeReview(item) {
+  const unread = hasUnreadReply(item);
+  const ready = isReplyReady(item);
+  return {
+    ...item,
+    hasReply: ready,
+    hasUnreadReply: unread,
+    displayStatus: unread ? "主管已回复" : item.status,
+    replyPreview: (item.finalExplanation || item.finalConclusion || "").trim(),
+  };
+}
+
+function compareReviews(left, right) {
+  if (left.hasUnreadReply !== right.hasUnreadReply) {
+    return left.hasUnreadReply ? -1 : 1;
+  }
+  if (left.hasReply !== right.hasReply) {
+    return left.hasReply ? -1 : 1;
+  }
+  return String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
+}
 
 Page({
   data: {
     tabs: TABS,
-    activeTab: "处理中",
+    activeTab: "processing",
     loading: false,
     reviews: [],
     filteredReviews: [],
+    unreadReplyCount: 0,
+    isSupervisor: false,
   },
 
   onShow() {
-    this.loadReviews();
+    this.startPolling();
   },
 
-  async loadReviews() {
-    this.setData({ loading: true });
+  onHide() {
+    this.stopPolling();
+  },
+
+  onUnload() {
+    this.stopPolling();
+  },
+
+  startPolling() {
+    this.stopPolling();
+    const supervisorAuth = wx.getStorageSync("supervisorAuth") || null;
+    this._isSupervisor = Boolean(supervisorAuth && supervisorAuth.user);
+    this.setData({
+      isSupervisor: this._isSupervisor,
+    });
+    this.loadReviews();
+    this._pollTimer = setInterval(() => {
+      this.loadReviews({ silent: true });
+    }, POLL_INTERVAL);
+  },
+
+  stopPolling() {
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = null;
+    }
+  },
+
+  async loadReviews(options = {}) {
+    const { silent = false } = options;
+    const isSupervisor = Boolean(this._isSupervisor || this.data.isSupervisor);
+    if (!silent) {
+      this.setData({ loading: true });
+    }
 
     try {
       const response = await request({
         url: "/reviews",
+        adminAuth: isSupervisor,
       });
 
-      const reviews = response.data || [];
-      this.setData({ reviews });
+      const reviews = (response.data || []).map(normalizeReview).sort(compareReviews);
+      const unreadReplyCount = isSupervisor
+        ? 0
+        : reviews.filter((item) => item.hasUnreadReply).length;
+      const prevUnreadReplyCount = this.data.unreadReplyCount || 0;
+
+      this.setData({ reviews, unreadReplyCount });
       this.applyFilter(this.data.activeTab, reviews);
+
+      if (silent && this._loadedOnce && unreadReplyCount > prevUnreadReplyCount) {
+        wx.vibrateShort({ type: "light" });
+        wx.showToast({
+          title: "主管有新回复",
+          icon: "none",
+        });
+      }
+
+      this._loadedOnce = true;
     } catch (error) {
-      wx.showToast({
-        title: error?.message || "加载复核列表失败",
-        icon: "none",
-      });
+      if (!silent) {
+        wx.showToast({
+          title: error?.message || "加载复核列表失败",
+          icon: "none",
+        });
+      }
     } finally {
-      this.setData({ loading: false });
+      if (!silent) {
+        this.setData({ loading: false });
+      }
     }
   },
 
@@ -43,13 +145,13 @@ Page({
 
   applyFilter(tab, reviews) {
     const filteredReviews = reviews.filter((item) => {
-      if (tab === "处理中") {
-        return item.status === "待处理";
+      if (tab === "processing") {
+        return !item.hasReply && (item.status === "待处理" || item.status === "AI已自动回答");
       }
-      if (tab === "已处理") {
-        return item.status === "已处理" || item.status === "已加入知识库";
+      if (tab === "replied") {
+        return item.hasReply && item.status !== "待补充";
       }
-      if (tab === "待补充") {
+      if (tab === "needMore") {
         return item.status === "待补充";
       }
       return true;

@@ -1,13 +1,26 @@
 <view class="page">
+  <view wx:if="{{isSupervisor}}" class="supervisor-banner">
+    <view class="reply-banner-title">主管模式</view>
+    <view class="reply-banner-desc">当前展示全部专员问题，你可以点进详情直接回复。</view>
+  </view>
+
+  <view wx:if="{{unreadReplyCount > 0}}" class="reply-banner">
+    <view class="reply-banner-title">主管已有 {{unreadReplyCount}} 条新回复</view>
+    <view class="reply-banner-desc">页面会自动刷新，新回复会优先显示在列表前面。</view>
+  </view>
+
   <view class="tabs">
     <view
       wx:for="{{tabs}}"
-      wx:key="*this"
-      class="tab {{activeTab === item ? 'tab-active' : ''}}"
-      data-tab="{{item}}"
+      wx:key="key"
+      class="tab {{activeTab === item.key ? 'tab-active' : ''}}"
+      data-tab="{{item.key}}"
       bindtap="handleTabChange"
     >
-      {{item}}
+      <text>{{item.label}}</text>
+      <text wx:if="{{item.key === 'replied' && unreadReplyCount > 0}}" class="tab-badge">
+        {{unreadReplyCount}}
+      </text>
     </view>
   </view>
 
@@ -33,11 +46,19 @@
         <view>
           <view class="review-id">{{item.id}}</view>
           <view class="review-meta">{{item.type}}｜{{item.category}}</view>
+          <view wx:if="{{isSupervisor}}" class="review-requester">
+            提问人：{{item.requester}}｜门店：{{item.storeCode}}
+          </view>
         </view>
-        <view class="review-status">{{item.status}}</view>
+        <view class="review-status {{item.hasUnreadReply ? 'review-status-replied' : ''}}">
+          {{item.displayStatus}}
+        </view>
       </view>
 
       <view class="review-desc">{{item.description}}</view>
+      <view wx:if="{{item.replyPreview}}" class="reply-preview">
+        <text class="reply-preview-label">主管回复：</text>{{item.replyPreview}}
+      </view>
       <view class="review-time">更新时间：{{item.updatedAt}}</view>
     </view>
   </view>

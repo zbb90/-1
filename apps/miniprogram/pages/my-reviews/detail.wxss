@@ -33,6 +33,12 @@
   font-size: 26rpx;
 }
 
+.hero-reply-time {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #54715c;
+}
+
 .detail-item + .detail-item {
   margin-top: 20rpx;
   padding-top: 20rpx;
@@ -56,6 +62,22 @@
   margin-top: 8rpx;
   color: #48484a;
   line-height: 1.8;
+  font-size: 28rpx;
+}
+
+.supervisor-tip {
+  margin-top: 0;
+  color: #54715c;
+}
+
+.picker-box {
+  min-height: 88rpx;
+  border: 2rpx solid #e8e8ed;
+  border-radius: 14rpx;
+  background: #fafafa;
+  padding: 0 22rpx;
+  line-height: 88rpx;
+  color: #1d1d1f;
   font-size: 28rpx;
 }
 
@@ -91,6 +113,11 @@
 .status-notice-done {
   background: linear-gradient(145deg, #ecfdf5, #ffffff);
   border-left: 6rpx solid #34c759;
+}
+
+.reply-arrived-card {
+  background: linear-gradient(145deg, #eff6ff, #ffffff);
+  border-left: 6rpx solid #3b82f6;
 }
 
 .notice-icon {

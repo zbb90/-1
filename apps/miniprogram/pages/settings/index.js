@@ -97,21 +97,36 @@ Page({
     this.setData({ supervisorPass: e.detail.value });
   },
 
-  saveSupervisorAuth() {
+  async saveSupervisorAuth() {
     const user = this.data.supervisorUser.trim();
     const pass = this.data.supervisorPass.trim();
     if (!user || !pass) {
       wx.showToast({ title: "账号和密码不能为空", icon: "none" });
       return;
     }
-    wx.setStorageSync("supervisorAuth", { user, pass });
-    this.setData({
-      isSupervisor: true,
-      showSupervisorForm: false,
-      supervisorUser: "",
-      supervisorPass: "",
-    });
-    wx.showToast({ title: "主管模式已开启", icon: "success" });
+    if (this.data.saving) return;
+    this.setData({ saving: true });
+    try {
+      await request({
+        url: "/reviews",
+        adminAuth: { user, pass },
+      });
+      wx.setStorageSync("supervisorAuth", { user, pass });
+      this.setData({
+        isSupervisor: true,
+        showSupervisorForm: false,
+        supervisorUser: "",
+        supervisorPass: "",
+      });
+      wx.showToast({ title: "主管模式已开启", icon: "success" });
+    } catch (error) {
+      wx.showToast({
+        title: error?.message || "主管账号验证失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({ saving: false });
+    }
   },
 
   exitSupervisorMode() {
