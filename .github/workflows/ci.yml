@@ -58,11 +58,13 @@ jobs:
       - name: Sync code to ECS
         run: |
           APP_DIR="${{ secrets.ECS_APP_DIR }}"
-          rsync -az --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '.next' \
-            ./ "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}:$APP_DIR/"
+          ssh "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}" "mkdir -p \"$APP_DIR\""
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            -czf - . \
+            | ssh "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}" "tar -xzf - -C \"$APP_DIR\""
 
       - name: Deploy to ECS
         run: |
