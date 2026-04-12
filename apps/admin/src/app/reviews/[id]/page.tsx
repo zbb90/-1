@@ -37,8 +37,13 @@ export default async function ReviewDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-  const task = await getReviewTaskById(id);
+  const { id: rawId } = await params;
+  let task: Awaited<ReturnType<typeof getReviewTaskById>> = null;
+  try {
+    task = await getReviewTaskById(rawId);
+  } catch {
+    notFound();
+  }
   const cookieStore = await cookies();
   const session = await getAdminSessionFromCookies(cookieStore);
   const isLeader = session?.role === "leader";
@@ -47,14 +52,16 @@ export default async function ReviewDetailPage({
     notFound();
   }
 
-  const source = parseSourcePayload(task.sourcePayload);
+  const s = (v: unknown) => String(v ?? "");
+
+  const source = parseSourcePayload(s(task.sourcePayload));
 
   return (
     <AdminShell>
       <AdminPageHeader
         eyebrow="人工复核池"
         title="复核任务详情"
-        description={`当前任务编号：${task.id}`}
+        description={`当前任务编号：${s(task.id)}`}
         actions={<AdminNav current="reviews" showUsersLink={isLeader} />}
       />
 
@@ -69,48 +76,48 @@ export default async function ReviewDetailPage({
                 <h2 className="mt-1 text-xl font-semibold text-gray-900">任务信息</h2>
               </div>
               <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                当前状态：{task.status}
+                当前状态：{s(task.status)}
               </div>
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs text-gray-500">任务类型</p>
-                <p className="mt-1 text-sm font-medium text-gray-800">{task.type}</p>
+                <p className="mt-1 text-sm font-medium text-gray-800">{s(task.type)}</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs text-gray-500">问题分类</p>
                 <p className="mt-1 text-sm font-medium text-gray-800">
-                  {task.category}
+                  {s(task.category)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs text-gray-500">门店编码</p>
                 <p className="mt-1 text-sm font-medium text-gray-800">
-                  {task.storeCode}
+                  {s(task.storeCode)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs text-gray-500">提问人</p>
                 <p className="mt-1 text-sm font-medium text-gray-800">
-                  {task.requester}
+                  {s(task.requester)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
                 <p className="text-xs text-gray-500">自行判断</p>
                 <p className="mt-1 text-sm leading-6 text-gray-800">
-                  {task.selfJudgment || "未填写"}
+                  {s(task.selfJudgment) || "未填写"}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
                 <p className="text-xs text-gray-500">问题描述</p>
                 <p className="mt-1 text-sm leading-6 text-gray-800">
-                  {task.description}
+                  {s(task.description)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
                 <p className="text-xs text-gray-500">系统备注</p>
                 <p className="mt-1 text-sm leading-6 text-gray-800">
-                  {task.rejectReason || "主管修正 AI 回答后，转入人工复核。"}
+                  {s(task.rejectReason) || "主管修正 AI 回答后，转入人工复核。"}
                 </p>
               </div>
             </div>

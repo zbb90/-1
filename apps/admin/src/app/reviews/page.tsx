@@ -7,7 +7,12 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function ReviewsPage() {
-  const tasks = await listReviewTasks();
+  let tasks: Awaited<ReturnType<typeof listReviewTasks>> = [];
+  try {
+    tasks = await listReviewTasks();
+  } catch {
+    // 复核数据异常时降级为空列表
+  }
   const cookieStore = await cookies();
   const session = await getAdminSessionFromCookies(cookieStore);
   const isLeader = session?.role === "leader";
@@ -40,52 +45,63 @@ export default async function ReviewsPage() {
             目前还没有复核任务。后续当系统无法判断时，会自动进入这里。
           </div>
         ) : (
-          tasks.map((task) => (
+          tasks.map((task) => {
+            const id = String(task?.id ?? "-");
+            const type = String(task?.type ?? "-");
+            const storeCode = String(task?.storeCode ?? "-");
+            const status = String(task?.status ?? "-");
+            const category = String(task?.category ?? "-");
+            const selfJudgment = String(task?.selfJudgment ?? "-");
+            const requester = String(task?.requester ?? "-");
+            const description = String(task?.description ?? "-");
+            const rejectReason = String(task?.rejectReason ?? "-");
+            return (
             <Link
-              key={task.id}
-              href={`/reviews/${task.id}`}
+              key={id}
+              href={`/reviews/${id}`}
               className="block rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:ring-green-200"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{task.id}</p>
+                  <p className="text-sm font-semibold text-gray-900">{id}</p>
                   <p className="mt-1 text-sm text-gray-500">
-                    {task.type}｜门店编码：{task.storeCode}
+                    {type}｜门店编码：{storeCode}
                   </p>
                 </div>
                 <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                  {task.status}
+                  {status}
                 </span>
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-xs text-gray-500">分类</p>
-                  <p className="mt-1 text-sm text-gray-800">{task.category}</p>
+                  <p className="mt-1 text-sm text-gray-800">{category}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">自行判断</p>
-                  <p className="mt-1 text-sm text-gray-800">{task.selfJudgment}</p>
+                  <p className="mt-1 text-sm text-gray-800">{selfJudgment}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">提问人</p>
-                  <p className="mt-1 text-sm text-gray-800">{task.requester}</p>
+                  <p className="mt-1 text-sm text-gray-800">{requester}</p>
                 </div>
                 <div className="md:col-span-2">
                   <p className="text-xs text-gray-500">问题描述</p>
                   <p className="mt-1 text-sm leading-6 text-gray-800">
-                    {task.description}
+                    {description}
                   </p>
                 </div>
                 <div className="md:col-span-2">
                   <p className="text-xs text-gray-500">系统拒答原因</p>
                   <p className="mt-1 text-sm leading-6 text-gray-800">
-                    {task.rejectReason}
+                    {rejectReason}
                   </p>
                 </div>
               </div>
             </Link>
-          ))
+            );
+          })
         )}
       </section>
     </AdminShell>
