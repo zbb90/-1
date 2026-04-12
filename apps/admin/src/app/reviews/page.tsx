@@ -56,50 +56,50 @@ export default async function ReviewsPage() {
             const description = String(task?.description ?? "-");
             const rejectReason = String(task?.rejectReason ?? "-");
             return (
-            <Link
-              key={id}
-              href={`/reviews/${id}`}
-              className="block rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:ring-green-200"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{id}</p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {type}｜门店编码：{storeCode}
-                  </p>
+              <Link
+                key={id}
+                href={`/reviews/${id}`}
+                className="block rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:ring-green-200"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{id}</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {type}｜门店编码：{storeCode}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                    {status}
+                  </span>
                 </div>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                  {status}
-                </span>
-              </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-xs text-gray-500">分类</p>
-                  <p className="mt-1 text-sm text-gray-800">{category}</p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-gray-500">分类</p>
+                    <p className="mt-1 text-sm text-gray-800">{category}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">自行判断</p>
+                    <p className="mt-1 text-sm text-gray-800">{selfJudgment}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">提问人</p>
+                    <p className="mt-1 text-sm text-gray-800">{requester}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-gray-500">问题描述</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-800">
+                      {description}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-gray-500">系统拒答原因</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-800">
+                      {rejectReason}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500">自行判断</p>
-                  <p className="mt-1 text-sm text-gray-800">{selfJudgment}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">提问人</p>
-                  <p className="mt-1 text-sm text-gray-800">{requester}</p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-xs text-gray-500">问题描述</p>
-                  <p className="mt-1 text-sm leading-6 text-gray-800">
-                    {description}
-                  </p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-xs text-gray-500">系统拒答原因</p>
-                  <p className="mt-1 text-sm leading-6 text-gray-800">
-                    {rejectReason}
-                  </p>
-                </div>
-              </div>
-            </Link>
+              </Link>
             );
           })
         )}
