@@ -66,6 +66,13 @@ export default async function HomePage() {
     },
   ];
 
+  const latestTasks = reviewSummary.latest.map((task) => ({
+    id: String(task?.id ?? "-"),
+    description: String(task?.description ?? "-"),
+    category: String(task?.category ?? "-"),
+    status: String(task?.status ?? "-"),
+  }));
+
   return (
     <AdminShell>
       {role ? (
@@ -152,12 +159,12 @@ export default async function HomePage() {
           </Link>
         </div>
         <div className="mt-4 space-y-3">
-          {reviewSummary.latest.length === 0 ? (
+          {latestTasks.length === 0 ? (
             <p className="text-sm text-gray-400">
               暂无复核任务，专员在小程序提问后会自动产生。
             </p>
           ) : (
-            reviewSummary.latest.map((r) => (
+            latestTasks.map((r) => (
               <Link
                 key={r.id}
                 href={`/reviews/${r.id}`}
