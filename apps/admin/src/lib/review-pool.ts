@@ -41,6 +41,17 @@ function isoToScore(iso: string) {
 const dataDir = resolve(process.cwd(), "../../data");
 const reviewFilePath = resolve(dataDir, "review-tasks.json");
 
+function parseReviewTask(raw: unknown, source: string): ReviewTask | null {
+  try {
+    const task =
+      typeof raw === "string" ? (JSON.parse(raw) as ReviewTask) : (raw as ReviewTask);
+    return task?.id ? task : null;
+  } catch (error) {
+    console.warn(`[review-pool] skip invalid task from ${source}`, error);
+    return null;
+  }
+}
+
 async function ensureReviewFile() {
   if (!existsSync(dataDir)) {
     await mkdir(dataDir, { recursive: true });
@@ -53,7 +64,18 @@ async function ensureReviewFile() {
 async function readFromFile(): Promise<ReviewTask[]> {
   await ensureReviewFile();
   const raw = await readFile(reviewFilePath, "utf-8");
-  return JSON.parse(raw) as ReviewTask[];
+  try {
+    const parsed = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((item, index) => parseReviewTask(item, `file:${index}`))
+      .filter((item): item is ReviewTask => Boolean(item));
+  } catch (error) {
+    console.warn("[review-pool] failed to parse review file", error);
+    return [];
+  }
 }
 
 async function writeToFile(tasks: ReviewTask[]) {
@@ -112,9 +134,7 @@ async function redisGetTask(id: string): Promise<ReviewTask | null> {
   const redis = await getRedis();
   const raw = await redis.get<string>(taskKey(id));
   if (!raw) return null;
-  return typeof raw === "string"
-    ? (JSON.parse(raw) as ReviewTask)
-    : (raw as unknown as ReviewTask);
+  return parseReviewTask(raw, `redis:${id}`);
 }
 
 async function redisUpdateTask(
@@ -161,12 +181,10 @@ async function redisGetMany(ids: string[]): Promise<ReviewTask[]> {
       pipeline.get(taskKey(id));
     }
     const results = await pipeline.exec();
-    for (const raw of results) {
+    for (let index = 0; index < results.length; index += 1) {
+      const raw = results[index];
       if (!raw) continue;
-      const task =
-        typeof raw === "string"
-          ? (JSON.parse(raw) as ReviewTask)
-          : (raw as unknown as ReviewTask);
+      const task = parseReviewTask(raw, `redis-batch:${batch[index]}`);
       if (task?.id) tasks.push(task);
     }
   }
