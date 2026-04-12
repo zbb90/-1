@@ -46,29 +46,37 @@ jobs:
       group: deploy-production
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.ECS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.ECS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync code to ECS
+        run: |
+          APP_DIR="${{ secrets.ECS_APP_DIR }}"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            ./ "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}:$APP_DIR/"
+
       - name: Deploy to ECS
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.ECS_HOST }}
-          username: ${{ secrets.ECS_USER }}
-          key: ${{ secrets.ECS_SSH_KEY }}
-          script_stop: true
-          script: |
-            set -e
-            APP_DIR="${{ secrets.ECS_APP_DIR }}"
-            cd "$APP_DIR"
+        run: |
+          APP_DIR="${{ secrets.ECS_APP_DIR }}"
+          ssh "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}" "set -e
+            cd \"$APP_DIR\"
 
-            echo ">>> Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            echo ">>> Tagging current image as rollback..."
+            echo '>>> Tagging current image as rollback...'
             podman tag audit-admin:latest audit-admin:rollback 2>/dev/null || true
 
-            echo ">>> Building new image..."
+            echo '>>> Building new image...'
             podman build -t audit-admin:latest -f apps/admin/Dockerfile .
 
-            echo ">>> Restarting container..."
+            echo '>>> Restarting container...'
             podman stop audit-admin 2>/dev/null || true
             podman rm audit-admin 2>/dev/null || true
             podman run -d \
@@ -78,15 +86,15 @@ jobs:
               --restart=always \
               audit-admin:latest
 
-            echo ">>> Waiting for startup..."
+            echo '>>> Waiting for startup...'
             sleep 5
 
-            echo ">>> Health check..."
-            STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/health)
-            if [ "$STATUS" = "200" ]; then
-              echo "Deploy OK — health check passed"
+            echo '>>> Health check...'
+            STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/health)
+            if [ \"\$STATUS\" = '200' ]; then
+              echo 'Deploy OK - health check passed'
             else
-              echo "Health check FAILED (status=$STATUS), rolling back..."
+              echo \"Health check FAILED (status=\$STATUS), rolling back...\"
               podman stop audit-admin 2>/dev/null || true
               podman rm audit-admin 2>/dev/null || true
               podman run -d \
@@ -95,6 +103,6 @@ jobs:
                 -p 127.0.0.1:3003:3003 \
                 --restart=always \
                 audit-admin:rollback
-              echo "Rolled back to previous image"
+              echo 'Rolled back to previous image'
               exit 1
-            fi
+            fi"
