@@ -7,7 +7,18 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function HomePage() {
-  const reviewSummary = await getReviewSummary();
+  let reviewSummary = {
+    total: 0,
+    pending: 0,
+    needMoreInfo: 0,
+    completed: 0,
+    latest: [],
+  } as Awaited<ReturnType<typeof getReviewSummary>>;
+  try {
+    reviewSummary = await getReviewSummary();
+  } catch {
+    // 复核数据异常时不要让工作台整页 500，先降级展示空态。
+  }
   const cookieStore = await cookies();
   const session = await getAdminSessionFromCookies(cookieStore);
   const role = session?.role;
