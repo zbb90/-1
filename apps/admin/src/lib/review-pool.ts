@@ -93,25 +93,30 @@ async function ensureMigrated() {
   if (migrationDone) return;
   migrationDone = true;
 
-  const redis = await getRedis();
-  const existsNew = await redis.exists(IDX_ALL);
-  if (existsNew) return;
+  try {
+    const redis = await getRedis();
+    const existsNew = await redis.exists(IDX_ALL);
+    if (existsNew) return;
 
-  const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
-  if (!legacy || !Array.isArray(legacy) || legacy.length === 0) return;
+    const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
+    if (!legacy || !Array.isArray(legacy) || legacy.length === 0) return;
 
-  const pipeline = redis.pipeline();
-  for (const task of legacy) {
-    pipeline.set(taskKey(task.id), JSON.stringify(task));
-    pipeline.zadd(IDX_ALL, {
-      score: isoToScore(task.createdAt),
-      member: task.id,
-    });
-    if (task.requesterId?.trim()) {
-      pipeline.sadd(requesterIdx(task.requesterId), task.id);
+    const pipeline = redis.pipeline();
+    for (const task of legacy) {
+      if (!task?.id) continue;
+      pipeline.set(taskKey(task.id), JSON.stringify(task));
+      pipeline.zadd(IDX_ALL, {
+        score: isoToScore(task.createdAt || new Date().toISOString()),
+        member: task.id,
+      });
+      if (task.requesterId?.trim()) {
+        pipeline.sadd(requesterIdx(task.requesterId), task.id);
+      }
     }
+    await pipeline.exec();
+  } catch (err) {
+    console.warn("[review-pool] ensureMigrated failed, continuing anyway", err);
   }
-  await pipeline.exec();
 }
 
 async function redisAddTask(task: ReviewTask) {
@@ -160,11 +165,15 @@ async function redisListIds(requesterId?: string): Promise<string[]> {
   await ensureMigrated();
   const redis = await getRedis();
 
-  if (requesterId) {
-    return (await redis.smembers(requesterIdx(requesterId))) as string[];
+  try {
+    if (requesterId) {
+      return (await redis.smembers(requesterIdx(requesterId))) as string[];
+    }
+    return (await redis.zrange(IDX_ALL, 0, -1, { rev: true })) as string[];
+  } catch (err) {
+    console.warn("[review-pool] redisListIds failed", err);
+    return [];
   }
-
-  return (await redis.zrange(IDX_ALL, 0, -1, { rev: true })) as string[];
 }
 
 async function redisGetMany(ids: string[]): Promise<ReviewTask[]> {
@@ -176,16 +185,20 @@ async function redisGetMany(ids: string[]): Promise<ReviewTask[]> {
 
   for (let i = 0; i < ids.length; i += BATCH) {
     const batch = ids.slice(i, i + BATCH);
-    const pipeline = redis.pipeline();
-    for (const id of batch) {
-      pipeline.get(taskKey(id));
-    }
-    const results = await pipeline.exec();
-    for (let index = 0; index < results.length; index += 1) {
-      const raw = results[index];
-      if (!raw) continue;
-      const task = parseReviewTask(raw, `redis-batch:${batch[index]}`);
-      if (task?.id) tasks.push(task);
+    try {
+      const pipeline = redis.pipeline();
+      for (const id of batch) {
+        pipeline.get(taskKey(id));
+      }
+      const results = await pipeline.exec();
+      for (let index = 0; index < results.length; index += 1) {
+        const raw = results[index];
+        if (!raw) continue;
+        const task = parseReviewTask(raw, `redis-batch:${batch[index]}`);
+        if (task?.id) tasks.push(task);
+      }
+    } catch (err) {
+      console.warn(`[review-pool] redisGetMany batch error at offset ${i}`, err);
     }
   }
 
@@ -236,36 +249,50 @@ export function hasUnreadRequesterReply(task: ReviewTask) {
   return !Number.isFinite(viewedAt) || replyAt > viewedAt;
 }
 
+function safeCreatedAt(t: ReviewTask): string {
+  return typeof t?.createdAt === "string" ? t.createdAt : "";
+}
+
 export async function listReviewTasks(filters?: { requesterId?: string }) {
-  const requesterId = filters?.requesterId?.trim();
+  try {
+    const requesterId = filters?.requesterId?.trim();
 
-  if (isRedisConfigured()) {
-    const ids = await redisListIds(requesterId);
-    const tasks = await redisGetMany(ids);
-    return tasks.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (isRedisConfigured()) {
+      const ids = await redisListIds(requesterId);
+      const tasks = await redisGetMany(ids);
+      return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+    }
+
+    const tasks = await readFromFile();
+    const filtered = requesterId
+      ? tasks.filter((t) => t.requesterId === requesterId)
+      : tasks;
+    return filtered.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+  } catch (err) {
+    console.error("[review-pool] listReviewTasks crashed, returning []", err);
+    return [];
   }
-
-  const tasks = await readFromFile();
-  const filtered = requesterId
-    ? tasks.filter((t) => t.requesterId === requesterId)
-    : tasks;
-  return filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function getReviewTaskById(
   id: string,
   filters?: { requesterId?: string },
 ) {
-  if (isRedisConfigured()) {
-    const task = await redisGetTask(id);
-    if (!task) return null;
-    const requesterId = filters?.requesterId?.trim();
-    if (requesterId && task.requesterId !== requesterId) return null;
-    return task;
-  }
+  try {
+    if (isRedisConfigured()) {
+      const task = await redisGetTask(id);
+      if (!task) return null;
+      const requesterId = filters?.requesterId?.trim();
+      if (requesterId && task.requesterId !== requesterId) return null;
+      return task;
+    }
 
-  const tasks = await listReviewTasks(filters);
-  return tasks.find((t) => t.id === id) || null;
+    const tasks = await listReviewTasks(filters);
+    return tasks.find((t) => t.id === id) || null;
+  } catch (err) {
+    console.error("[review-pool] getReviewTaskById crashed", err);
+    return null;
+  }
 }
 
 export async function updateReviewTask(
@@ -297,14 +324,18 @@ export async function markReviewTaskRequesterRead(id: string) {
 }
 
 export async function getReviewSummary() {
-  const tasks = await listReviewTasks();
-  return {
-    total: tasks.length,
-    pending: tasks.filter((t) => t.status === "待处理").length,
-    needMoreInfo: tasks.filter((t) => t.status === "待补充").length,
-    completed: tasks.filter((t) => t.status === "已处理").length,
-    latest: tasks.slice(0, 5),
-  };
+  try {
+    const tasks = await listReviewTasks();
+    return {
+      total: tasks.length,
+      pending: tasks.filter((t) => t.status === "待处理").length,
+      needMoreInfo: tasks.filter((t) => t.status === "待补充").length,
+      completed: tasks.filter((t) => t.status === "已处理").length,
+      latest: tasks.slice(0, 5),
+    };
+  } catch {
+    return { total: 0, pending: 0, needMoreInfo: 0, completed: 0, latest: [] };
+  }
 }
 
 export function getStorageBackend() {
