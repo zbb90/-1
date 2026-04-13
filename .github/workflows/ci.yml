@@ -104,9 +104,9 @@ jobs:
             \$SUDO sed -i '/^KV_REST_API_URL=/d' \"\$ENV_FILE\"
             \$SUDO sed -i '/^KV_REST_API_TOKEN=/d' \"\$ENV_FILE\"
             if grep -q '^REDIS_URL=' \"\$ENV_FILE\"; then
-              \$SUDO sed -i 's#^REDIS_URL=.*#REDIS_URL=redis://127.0.0.1:6379/0#' \"\$ENV_FILE\"
+              \$SUDO sed -i 's#^REDIS_URL=.*#REDIS_URL=redis://host.containers.internal:6379/0#' \"\$ENV_FILE\"
             else
-              printf '\nREDIS_URL=redis://127.0.0.1:6379/0\n' | \$SUDO tee -a \"\$ENV_FILE\" >/dev/null
+              printf '\nREDIS_URL=redis://host.containers.internal:6379/0\n' | \$SUDO tee -a \"\$ENV_FILE\" >/dev/null
             fi
 
             echo '>>> Tagging current image as rollback...'
@@ -120,6 +120,7 @@ jobs:
             podman rm audit-admin 2>/dev/null || true
             podman run -d \
               --name audit-admin \
+              --add-host=host.containers.internal:host-gateway \
               --env-file /root/audit-admin.env \
               -p 127.0.0.1:3003:3003 \
               --restart=always \
@@ -130,14 +131,16 @@ jobs:
 
             echo '>>> Health check...'
             STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/health)
-            if [ \"\$STATUS\" = '200' ]; then
-              echo 'Deploy OK - health check passed'
+            KNOWLEDGE_STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/knowledge/summary)
+            if [ \"\$STATUS\" = '200' ] && [ \"\$KNOWLEDGE_STATUS\" = '200' ]; then
+              echo 'Deploy OK - health and knowledge checks passed'
             else
-              echo \"Health check FAILED (status=\$STATUS), rolling back...\"
+              echo \"Health check FAILED (health=\$STATUS knowledge=\$KNOWLEDGE_STATUS), rolling back...\"
               podman stop audit-admin 2>/dev/null || true
               podman rm audit-admin 2>/dev/null || true
               podman run -d \
                 --name audit-admin \
+                --add-host=host.containers.internal:host-gateway \
                 --env-file /root/audit-admin.env \
                 -p 127.0.0.1:3003:3003 \
                 --restart=always \

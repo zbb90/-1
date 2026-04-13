@@ -20,7 +20,7 @@ PONG
 编辑 `/root/audit-admin.env`，加入：
 
 ```bash
-REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_URL=redis://host.containers.internal:6379/0
 ```
 
 并移除旧的：

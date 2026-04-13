@@ -51,5 +51,5 @@ podman run -d --name audit-admin --env-file /root/audit-admin.env \
 推荐配置：
 
 ```bash
-REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_URL=redis://host.containers.internal:6379/0
 ```
