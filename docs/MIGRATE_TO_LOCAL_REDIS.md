@@ -17,10 +17,12 @@ PONG
 
 ## 2. 更新服务环境变量
 
-编辑 `/root/audit-admin.env`，加入：
+若使用当前仓库自带的 CI/CD 部署，可直接跳过这一步，工作流会自动以 `-e REDIS_URL=redis://127.0.0.1:6379/0` 启动应用容器。
+
+若你需要手动运行应用容器，再编辑 `/root/audit-admin.env`，加入：
 
 ```bash
-REDIS_URL=redis://host.containers.internal:6379/0
+REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
 并移除旧的：

@@ -48,8 +48,8 @@ podman run -d --name audit-admin --env-file /root/audit-admin.env \
 
 生产环境变量集中在 `audit-admin.env`（或你方统一命名），至少包含：`REDIS_URL`、`DASHSCOPE_API_KEY`、`JWT_SECRET`、`WX_APPID`、`WX_APP_SECRET`、模型与向量相关变量等。修改后需 **重启容器** 生效。
 
-推荐配置：
+若应用通过当前 CI/CD 以 Podman 容器部署，工作流会自动拉起本机 Redis 容器并注入：
 
 ```bash
-REDIS_URL=redis://host.containers.internal:6379/0
+REDIS_URL=redis://127.0.0.1:6379/0
 ```
