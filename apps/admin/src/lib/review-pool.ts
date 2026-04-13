@@ -215,12 +215,16 @@ async function redisGetMany(ids: string[]): Promise<ReviewTask[]> {
 
 async function persistNewTask(task: ReviewTask) {
   if (isRedisConfigured()) {
-    await redisAddTask(task);
-  } else {
-    const tasks = await readFromFile();
-    tasks.unshift(task);
-    await writeToFile(tasks);
+    try {
+      await redisAddTask(task);
+      return task;
+    } catch (error) {
+      console.warn("[review-pool] persistNewTask fallback to file", error);
+    }
   }
+  const tasks = await readFromFile();
+  tasks.unshift(task);
+  await writeToFile(tasks);
   return task;
 }
 
@@ -258,22 +262,29 @@ function safeCreatedAt(t: ReviewTask): string {
 }
 
 export async function listReviewTasks(filters?: { requesterId?: string }) {
-  try {
-    const requesterId = filters?.requesterId?.trim();
+  const requesterId = filters?.requesterId?.trim();
 
-    if (isRedisConfigured()) {
+  if (isRedisConfigured()) {
+    try {
       const ids = await redisListIds(requesterId);
       const tasks = await redisGetMany(ids);
       return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+    } catch (err) {
+      console.error(
+        "[review-pool] listReviewTasks redis path crashed, falling back to file",
+        err,
+      );
     }
+  }
 
+  try {
     const tasks = await readFromFile();
     const filtered = requesterId
       ? tasks.filter((t) => t.requesterId === requesterId)
       : tasks;
     return filtered.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
   } catch (err) {
-    console.error("[review-pool] listReviewTasks crashed, returning []", err);
+    console.error("[review-pool] listReviewTasks file path crashed, returning []", err);
     return [];
   }
 }
@@ -284,11 +295,18 @@ export async function getReviewTaskById(
 ) {
   try {
     if (isRedisConfigured()) {
-      const task = await redisGetTask(id);
-      if (!task) return null;
-      const requesterId = filters?.requesterId?.trim();
-      if (requesterId && task.requesterId !== requesterId) return null;
-      return task;
+      try {
+        const task = await redisGetTask(id);
+        if (!task) return null;
+        const requesterId = filters?.requesterId?.trim();
+        if (requesterId && task.requesterId !== requesterId) return null;
+        return task;
+      } catch (err) {
+        console.error(
+          "[review-pool] getReviewTaskById redis path crashed, falling back",
+          err,
+        );
+      }
     }
 
     const tasks = await listReviewTasks(filters);
@@ -304,7 +322,11 @@ export async function updateReviewTask(
   payload: Partial<ReviewTask> & { status?: ReviewTaskStatus },
 ) {
   if (isRedisConfigured()) {
-    return redisUpdateTask(id, payload);
+    try {
+      return await redisUpdateTask(id, payload);
+    } catch (error) {
+      console.warn("[review-pool] updateReviewTask fallback to file", error);
+    }
   }
 
   const tasks = await readFromFile();

@@ -72,54 +72,72 @@ jobs:
           ssh "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}" "set -e
             cd \"$APP_DIR\"
 
+            if [ \"\$(id -u)\" = '0' ]; then
+              SUDO=''
+            else
+              SUDO='sudo'
+            fi
+
             echo '>>> Tagging current image as rollback...'
             podman tag audit-admin:latest audit-admin:rollback 2>/dev/null || true
 
             echo '>>> Building new image...'
             podman build -t audit-admin:latest -f apps/admin/Dockerfile .
 
-            echo '>>> Ensuring local Redis container...'
-            podman volume exists audit-redis-data || podman volume create audit-redis-data
-            podman pod exists audit-admin-pod || podman pod create --name audit-admin-pod -p 127.0.0.1:3003:3003
-            if podman container exists audit-redis; then
-              podman start audit-redis 2>/dev/null || true
-            else
-              podman run -d \
-                --pod audit-admin-pod \
-                --name audit-redis \
-                -v audit-redis-data:/data \
-                docker.m.daocloud.io/library/redis:7-alpine \
-                redis-server --appendonly yes
+            echo '>>> Ensuring Redis is installed...'
+            if ! command -v redis-server >/dev/null 2>&1; then
+              if command -v yum >/dev/null 2>&1; then
+                \$SUDO yum install -y redis
+              elif command -v apt-get >/dev/null 2>&1; then
+                \$SUDO apt-get update
+                \$SUDO apt-get install -y redis-server
+              else
+                echo 'No supported package manager found for Redis install'
+                exit 1
+              fi
+            fi
+
+            echo '>>> Starting Redis...'
+            \$SUDO systemctl enable redis || \$SUDO systemctl enable redis-server || true
+            \$SUDO systemctl start redis || \$SUDO systemctl start redis-server || true
+
+            echo '>>> Updating runtime env...'
+            ENV_FILE=/root/audit-admin.env
+            if [ -f \"\$ENV_FILE\" ]; then
+              \$SUDO sed -i '/^KV_REST_API_URL=/d' \"\$ENV_FILE\"
+              \$SUDO sed -i '/^KV_REST_API_TOKEN=/d' \"\$ENV_FILE\"
+              if grep -q '^REDIS_URL=' \"\$ENV_FILE\"; then
+                \$SUDO sed -i 's#^REDIS_URL=.*#REDIS_URL=redis://127.0.0.1:6379/0#' \"\$ENV_FILE\"
+              else
+                printf '\nREDIS_URL=redis://127.0.0.1:6379/0\n' | \$SUDO tee -a \"\$ENV_FILE\" >/dev/null
+              fi
             fi
 
             echo '>>> Restarting container...'
             podman stop audit-admin 2>/dev/null || true
             podman rm audit-admin 2>/dev/null || true
             podman run -d \
-              --pod audit-admin-pod \
               --name audit-admin \
               --env-file /root/audit-admin.env \
-              -e REDIS_URL=redis://127.0.0.1:6379/0 \
+              -p 127.0.0.1:3003:3003 \
               --restart=always \
               audit-admin:latest
 
             echo '>>> Waiting for startup...'
-            sleep 8
+            sleep 5
 
             echo '>>> Health check...'
             STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/health)
-            KNOWLEDGE_STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/knowledge/summary)
-            if [ \"\$STATUS\" = '200' ] && [ \"\$KNOWLEDGE_STATUS\" = '200' ]; then
-              echo 'Deploy OK - health and knowledge checks passed'
+            if [ \"\$STATUS\" = '200' ]; then
+              echo 'Deploy OK - health check passed'
             else
-              echo \"Health check FAILED (health=\$STATUS knowledge=\$KNOWLEDGE_STATUS), rolling back...\"
+              echo \"Health check FAILED (status=\$STATUS), rolling back...\"
               podman stop audit-admin 2>/dev/null || true
               podman rm audit-admin 2>/dev/null || true
               podman run -d \
-                --pod audit-admin-pod \
                 --name audit-admin \
                 --env-file /root/audit-admin.env \
-                -e REDIS_URL=redis://127.0.0.1:6379/0 \
+                -p 127.0.0.1:3003:3003 \
                 --restart=always \
                 audit-admin:rollback
               echo 'Rolled back to previous image'

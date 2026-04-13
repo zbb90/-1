@@ -26,18 +26,22 @@ type Row = Record<string, string>;
 
 export async function readRows(table: KbTableName): Promise<Row[]> {
   if (isRedisConfigured()) {
-    const redis = await getRedis();
-    const raw = await redis.get<string>(rowsKey(table));
-    if (raw) {
-      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as Row[];
+    try {
+      const redis = await getRedis();
+      const raw = await redis.get<string>(rowsKey(table));
+      if (raw) {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed as Row[];
+      }
+      // Redis empty → seed from CSV
+      const csvRows = (await readCsvTable(table)) as unknown as Row[];
+      if (csvRows.length > 0) {
+        await redis.set(rowsKey(table), JSON.stringify(csvRows));
+      }
+      return csvRows;
+    } catch (error) {
+      console.warn(`[knowledge-store] readRows fallback to CSV for ${table}`, error);
     }
-    // Redis empty → seed from CSV
-    const csvRows = (await readCsvTable(table)) as unknown as Row[];
-    if (csvRows.length > 0) {
-      await redis.set(rowsKey(table), JSON.stringify(csvRows));
-    }
-    return csvRows;
   }
 
   return (await readCsvTable(table)) as unknown as Row[];
@@ -49,8 +53,13 @@ export async function readRows(table: KbTableName): Promise<Row[]> {
 
 async function persistRows(table: KbTableName, rows: Row[]) {
   if (isRedisConfigured()) {
-    const redis = await getRedis();
-    await redis.set(rowsKey(table), JSON.stringify(rows));
+    try {
+      const redis = await getRedis();
+      await redis.set(rowsKey(table), JSON.stringify(rows));
+    } catch (error) {
+      console.warn(`[knowledge-store] persistRows fallback to CSV for ${table}`, error);
+      await writeTableRows(table, rows);
+    }
   } else {
     await writeTableRows(table, rows);
   }

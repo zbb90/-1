@@ -49,20 +49,30 @@ function phoneKey(phone: string) {
 
 export async function getUserByOpenid(openid: string): Promise<AppUser | null> {
   if (!isRedisConfigured()) return null;
-  const redis = await getRedis();
-  const raw = await redis.get<string>(userKey(openid));
-  if (!raw) return null;
-  return typeof raw === "string"
-    ? (JSON.parse(raw) as AppUser)
-    : (raw as unknown as AppUser);
+  try {
+    const redis = await getRedis();
+    const raw = await redis.get<string>(userKey(openid));
+    if (!raw) return null;
+    return typeof raw === "string"
+      ? (JSON.parse(raw) as AppUser)
+      : (raw as unknown as AppUser);
+  } catch (error) {
+    console.warn("[user-store] getUserByOpenid failed", error);
+    return null;
+  }
 }
 
 export async function getUserByPhone(phone: string): Promise<AppUser | null> {
   if (!isRedisConfigured()) return null;
-  const redis = await getRedis();
-  const openid = await redis.get<string>(phoneKey(phone));
-  if (!openid) return null;
-  return getUserByOpenid(typeof openid === "string" ? openid : String(openid));
+  try {
+    const redis = await getRedis();
+    const openid = await redis.get<string>(phoneKey(phone));
+    if (!openid) return null;
+    return getUserByOpenid(typeof openid === "string" ? openid : String(openid));
+  } catch (error) {
+    console.warn("[user-store] getUserByPhone failed", error);
+    return null;
+  }
 }
 
 export async function createUser(user: AppUser): Promise<AppUser> {
@@ -111,34 +121,44 @@ export async function updateUser(
 
 export async function listUsersByRole(role: UserRole): Promise<AppUser[]> {
   if (!isRedisConfigured()) return [];
-  const redis = await getRedis();
-  const openids = (await redis.smembers(roleSetKey(role))) as string[];
-  if (openids.length === 0) return [];
+  try {
+    const redis = await getRedis();
+    const openids = (await redis.smembers(roleSetKey(role))) as string[];
+    if (openids.length === 0) return [];
 
-  const pipeline = redis.pipeline();
-  for (const id of openids) {
-    pipeline.get(userKey(id));
+    const pipeline = redis.pipeline();
+    for (const id of openids) {
+      pipeline.get(userKey(id));
+    }
+    const results = await pipeline.exec();
+    const users: AppUser[] = [];
+    for (const raw of results) {
+      if (!raw) continue;
+      const user =
+        typeof raw === "string"
+          ? (JSON.parse(raw) as AppUser)
+          : (raw as unknown as AppUser);
+      if (user?.openid) users.push(user);
+    }
+    return users;
+  } catch (error) {
+    console.warn(`[user-store] listUsersByRole failed for ${role}`, error);
+    return [];
   }
-  const results = await pipeline.exec();
-  const users: AppUser[] = [];
-  for (const raw of results) {
-    if (!raw) continue;
-    const user =
-      typeof raw === "string"
-        ? (JSON.parse(raw) as AppUser)
-        : (raw as unknown as AppUser);
-    if (user?.openid) users.push(user);
-  }
-  return users;
 }
 
 export async function listAllUsers(): Promise<AppUser[]> {
-  const [specialists, supervisors, leaders] = await Promise.all([
-    listUsersByRole("specialist"),
-    listUsersByRole("supervisor"),
-    listUsersByRole("leader"),
-  ]);
-  return [...leaders, ...supervisors, ...specialists];
+  try {
+    const [specialists, supervisors, leaders] = await Promise.all([
+      listUsersByRole("specialist"),
+      listUsersByRole("supervisor"),
+      listUsersByRole("leader"),
+    ]);
+    return [...leaders, ...supervisors, ...specialists];
+  } catch (error) {
+    console.warn("[user-store] listAllUsers failed", error);
+    return [];
+  }
 }
 
 export function toPublicUser(user: AppUser): PublicAppUser {
