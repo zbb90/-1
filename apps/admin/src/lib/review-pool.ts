@@ -285,7 +285,10 @@ export async function listReviewTasks(filters?: { requesterId?: string }) {
     try {
       const ids = await redisListIds(requesterId);
       const tasks = await redisGetMany(ids);
-      return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+      if (tasks.length > 0) {
+        return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+      }
+      console.warn("[review-pool] redis returned empty list, falling back to file");
     } catch (err) {
       console.error(
         "[review-pool] listReviewTasks redis path crashed, falling back to file",
@@ -314,10 +317,12 @@ export async function getReviewTaskById(
     if (isRedisConfigured()) {
       try {
         const task = await redisGetTask(id);
-        if (!task) return null;
-        const requesterId = filters?.requesterId?.trim();
-        if (requesterId && task.requesterId !== requesterId) return null;
-        return task;
+        if (task) {
+          const requesterId = filters?.requesterId?.trim();
+          if (requesterId && task.requesterId !== requesterId) return null;
+          return task;
+        }
+        console.warn("[review-pool] redis task missing, falling back to file");
       } catch (err) {
         console.error(
           "[review-pool] getReviewTaskById redis path crashed, falling back",
