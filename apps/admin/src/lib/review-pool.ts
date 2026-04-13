@@ -38,8 +38,18 @@ function isoToScore(iso: string) {
 /*  File-based storage (local dev fallback – unchanged)                */
 /* ------------------------------------------------------------------ */
 
-const dataDir = resolve(process.cwd(), "../../data");
-const reviewFilePath = resolve(dataDir, "review-tasks.json");
+function resolveDataDir() {
+  const candidates = [
+    resolve(process.cwd(), "data"),
+    resolve(process.cwd(), "../../data"),
+    resolve(process.cwd(), "../../../data"),
+  ];
+  return candidates.find((dir) => existsSync(dir)) ?? candidates[0];
+}
+
+function getReviewFilePath() {
+  return resolve(resolveDataDir(), "review-tasks.json");
+}
 
 function parseReviewTask(raw: unknown, source: string): ReviewTask | null {
   try {
@@ -53,6 +63,8 @@ function parseReviewTask(raw: unknown, source: string): ReviewTask | null {
 }
 
 async function ensureReviewFile() {
+  const dataDir = resolveDataDir();
+  const reviewFilePath = getReviewFilePath();
   if (!existsSync(dataDir)) {
     await mkdir(dataDir, { recursive: true });
   }
@@ -63,6 +75,7 @@ async function ensureReviewFile() {
 
 async function readFromFile(): Promise<ReviewTask[]> {
   await ensureReviewFile();
+  const reviewFilePath = getReviewFilePath();
   const raw = await readFile(reviewFilePath, "utf-8");
   try {
     const parsed = JSON.parse(raw) as unknown[];
@@ -80,6 +93,7 @@ async function readFromFile(): Promise<ReviewTask[]> {
 
 async function writeToFile(tasks: ReviewTask[]) {
   await ensureReviewFile();
+  const reviewFilePath = getReviewFilePath();
   await writeFile(reviewFilePath, `${JSON.stringify(tasks, null, 2)}\n`, "utf-8");
 }
 
@@ -96,7 +110,10 @@ async function ensureMigrated() {
   try {
     const redis = await getRedis();
     const existsNew = await redis.exists(IDX_ALL);
-    if (existsNew) return;
+    const existingIds = existsNew
+      ? await redis.zrange(IDX_ALL, 0, 0, { rev: true })
+      : [];
+    if (existsNew && existingIds.length > 0) return;
 
     const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
     const seedTasks =
