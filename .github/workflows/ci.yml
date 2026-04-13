@@ -72,6 +72,43 @@ jobs:
           ssh "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}" "set -e
             cd \"$APP_DIR\"
 
+            if [ \"\$(id -u)\" = '0' ]; then
+              SUDO=''
+            else
+              SUDO='sudo'
+            fi
+
+            echo '>>> Ensuring Redis is installed...'
+            if ! command -v redis-server >/dev/null 2>&1; then
+              if command -v yum >/dev/null 2>&1; then
+                \$SUDO yum install -y redis
+              elif command -v apt-get >/dev/null 2>&1; then
+                \$SUDO apt-get update
+                \$SUDO apt-get install -y redis-server
+              else
+                echo 'No supported package manager found for Redis install'
+                exit 1
+              fi
+            fi
+
+            echo '>>> Starting Redis...'
+            \$SUDO systemctl enable redis || \$SUDO systemctl enable redis-server || true
+            \$SUDO systemctl start redis || \$SUDO systemctl start redis-server
+
+            echo '>>> Updating runtime env...'
+            ENV_FILE=/root/audit-admin.env
+            if [ ! -f \"\$ENV_FILE\" ]; then
+              echo 'Missing /root/audit-admin.env'
+              exit 1
+            fi
+            \$SUDO sed -i '/^KV_REST_API_URL=/d' \"\$ENV_FILE\"
+            \$SUDO sed -i '/^KV_REST_API_TOKEN=/d' \"\$ENV_FILE\"
+            if grep -q '^REDIS_URL=' \"\$ENV_FILE\"; then
+              \$SUDO sed -i 's#^REDIS_URL=.*#REDIS_URL=redis://127.0.0.1:6379/0#' \"\$ENV_FILE\"
+            else
+              printf '\nREDIS_URL=redis://127.0.0.1:6379/0\n' | \$SUDO tee -a \"\$ENV_FILE\" >/dev/null
+            fi
+
             echo '>>> Tagging current image as rollback...'
             podman tag audit-admin:latest audit-admin:rollback 2>/dev/null || true
 

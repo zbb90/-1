@@ -99,10 +99,14 @@ async function ensureMigrated() {
     if (existsNew) return;
 
     const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
-    if (!legacy || !Array.isArray(legacy) || legacy.length === 0) return;
+    const seedTasks =
+      legacy && Array.isArray(legacy) && legacy.length > 0
+        ? legacy
+        : await readFromFile();
+    if (!Array.isArray(seedTasks) || seedTasks.length === 0) return;
 
     const pipeline = redis.pipeline();
-    for (const task of legacy) {
+    for (const task of seedTasks) {
       if (!task?.id) continue;
       pipeline.set(taskKey(task.id), JSON.stringify(task));
       pipeline.zadd(IDX_ALL, {
