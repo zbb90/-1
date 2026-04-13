@@ -339,7 +339,7 @@ export async function getReviewSummary() {
 }
 
 export function getStorageBackend() {
-  return isRedisConfigured() ? "upstash-redis" : "local-file";
+  return isRedisConfigured() ? "redis" : "local-file";
 }
 
 /* ------------------------------------------------------------------ */

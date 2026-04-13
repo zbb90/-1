@@ -9,6 +9,11 @@
 ## 常用命令（SSH 登录服务器后）
 
 ```bash
+# 安装 Redis（首次）
+sudo yum install -y redis || sudo apt-get update && sudo apt-get install -y redis-server
+sudo systemctl enable redis
+sudo systemctl start redis
+
 # 查看容器
 podman ps
 
@@ -41,4 +46,10 @@ podman run -d --name audit-admin --env-file /root/audit-admin.env \
 
 ## 环境变量
 
-生产环境变量集中在 `audit-admin.env`（或你方统一命名），至少包含：`KV_REST_*`、`DASHSCOPE_API_KEY`、`JWT_SECRET`、`WX_APPID`、`WX_APP_SECRET`、模型与向量相关变量等。修改后需 **重启容器** 生效。
+生产环境变量集中在 `audit-admin.env`（或你方统一命名），至少包含：`REDIS_URL`、`DASHSCOPE_API_KEY`、`JWT_SECRET`、`WX_APPID`、`WX_APP_SECRET`、模型与向量相关变量等。修改后需 **重启容器** 生效。
+
+推荐配置：
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379/0
+```

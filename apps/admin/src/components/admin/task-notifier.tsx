@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-const POLL_INTERVAL = 30_000;
+const POLL_INTERVAL = 120_000;
 
 let currentCount = 0;
 const listeners = new Set<() => void>();
+let activePollers = 0;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 function subscribe(cb: () => void) {
   listeners.add(cb);
@@ -45,6 +47,33 @@ async function fetchPendingCount(
   }
 }
 
+function startPolling(
+  prevRef: React.RefObject<number>,
+  audioRef: React.RefObject<HTMLAudioElement | null>,
+) {
+  activePollers += 1;
+  if (activePollers > 1) {
+    return () => {
+      activePollers = Math.max(0, activePollers - 1);
+      if (activePollers === 0 && pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+  }
+
+  fetchPendingCount(prevRef, audioRef);
+  pollTimer = setInterval(() => fetchPendingCount(prevRef, audioRef), POLL_INTERVAL);
+
+  return () => {
+    activePollers = Math.max(0, activePollers - 1);
+    if (activePollers === 0 && pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+}
+
 export function TaskNotifier() {
   const count = useSyncExternalStore(subscribe, getSnapshot, () => 0);
   const prevRef = useRef(0);
@@ -55,9 +84,7 @@ export function TaskNotifier() {
       Notification.requestPermission().catch(() => {});
     }
 
-    fetchPendingCount(prevRef, audioRef);
-    const id = setInterval(() => fetchPendingCount(prevRef, audioRef), POLL_INTERVAL);
-    return () => clearInterval(id);
+    return startPolling(prevRef, audioRef);
   }, []);
 
   return (

@@ -1,5 +1,5 @@
 /**
- * Redis-backed knowledge store — enables online editing in production (Vercel).
+ * Redis-backed knowledge store — enables online editing in production.
  *
  * Key schema per table (rules / consensus / external-purchases / old-items / operations):
  *   audit:kb:{table}:rows   — String (JSON array of row objects)

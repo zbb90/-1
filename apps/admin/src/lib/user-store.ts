@@ -2,7 +2,7 @@ import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/password";
 import { getRedis, isRedisConfigured } from "@/lib/redis-client";
 
 /**
- * Three-tier user store backed by Upstash Redis.
+ * Three-tier user store backed by Redis.
  *
  * Key schema:
  *   audit:user:{openid}            — Hash with role, name, phone, status, etc.
@@ -67,7 +67,7 @@ export async function getUserByPhone(phone: string): Promise<AppUser | null> {
 
 export async function createUser(user: AppUser): Promise<AppUser> {
   if (!isRedisConfigured()) {
-    throw new Error("User store requires Redis (KV_REST_API_URL).");
+    throw new Error("User store requires Redis (REDIS_URL or REDIS_HOST).");
   }
 
   const redis = await getRedis();

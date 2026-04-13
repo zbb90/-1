@@ -48,9 +48,9 @@ MODEL_NAME=qwen3.5-flash
 ## 复核数据持久化
 
 - 本地开发：自动使用 `data/review-tasks.json`，无需额外配置
-- **Vercel 部署**：必须接入 Upstash Redis，否则复核任务数据会在容器回收后丢失
-- 设置方式：Vercel 控制台 → Storage → 创建 **Upstash Redis** 数据库 → 关联到项目后会自动注入 `KV_REST_API_URL` 和 `KV_REST_API_TOKEN`
-- 验证方式：访问 `GET /api/health`，返回的 `storage` 字段应为 `"upstash-redis"`（本地为 `"local-file"`）
+- 生产部署：推荐直接连接阿里云 ECS 本机 Redis
+- 最简配置：在 `audit-admin.env` 中设置 `REDIS_URL=redis://127.0.0.1:6379/0`
+- 验证方式：访问 `GET /api/health`，返回的 `storage` 字段应为 `"redis"`（本地为 `"local-file"`）
 
 ## 后台最小鉴权
 
@@ -70,7 +70,7 @@ MODEL_NAME=qwen3.5-flash
 ## 生产部署（阿里云 ECS）
 
 - 应用以 Docker/Podman 容器运行，Nginx 反向代理与 HTTPS 证书由服务器侧配置；运维与重启命令见 [docs/OPS_ALIYUN.md](docs/OPS_ALIYUN.md)。
-- 生产环境同样需要 **Upstash Redis**（`KV_REST_*`）用于复核任务与知识库在线数据，否则数据会在容器重建后丢失。
+- 生产环境推荐在 ECS 本机安装 Redis，并通过 `REDIS_URL` 连接，用于复核任务、知识库和账号数据持久化。
 
 ## 测试与脚本
 
@@ -89,11 +89,12 @@ npm run verify:semantic-cases  # 语义回归（需已配置向量等）
 
 ## 文档索引
 
-| 文档                                                       | 说明                    |
-| ---------------------------------------------------------- | ----------------------- |
-| [data/README.md](data/README.md)                           | 知识库模板与 Excel 校验 |
-| [docs/LOCAL_E2E_CHECKLIST.md](docs/LOCAL_E2E_CHECKLIST.md) | 本地全链路测试清单      |
-| [docs/ACCOUNT_ONBOARDING.md](docs/ACCOUNT_ONBOARDING.md)   | 账号与权限预配置        |
-| [docs/SECURITY.md](docs/SECURITY.md)                       | 安全与限流说明          |
-| [docs/OPS_ALIYUN.md](docs/OPS_ALIYUN.md)                   | 阿里云运维              |
-| [docs/USAGE_MINIPROGRAM.md](docs/USAGE_MINIPROGRAM.md)     | 专员小程序使用说明      |
+| 文档                                                             | 说明                    |
+| ---------------------------------------------------------------- | ----------------------- |
+| [data/README.md](data/README.md)                                 | 知识库模板与 Excel 校验 |
+| [docs/LOCAL_E2E_CHECKLIST.md](docs/LOCAL_E2E_CHECKLIST.md)       | 本地全链路测试清单      |
+| [docs/MIGRATE_TO_LOCAL_REDIS.md](docs/MIGRATE_TO_LOCAL_REDIS.md) | 迁移到 ECS 本机 Redis   |
+| [docs/ACCOUNT_ONBOARDING.md](docs/ACCOUNT_ONBOARDING.md)         | 账号与权限预配置        |
+| [docs/SECURITY.md](docs/SECURITY.md)                             | 安全与限流说明          |
+| [docs/OPS_ALIYUN.md](docs/OPS_ALIYUN.md)                         | 阿里云运维              |
+| [docs/USAGE_MINIPROGRAM.md](docs/USAGE_MINIPROGRAM.md)           | 专员小程序使用说明      |
