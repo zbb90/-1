@@ -12,7 +12,7 @@ export default async function KnowledgePage() {
   const isLeader = session?.role === "leader";
 
   return (
-    <AdminShell>
+    <AdminShell maxWidthClass="max-w-screen-2xl">
       <AdminPageHeader
         eyebrow="知识库管理"
         title="稽核知识库"

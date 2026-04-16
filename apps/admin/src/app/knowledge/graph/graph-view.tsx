@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   forceCenter,
   forceCollide,
@@ -12,6 +12,12 @@ import {
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from "d3-force";
+import {
+  StatusPill,
+  WorkspaceMetric,
+  WorkspacePill,
+  WorkspaceSection,
+} from "@/components/admin/knowledge-workspace";
 import type { GraphEdge, GraphNode } from "@/lib/knowledge-graph";
 
 type TableKey = GraphNode["table"];
@@ -119,29 +125,6 @@ function clusterPosition(index: number, count: number, width: number, height: nu
     x: ((column + 0.5) * width) / columns,
     y: ((row + 0.5) * height) / rows,
   };
-}
-
-function StatChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-        active
-          ? "bg-green-700 text-white shadow-sm"
-          : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
-      }`}
-    >
-      {children}
-    </button>
-  );
 }
 
 export function KnowledgeGraphView({
@@ -302,243 +285,281 @@ export function KnowledgeGraphView({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={selectedTable}
-              onChange={(e) => setSelectedTable(e.target.value as TableKey | "all")}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
-            >
-              <option value="all">全部表</option>
-              {Object.entries(TABLE_LABELS).map(([table, label]) => (
-                <option key={table} value={table}>
-                  {label}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
-            >
-              <option value="">全部标签</option>
-              {tagList.map((item) => (
-                <option key={item.tag} value={item.tag}>
-                  {item.tag}（{item.count}）
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
-            >
-              <option value="">全部分类</option>
-              {groupList.map((item) => (
-                <option key={item.label} value={item.label}>
-                  {item.label}（{item.count}）
-                </option>
-              ))}
-            </select>
-
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={hideIsolated}
-                onChange={(e) => setHideIsolated(e.target.checked)}
-              />
-              仅看已关联节点
+    <div className="space-y-5">
+      <WorkspaceSection
+        title="图谱筛选与概览"
+        description="筛选条、分组方式和统计卡统一放在上方，保持和知识库主页面一致的查看节奏。"
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 lg:grid-cols-[220px_220px_220px_auto]">
+            <label className="flex flex-col gap-1 text-sm text-gray-600">
+              <span>知识表</span>
+              <select
+                value={selectedTable}
+                onChange={(e) => setSelectedTable(e.target.value as TableKey | "all")}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
+              >
+                <option value="all">全部表</option>
+                {Object.entries(TABLE_LABELS).map(([table, label]) => (
+                  <option key={table} value={table}>
+                    {label}
+                  </option>
+                ))}
+              </select>
             </label>
+            <label className="flex flex-col gap-1 text-sm text-gray-600">
+              <span>标签</span>
+              <select
+                value={selectedTag}
+                onChange={(e) => setSelectedTag(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
+              >
+                <option value="">全部标签</option>
+                {tagList.map((item) => (
+                  <option key={item.tag} value={item.tag}>
+                    {item.tag}（{item.count}）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-gray-600">
+              <span>分类</span>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
+              >
+                <option value="">全部分类</option>
+                {groupList.map((item) => (
+                  <option key={item.label} value={item.label}>
+                    {item.label}（{item.count}）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-slate-50 px-3 py-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={hideIsolated}
+                  onChange={(e) => setHideIsolated(e.target.checked)}
+                />
+                仅看已关联节点
+              </label>
+              <button
+                onClick={resetFilters}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                清空筛选
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <StatChip
+            <WorkspacePill
               active={layoutMode === "group"}
               onClick={() => setLayoutMode("group")}
             >
               按分类分组
-            </StatChip>
-            <StatChip
+            </WorkspacePill>
+            <WorkspacePill
               active={layoutMode === "table"}
               onClick={() => setLayoutMode("table")}
             >
               按知识表分组
-            </StatChip>
-            <StatChip
+            </WorkspacePill>
+            <WorkspacePill
               active={layoutMode === "free"}
               onClick={() => setLayoutMode("free")}
             >
               自由布局
-            </StatChip>
+            </WorkspacePill>
+            {selectedTag ? (
+              <StatusPill tone="amber">标签 #{selectedTag}</StatusPill>
+            ) : null}
+            {selectedGroup ? (
+              <StatusPill tone="blue">分类 {selectedGroup}</StatusPill>
+            ) : null}
           </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-gray-500">
-            <span>节点 {layoutNodes.length}</span>
-            <span>连线 {layoutEdges.length}</span>
-            <span>分类 {clusterLabels.length || 1}</span>
-            <button
-              onClick={resetFilters}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-            >
-              重置筛选
-            </button>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <WorkspaceMetric label="当前节点" value={layoutNodes.length} tone="blue" />
+            <WorkspaceMetric label="当前连线" value={layoutEdges.length} tone="green" />
+            <WorkspaceMetric
+              label="当前分组数"
+              value={clusterLabels.length || 1}
+              tone="slate"
+            />
+            <WorkspaceMetric
+              label="孤立节点"
+              value={filtered.nodes.filter((node) => node.isIsolated).length}
+              tone="amber"
+            />
           </div>
         </div>
-      </div>
+      </WorkspaceSection>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-          <div className="border-b border-gray-100 px-4 py-3 text-sm text-gray-500">
-            画布已扩大为大屏工作区。可横向滚动查看完整布局，悬停即可预览内容。
-          </div>
-          <div ref={canvasRef} className="relative overflow-auto bg-slate-50">
-            <svg
-              viewBox={`0 0 ${width} ${height}`}
-              className="bg-slate-50"
-              style={{ width: `${width}px`, height: `${height}px` }}
-            >
-              <rect x={0} y={0} width={width} height={height} fill="#f8fafc" />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <WorkspaceSection
+          title="图谱主视图"
+          description="画布保留大视图能力，但外层容器更贴近后台分析页。可横向滚动查看完整布局。"
+        >
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-slate-50">
+            <div className="border-b border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+              节点默认显示标题与副标题，鼠标悬停即可预览，点击后在右侧固定查看详情。
+            </div>
+            <div ref={canvasRef} className="relative overflow-auto bg-slate-50">
+              <svg
+                viewBox={`0 0 ${width} ${height}`}
+                className="bg-slate-50"
+                style={{ width: `${width}px`, height: `${height}px` }}
+              >
+                <rect x={0} y={0} width={width} height={height} fill="#f8fafc" />
 
-              {clusterLabels.map((cluster) => (
-                <g key={cluster.label}>
-                  <text
-                    x={cluster.x}
-                    y={cluster.y}
-                    textAnchor="middle"
-                    className="fill-slate-400 text-[16px] font-semibold"
-                  >
-                    {truncateText(cluster.label, 18)}
-                  </text>
-                </g>
-              ))}
-
-              {layoutEdges.map((edge) => {
-                const source = edge.source as PositionedNode;
-                const target = edge.target as PositionedNode;
-                const isPreviewed =
-                  hovered?.kind === "edge" && hovered.edge.id === edge.id;
-                return (
-                  <line
-                    key={edge.id}
-                    x1={source.x || 0}
-                    y1={source.y || 0}
-                    x2={target.x || 0}
-                    y2={target.y || 0}
-                    stroke={edgeStroke(edge)}
-                    strokeWidth={
-                      isPreviewed ? 3 : edge.linkType === "contradicts" ? 2.6 : 1.8
-                    }
-                    strokeDasharray={edgeDash(edge)}
-                    opacity={isPreviewed ? 0.95 : 0.72}
-                    onMouseEnter={(event) => showEdgeTooltip(event, edge)}
-                    onMouseMove={(event) => showEdgeTooltip(event, edge)}
-                    onMouseLeave={() => setHovered(null)}
-                  >
-                    <title>
-                      {LINK_TYPE_LABELS[edge.linkType]}: {edge.sourceLabel}
-                      {" -> "}
-                      {edge.targetLabel}
-                    </title>
-                  </line>
-                );
-              })}
-
-              {layoutNodes.map((node) => {
-                const radius = nodeRadius(node);
-                const title = truncateText(node.title || node.label, 12);
-                const subtitle = truncateText(node.subtitle || node.itemId, 14);
-                const isSelected = selectedNodeId === node.id;
-                const isHovered =
-                  hovered?.kind === "node" && hovered.node.id === node.id;
-                return (
-                  <g
-                    key={node.id}
-                    onMouseEnter={(event) => showNodeTooltip(event, node)}
-                    onMouseMove={(event) => showNodeTooltip(event, node)}
-                    onMouseLeave={() => setHovered(null)}
-                    onClick={() => setSelectedNodeId(node.id)}
-                    className="cursor-pointer"
-                  >
-                    <circle
-                      cx={node.x || 0}
-                      cy={node.y || 0}
-                      r={radius}
-                      fill={TABLE_COLORS[node.table]}
-                      opacity={
-                        selectedNodeId && selectedNodeId !== node.id && !isHovered
-                          ? 0.5
-                          : 0.96
-                      }
-                      stroke={isSelected ? "#0f172a" : isHovered ? "#1e293b" : "#fff"}
-                      strokeWidth={isSelected ? 4 : isHovered ? 2.5 : 1.5}
-                    />
+                {clusterLabels.map((cluster) => (
+                  <g key={cluster.label}>
                     <text
-                      x={node.x || 0}
-                      y={(node.y || 0) + radius + 18}
+                      x={cluster.x}
+                      y={cluster.y}
                       textAnchor="middle"
-                      className="fill-slate-700 text-[12px] font-medium"
+                      className="fill-slate-400 text-[16px] font-semibold"
                     >
-                      <tspan x={node.x || 0}>{title}</tspan>
-                      <tspan
-                        x={node.x || 0}
-                        dy="1.15em"
-                        className="fill-slate-500 text-[10px] font-normal"
-                      >
-                        {subtitle}
-                      </tspan>
+                      {truncateText(cluster.label, 18)}
                     </text>
-                    <title>{node.label}</title>
                   </g>
-                );
-              })}
-            </svg>
-          </div>
-        </div>
+                ))}
 
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">图谱说明</h3>
-            <div className="mt-3 space-y-2 text-xs text-gray-500">
-              <p>节点颜色表示知识表来源，节点越大代表关联越多。</p>
-              <p>节点默认显示标题与副标题，不再只显示编号。</p>
-              <p>切换“按分类分组 / 按知识表分组”可快速看清结构。</p>
-            </div>
-            <div className="mt-4 grid gap-2">
-              {Object.entries(TABLE_LABELS).map(([table, label]) => (
-                <div
-                  key={table}
-                  className="flex items-center justify-between gap-2 text-xs text-gray-600"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: TABLE_COLORS[table as TableKey] }}
-                    />
-                    {label}
-                  </div>
-                  <span>
-                    {
-                      initialNodes.filter((node) => node.table === (table as TableKey))
-                        .length
-                    }{" "}
-                    个
-                  </span>
-                </div>
-              ))}
+                {layoutEdges.map((edge) => {
+                  const source = edge.source as PositionedNode;
+                  const target = edge.target as PositionedNode;
+                  const isPreviewed =
+                    hovered?.kind === "edge" && hovered.edge.id === edge.id;
+                  return (
+                    <line
+                      key={edge.id}
+                      x1={source.x || 0}
+                      y1={source.y || 0}
+                      x2={target.x || 0}
+                      y2={target.y || 0}
+                      stroke={edgeStroke(edge)}
+                      strokeWidth={
+                        isPreviewed ? 3 : edge.linkType === "contradicts" ? 2.6 : 1.8
+                      }
+                      strokeDasharray={edgeDash(edge)}
+                      opacity={isPreviewed ? 0.95 : 0.72}
+                      onMouseEnter={(event) => showEdgeTooltip(event, edge)}
+                      onMouseMove={(event) => showEdgeTooltip(event, edge)}
+                      onMouseLeave={() => setHovered(null)}
+                    >
+                      <title>
+                        {LINK_TYPE_LABELS[edge.linkType]}: {edge.sourceLabel}
+                        {" -> "}
+                        {edge.targetLabel}
+                      </title>
+                    </line>
+                  );
+                })}
+
+                {layoutNodes.map((node) => {
+                  const radius = nodeRadius(node);
+                  const title = truncateText(node.title || node.label, 12);
+                  const subtitle = truncateText(node.subtitle || node.itemId, 14);
+                  const isSelected = selectedNodeId === node.id;
+                  const isHovered =
+                    hovered?.kind === "node" && hovered.node.id === node.id;
+                  return (
+                    <g
+                      key={node.id}
+                      onMouseEnter={(event) => showNodeTooltip(event, node)}
+                      onMouseMove={(event) => showNodeTooltip(event, node)}
+                      onMouseLeave={() => setHovered(null)}
+                      onClick={() => setSelectedNodeId(node.id)}
+                      className="cursor-pointer"
+                    >
+                      <circle
+                        cx={node.x || 0}
+                        cy={node.y || 0}
+                        r={radius}
+                        fill={TABLE_COLORS[node.table]}
+                        opacity={
+                          selectedNodeId && selectedNodeId !== node.id && !isHovered
+                            ? 0.5
+                            : 0.96
+                        }
+                        stroke={isSelected ? "#0f172a" : isHovered ? "#1e293b" : "#fff"}
+                        strokeWidth={isSelected ? 4 : isHovered ? 2.5 : 1.5}
+                      />
+                      <text
+                        x={node.x || 0}
+                        y={(node.y || 0) + radius + 18}
+                        textAnchor="middle"
+                        className="fill-slate-700 text-[12px] font-medium"
+                      >
+                        <tspan x={node.x || 0}>{title}</tspan>
+                        <tspan
+                          x={node.x || 0}
+                          dy="1.15em"
+                          className="fill-slate-500 text-[10px] font-normal"
+                        >
+                          {subtitle}
+                        </tspan>
+                      </text>
+                      <title>{node.label}</title>
+                    </g>
+                  );
+                })}
+              </svg>
             </div>
           </div>
+        </WorkspaceSection>
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">悬停预览</h3>
-            {hovered?.kind === "edge" && previewEdge ? (
-              <div className="mt-3 space-y-2 text-sm text-gray-700">
-                <p className="font-medium text-gray-900">
-                  {LINK_TYPE_LABELS[previewEdge.linkType]}
+        <div className="space-y-5">
+          <WorkspaceSection
+            title="图谱说明与图例"
+            description="把说明、图例和当前筛选摘要合并到一处，减少重复卡片。"
+          >
+            <div className="space-y-4">
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>节点颜色表示知识表来源，节点越大代表关联越多。</p>
+                <p>
+                  连线颜色区分支撑、冲突、替代、引用等关系，虚线多为一般关联或系统派生。
                 </p>
+              </div>
+              <div className="grid gap-2">
+                {Object.entries(TABLE_LABELS).map(([table, label]) => (
+                  <div
+                    key={table}
+                    className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-gray-700 ring-1 ring-slate-200"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: TABLE_COLORS[table as TableKey] }}
+                      />
+                      {label}
+                    </div>
+                    <span>
+                      {
+                        initialNodes.filter(
+                          (node) => node.table === (table as TableKey),
+                        ).length
+                      }
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="当前节点与关系"
+            description="悬停可快速预览，点击节点后会在这里固定显示详情。"
+          >
+            {hovered?.kind === "edge" && previewEdge ? (
+              <div className="space-y-2 text-sm text-gray-700">
+                <StatusPill tone="blue">
+                  {LINK_TYPE_LABELS[previewEdge.linkType]}
+                </StatusPill>
                 <p>{previewEdge.sourceLabel}</p>
                 <p className="text-xs text-gray-400">↓</p>
                 <p>{previewEdge.targetLabel}</p>
@@ -547,18 +568,25 @@ export function KnowledgeGraphView({
                 </p>
               </div>
             ) : previewNode ? (
-              <div className="mt-3 space-y-2 text-sm text-gray-700">
-                <p className="font-medium text-gray-900">{previewNode.title}</p>
-                <p>编号：{previewNode.itemId}</p>
-                <p>表类型：{TABLE_LABELS[previewNode.table]}</p>
-                <p>分类：{previewNode.groupLabel || "未分类"}</p>
-                <p>关联数：{previewNode.degree}</p>
+              <div className="space-y-3 text-sm text-gray-700">
+                <div className="space-y-1">
+                  <p className="font-medium text-gray-900">{previewNode.title}</p>
+                  <p>编号：{previewNode.itemId}</p>
+                  <p>表类型：{TABLE_LABELS[previewNode.table]}</p>
+                  <p>分类：{previewNode.groupLabel || "未分类"}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill tone={previewNode.isIsolated ? "amber" : "green"}>
+                    {previewNode.isIsolated ? "孤立节点" : "已关联节点"}
+                  </StatusPill>
+                  <StatusPill tone="blue">关联数 {previewNode.degree}</StatusPill>
+                </div>
                 {previewNode.summary ? (
-                  <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {previewNode.summary}
-                  </p>
+                  </div>
                 ) : null}
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-2">
                   {previewNode.tags.length > 0 ? (
                     previewNode.tags.map((tag) => (
                       <button
@@ -575,39 +603,18 @@ export function KnowledgeGraphView({
                 </div>
               </div>
             ) : (
-              <p className="mt-3 text-sm text-gray-500">
-                把鼠标移到节点或连线上可直接预览。
+              <p className="text-sm text-gray-500">
+                把鼠标移到节点或连线上，或点击节点后在这里查看详情。
               </p>
             )}
-          </div>
+          </WorkspaceSection>
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">选中节点详情</h3>
-            {selectedNode ? (
-              <div className="mt-3 space-y-2 text-sm text-gray-700">
-                <p className="font-medium text-gray-900">{selectedNode.title}</p>
-                <p>完整标签：{selectedNode.label}</p>
-                <p>编号：{selectedNode.itemId}</p>
-                <p>分类：{selectedNode.groupLabel || "未分类"}</p>
-                <p>关联数：{selectedNode.degree}</p>
-                <p>是否孤立：{selectedNode.isIsolated ? "是" : "否"}</p>
-                {selectedNode.summary ? (
-                  <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    {selectedNode.summary}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-500">
-                点击图中的节点，可固定查看该节点详情。
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">高频分类</h3>
+          <WorkspaceSection
+            title="高频分类"
+            description="常用分类可在右侧快速切换，不必反复下拉选择。"
+          >
             {groupList.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {groupList.slice(0, 18).map((group) => (
                   <button
                     key={group.label}
@@ -627,9 +634,9 @@ export function KnowledgeGraphView({
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-gray-500">当前筛选范围内暂无可用分类。</p>
+              <p className="text-sm text-gray-500">当前筛选范围内暂无可用分类。</p>
             )}
-          </div>
+          </WorkspaceSection>
         </div>
       </div>
 
