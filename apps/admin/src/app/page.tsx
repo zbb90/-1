@@ -101,7 +101,11 @@ export default async function HomePage() {
         }
         actions={
           role ? (
-            <AdminNav current="home" showUsersLink={isLeader} showStorageLink={isLeader} />
+            <AdminNav
+              current="home"
+              showUsersLink={isLeader}
+              showStorageLink={isLeader}
+            />
           ) : (
             <WorkspaceActionLink href="/reviews/login" tone="green">
               登录
@@ -119,77 +123,106 @@ export default async function HomePage() {
       {isLeader && (
         <section className="grid grid-cols-2 gap-4 md:grid-cols-2">
           <WorkspaceMetric label="主管人数" value={userCounts.supervisor} tone="blue" />
-          <WorkspaceMetric label="专员人数" value={userCounts.specialist} tone="violet" />
+          <WorkspaceMetric
+            label="专员人数"
+            value={userCounts.specialist}
+            tone="violet"
+          />
         </section>
       )}
 
-      <WorkspaceSection
-        title="工作入口"
-        description="统一按知识库工作台样式组织常用入口。"
-      >
-        <div className="grid gap-4 md:grid-cols-3">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="group flex items-start gap-4 rounded-2xl border border-gray-100 bg-slate-50/70 p-5 transition hover:border-green-200 hover:bg-green-50/60"
-            >
-              <span className="text-2xl">{item.icon}</span>
-              <div>
-                <p className="text-sm font-semibold text-gray-900 group-hover:text-green-700">
-                  {item.label}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">{item.desc}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </WorkspaceSection>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <WorkspaceSection
+          title="最新复核任务"
+          description="首页主区直接放最新任务，骨架和知识库工作台一致。"
+          actions={
+            <WorkspaceActionLink href="/reviews" tone="slate" outline>
+              查看全部
+            </WorkspaceActionLink>
+          }
+        >
+          <div className="space-y-3">
+            {latestTasks.length === 0 ? (
+              <WorkspaceEmptyState
+                title="暂无复核任务"
+                description="专员在小程序提问后，系统会自动生成复核任务并出现在这里。"
+              />
+            ) : (
+              latestTasks.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/reviews/${r.id}`}
+                  className="flex items-center justify-between rounded-2xl border border-gray-100 bg-slate-50/70 p-4 transition hover:border-green-200 hover:bg-green-50/60"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{r.description}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {r.category} · {r.id}
+                    </p>
+                  </div>
+                  <StatusPill
+                    tone={
+                      r.status === "待处理"
+                        ? "amber"
+                        : r.status === "已处理"
+                          ? "green"
+                          : "slate"
+                    }
+                  >
+                    {r.status}
+                  </StatusPill>
+                </Link>
+              ))
+            )}
+          </div>
+        </WorkspaceSection>
 
-      <WorkspaceSection
-        title="最新复核任务"
-        description="保持与小程序“我的复核”一致的最新处理列表。"
-        actions={
-          <WorkspaceActionLink href="/reviews" tone="slate" outline>
-            查看全部
-          </WorkspaceActionLink>
-        }
-      >
-        <div className="space-y-3">
-          {latestTasks.length === 0 ? (
-            <WorkspaceEmptyState
-              title="暂无复核任务"
-              description="专员在小程序提问后，系统会自动生成复核任务并出现在这里。"
-            />
-          ) : (
-            latestTasks.map((r) => (
-              <Link
-                key={r.id}
-                href={`/reviews/${r.id}`}
-                className="flex items-center justify-between rounded-2xl border border-gray-100 bg-slate-50/70 p-4 transition hover:border-green-200 hover:bg-green-50/60"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{r.description}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {r.category} · {r.id}
+        <div className="space-y-5">
+          <WorkspaceSection
+            title="工作入口"
+            description="右侧辅助区集中放常用入口，不再平铺成一整块卡片墙。"
+          >
+            <div className="flex flex-col gap-3">
+              {navItems.map((item) => (
+                <WorkspaceActionLink
+                  key={item.label}
+                  href={item.href}
+                  tone="slate"
+                  outline
+                >
+                  {item.label}
+                </WorkspaceActionLink>
+              ))}
+            </div>
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="当前概览"
+            description="补充负责人视角下最常看的辅助信息。"
+          >
+            <div className="space-y-3 text-sm">
+              {navItems.slice(0, 4).map((item) => (
+                <div
+                  key={`${item.label}-summary`}
+                  className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"
+                >
+                  <p className="font-medium text-slate-900">{item.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{item.desc}</p>
+                </div>
+              ))}
+              {isLeader ? (
+                <div className="rounded-2xl bg-blue-50 p-4 ring-1 ring-blue-200">
+                  <p className="font-medium text-blue-900">账号规模</p>
+                  <p className="mt-1 text-xs leading-5 text-blue-800">
+                    当前主管 {userCounts.supervisor} 人，专员 {userCounts.specialist}{" "}
+                    人。
                   </p>
                 </div>
-                <StatusPill
-                  tone={
-                    r.status === "待处理"
-                      ? "amber"
-                      : r.status === "已处理"
-                        ? "green"
-                        : "slate"
-                  }
-                >
-                  {r.status}
-                </StatusPill>
-              </Link>
-            ))
-          )}
+              ) : null}
+            </div>
+          </WorkspaceSection>
         </div>
-      </WorkspaceSection>
+      </div>
     </AdminShell>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { WorkspaceActionButton } from "@/components/admin/knowledge-workspace";
 
 export function MarkWrongButton({ taskId }: { taskId: string }) {
   const router = useRouter();
@@ -32,12 +33,13 @@ export function MarkWrongButton({ taskId }: { taskId: string }) {
   }
 
   return (
-    <button
+    <WorkspaceActionButton
       onClick={handleClick}
       disabled={loading}
-      className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+      tone="red"
+      className="px-4 py-2 text-xs"
     >
       {loading ? "处理中..." : "标记答错，转人工复核"}
-    </button>
+    </WorkspaceActionButton>
   );
 }

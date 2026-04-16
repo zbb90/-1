@@ -165,134 +165,142 @@ export function UserManagement({
 
   return (
     <div className="space-y-6">
-      <WorkspaceSection
-        title="角色与权限"
-        description="统一说明负责人、主管、专员的来源与权限边界。"
-      >
-        <h2 className="text-sm font-semibold text-slate-900">角色与权限</h2>
-        <ul className="mt-3 space-y-2 text-sm text-slate-600">
-          <li>
-            <span className="font-medium text-slate-800">主负责人</span>
-            ：在 Vercel 环境变量{" "}
-            <code className="rounded bg-slate-100 px-1 text-xs">
-              LEADER_ACCOUNTS
-            </code>{" "}
-            中配置（当前主账号手机号优先取{" "}
-            <code className="rounded bg-slate-100 px-1 text-xs">
-              PRIMARY_LEADER_PHONE
-            </code>{" "}
-            ，未设置则为列表第一条）。可管理副负责人、主管与全员账号。
-          </li>
-          <li>
-            <span className="font-medium text-slate-800">副负责人</span>
-            ：仅主负责人在本页「添加副负责人」创建，系统会生成一次性临时密码，权限与负责人相同（除「授权副负责人」仅主账号可用）。
-          </li>
-          <li>
-            <span className="font-medium text-slate-800">主管</span>
-            ：由负责人在此创建，系统会生成一次性临时密码，用于登录 PC 处理复核与知识库。
-          </li>
-          <li>
-            <span className="font-medium text-slate-800">专员</span>
-            ：仅通过小程序微信登录自动注册，无 PC 权限。
-          </li>
-        </ul>
-        {primaryPhoneHint ? (
-          <p className="mt-3 text-xs text-slate-500">
-            当前识别的主负责人手机号为：{" "}
-            <span className="font-mono font-medium text-slate-700">
-              {primaryPhoneHint}
-            </span>
-          </p>
-        ) : null}
-      </WorkspaceSection>
-
-      <WorkspaceSection title="账号操作" description="创建主管/副负责人并切换账号筛选。">
-        <div className="flex flex-wrap items-center gap-3">
-        <WorkspaceActionButton
-          type="button"
-          onClick={() =>
-            setCreateMode(createMode === "supervisor" ? null : "supervisor")
-          }
-          tone="green"
-        >
-          {createMode === "supervisor" ? "取消" : "添加主管"}
-        </WorkspaceActionButton>
-        {canDelegate ? (
-          <WorkspaceActionButton
-            type="button"
-            onClick={() =>
-              setCreateMode(
-                createMode === "delegated_leader" ? null : "delegated_leader",
-              )
-            }
-            tone="amber"
-            outline
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
+          <WorkspaceSection
+            title="账号操作"
+            description="左侧主区域负责新增、筛选和后续账号维护。"
           >
-            {createMode === "delegated_leader" ? "取消" : "添加副负责人"}
-          </WorkspaceActionButton>
-        ) : (
-          <span className="text-xs text-slate-400">
-            仅主负责人可添加副负责人（请使用主账号手机号登录）
-          </span>
-        )}
-
-        <div className="ml-auto flex flex-wrap gap-2">
-          {(["all", "leader", "supervisor", "specialist"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                filter === f
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {f === "all" ? "全部" : f === "leader" ? "负责人" : roleLabels[f]}
-            </button>
-          ))}
-        </div>
-        </div>
-      </WorkspaceSection>
-
-      {createMode && (
-        <WorkspaceSection
-          title={createMode === "delegated_leader" ? "新建副负责人" : "新建主管"}
-          description="创建成功后会显示一次性临时密码，请立即告知对应人员，并要求首次使用后尽快改密。"
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-1.5 text-sm text-gray-700">
-              <span>姓名</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={
-                  createMode === "delegated_leader" ? "副负责人姓名" : "主管姓名"
+            <div className="flex flex-wrap items-center gap-3">
+              <WorkspaceActionButton
+                type="button"
+                onClick={() =>
+                  setCreateMode(createMode === "supervisor" ? null : "supervisor")
                 }
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-green-400"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm text-gray-700">
-              <span>手机号</span>
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="11 位手机号"
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-green-400"
-              />
-            </label>
-          </div>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <WorkspaceActionButton
-            type="button"
-            onClick={handleCreate}
-            disabled={isPending}
-            tone={createMode === "delegated_leader" ? "amber" : "green"}
-          >
-            {isPending ? "提交中…" : "确认创建"}
-          </WorkspaceActionButton>
+                tone="green"
+              >
+                {createMode === "supervisor" ? "取消" : "添加主管"}
+              </WorkspaceActionButton>
+              {canDelegate ? (
+                <WorkspaceActionButton
+                  type="button"
+                  onClick={() =>
+                    setCreateMode(
+                      createMode === "delegated_leader" ? null : "delegated_leader",
+                    )
+                  }
+                  tone="amber"
+                  outline
+                >
+                  {createMode === "delegated_leader" ? "取消" : "添加副负责人"}
+                </WorkspaceActionButton>
+              ) : (
+                <span className="text-xs text-slate-400">
+                  仅主负责人可添加副负责人（请使用主账号手机号登录）
+                </span>
+              )}
+
+              <div className="ml-auto flex flex-wrap gap-2">
+                {(["all", "leader", "supervisor", "specialist"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFilter(f)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      filter === f
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {f === "all" ? "全部" : f === "leader" ? "负责人" : roleLabels[f]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </WorkspaceSection>
+
+          {createMode && (
+            <WorkspaceSection
+              title={createMode === "delegated_leader" ? "新建副负责人" : "新建主管"}
+              description="创建成功后会显示一次性临时密码，请立即告知对应人员，并要求首次使用后尽快改密。"
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="flex flex-col gap-1.5 text-sm text-gray-700">
+                  <span>姓名</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={
+                      createMode === "delegated_leader" ? "副负责人姓名" : "主管姓名"
+                    }
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-green-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm text-gray-700">
+                  <span>手机号</span>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="11 位手机号"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 outline-none transition focus:border-green-400"
+                  />
+                </label>
+              </div>
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              <WorkspaceActionButton
+                type="button"
+                onClick={handleCreate}
+                disabled={isPending}
+                tone={createMode === "delegated_leader" ? "amber" : "green"}
+              >
+                {isPending ? "提交中…" : "确认创建"}
+              </WorkspaceActionButton>
+            </WorkspaceSection>
+          )}
+        </div>
+
+        <WorkspaceSection
+          title="角色与权限"
+          description="右侧固定说明区，和知识库页右侧辅助说明区保持同样使用方式。"
+        >
+          <ul className="space-y-3 text-sm leading-6 text-slate-600">
+            <li>
+              <span className="font-medium text-slate-800">主负责人</span>
+              ：在 Vercel 环境变量{" "}
+              <code className="rounded bg-slate-100 px-1 text-xs">
+                LEADER_ACCOUNTS
+              </code>{" "}
+              中配置（当前主账号手机号优先取{" "}
+              <code className="rounded bg-slate-100 px-1 text-xs">
+                PRIMARY_LEADER_PHONE
+              </code>{" "}
+              ，未设置则为列表第一条）。
+            </li>
+            <li>
+              <span className="font-medium text-slate-800">副负责人</span>
+              ：仅主负责人可创建，生成一次性临时密码，权限与负责人相同。
+            </li>
+            <li>
+              <span className="font-medium text-slate-800">主管</span>
+              ：由负责人创建，用于登录 PC 处理复核与知识库。
+            </li>
+            <li>
+              <span className="font-medium text-slate-800">专员</span>
+              ：仅通过小程序微信登录自动注册，无 PC 权限。
+            </li>
+          </ul>
+          {primaryPhoneHint ? (
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <p className="text-xs font-medium tracking-wide text-slate-500">
+                当前主负责人手机号
+              </p>
+              <p className="mt-2 font-mono text-sm font-semibold text-slate-900">
+                {primaryPhoneHint}
+              </p>
+            </div>
+          ) : null}
         </WorkspaceSection>
-      )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <WorkspaceMetric label="环境内负责人" value={envSummaries.length} />
@@ -301,127 +309,175 @@ export function UserManagement({
         <WorkspaceMetric label="专员" value={specialistCount} tone="violet" />
       </div>
 
-      <WorkspaceSection title="账号列表" description="统一查看 PC 账号与小程序专员账号状态。">
-      <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="px-4 py-3 font-medium text-gray-500">姓名</th>
-              <th className="px-4 py-3 font-medium text-gray-500">角色 / 权限说明</th>
-              <th className="px-4 py-3 font-medium text-gray-500">手机号</th>
-              <th className="px-4 py-3 font-medium text-gray-500">状态</th>
-              <th className="px-4 py-3 font-medium text-gray-500">注册时间</th>
-              <th className="px-4 py-3 font-medium text-gray-500">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {showEnvRowInFilter() &&
-              envSummaries.map((row) => (
-                <tr
-                  key={`env-${row.phone}`}
-                  className="border-b border-gray-50 bg-slate-50/80"
-                >
-                  <td className="px-4 py-3 font-medium text-gray-900">负责人</td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {row.slot === "primary" ? (
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
-                        主负责人（环境配置）
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-800">
-                        负责人（环境配置）
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-gray-600">{row.phone}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                      正常
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-400">—</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">在 Vercel 中修改</td>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <WorkspaceSection
+          title="账号列表"
+          description="主数据区只放账号列表和直接操作。"
+        >
+          <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="px-4 py-3 font-medium text-gray-500">姓名</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">
+                    角色 / 权限说明
+                  </th>
+                  <th className="px-4 py-3 font-medium text-gray-500">手机号</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">状态</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">注册时间</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">操作</th>
                 </tr>
-              ))}
-
-            {filteredUsers.length === 0 &&
-            !(showEnvRowInFilter() && envSummaries.length > 0) ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                  暂无数据
-                </td>
-              </tr>
-            ) : null}
-
-            {filteredUsers.map((user) => {
-              const st = statusLabels[user.status] ?? statusLabels.active;
-              const canToggleDelegated =
-                user.role === "leader" && user.leaderKind === "delegated"
-                  ? canDelegate
-                  : user.role !== "leader";
-
-              return (
-                <tr key={user.openid} className="border-b border-gray-50 last:border-0">
-                  <td className="px-4 py-3 font-medium text-gray-900">{user.name}</td>
-                  <td className="px-4 py-3 text-gray-700">{roleDetailLabel(user)}</td>
-                  <td className="px-4 py-3 font-mono text-gray-600">
-                    {user.phone || "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${st.cls}`}
+              </thead>
+              <tbody>
+                {showEnvRowInFilter() &&
+                  envSummaries.map((row) => (
+                    <tr
+                      key={`env-${row.phone}`}
+                      className="border-b border-gray-50 bg-slate-50/80"
                     >
-                      {st.text}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {new Date(user.createdAt).toLocaleDateString("zh-CN")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      {canToggleDelegated && (
-                        <button
-                          type="button"
-                          onClick={() => toggleStatus(user)}
-                          disabled={isPending}
-                          className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
-                            user.status === "active"
-                              ? "bg-red-50 text-red-700 hover:bg-red-100"
-                              : "bg-green-50 text-green-700 hover:bg-green-100"
-                          }`}
+                      <td className="px-4 py-3 font-medium text-gray-900">负责人</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.slot === "primary" ? (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                            主负责人（环境配置）
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-800">
+                            负责人（环境配置）
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-gray-600">{row.phone}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-block rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                          正常
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400">—</td>
+                      <td className="px-4 py-3 text-xs text-gray-400">
+                        在 Vercel 中修改
+                      </td>
+                    </tr>
+                  ))}
+
+                {filteredUsers.length === 0 &&
+                !(showEnvRowInFilter() && envSummaries.length > 0) ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                      暂无数据
+                    </td>
+                  </tr>
+                ) : null}
+
+                {filteredUsers.map((user) => {
+                  const st = statusLabels[user.status] ?? statusLabels.active;
+                  const canToggleDelegated =
+                    user.role === "leader" && user.leaderKind === "delegated"
+                      ? canDelegate
+                      : user.role !== "leader";
+
+                  return (
+                    <tr
+                      key={user.openid}
+                      className="border-b border-gray-50 last:border-0"
+                    >
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {user.name}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {roleDetailLabel(user)}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-gray-600">
+                        {user.phone || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${st.cls}`}
                         >
-                          {user.status === "active" ? "停用" : "启用"}
-                        </button>
-                      )}
-                      {(user.role === "supervisor" ||
-                        (user.role === "leader" &&
-                          user.leaderKind === "delegated")) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setResetTarget(user);
-                            setNewPassword("");
-                            setError("");
-                          }}
-                          className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
-                        >
-                          改密码
-                        </button>
-                      )}
-                      {!canToggleDelegated &&
-                        user.role !== "supervisor" &&
-                        !(
-                          user.role === "leader" && user.leaderKind === "delegated"
-                        ) && <span className="text-xs text-gray-400">—</span>}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                          {st.text}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {new Date(user.createdAt).toLocaleDateString("zh-CN")}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {canToggleDelegated && (
+                            <button
+                              type="button"
+                              onClick={() => toggleStatus(user)}
+                              disabled={isPending}
+                              className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
+                                user.status === "active"
+                                  ? "bg-red-50 text-red-700 hover:bg-red-100"
+                                  : "bg-green-50 text-green-700 hover:bg-green-100"
+                              }`}
+                            >
+                              {user.status === "active" ? "停用" : "启用"}
+                            </button>
+                          )}
+                          {(user.role === "supervisor" ||
+                            (user.role === "leader" &&
+                              user.leaderKind === "delegated")) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResetTarget(user);
+                                setNewPassword("");
+                                setError("");
+                              }}
+                              className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
+                            >
+                              改密码
+                            </button>
+                          )}
+                          {!canToggleDelegated &&
+                            user.role !== "supervisor" &&
+                            !(
+                              user.role === "leader" && user.leaderKind === "delegated"
+                            ) && <span className="text-xs text-gray-400">—</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </WorkspaceSection>
+
+        <WorkspaceSection
+          title="管理提示"
+          description="右侧只放维护提示和当前筛选结果，结构上对齐知识库的辅助区。"
+        >
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <p className="text-xs font-medium tracking-wide text-slate-500">
+                当前筛选
+              </p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {filter === "all"
+                  ? "全部账号"
+                  : filter === "leader"
+                    ? "负责人"
+                    : roleLabels[filter]}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-blue-50 p-4 ring-1 ring-blue-200">
+              <p className="text-sm font-medium text-blue-900">创建主管 / 副负责人</p>
+              <p className="mt-2 text-sm leading-6 text-blue-800">
+                建议先创建账号，再立即分发临时密码，避免账号创建后长期无人接管。
+              </p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
+              <p className="text-sm font-medium text-amber-900">环境负责人账号</p>
+              <p className="mt-2 text-sm leading-6 text-amber-800">
+                环境配置里的负责人账号仍需在 Vercel 环境变量中维护，页面只做展示。
+              </p>
+            </div>
+          </div>
+        </WorkspaceSection>
       </div>
-      </WorkspaceSection>
 
       {/* 重置密码弹窗 */}
       {resetTarget && (
