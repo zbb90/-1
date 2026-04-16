@@ -4,25 +4,24 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { getAdminSessionFromCookies } from "@/lib/admin-session";
-import { buildKnowledgeGraphData } from "@/lib/knowledge-graph";
-import { KnowledgeGraphView } from "./graph-view";
+import { AuditMatchWorkbench } from "./audit-match-workbench";
 
-export default async function KnowledgeGraphPage() {
+export default async function AuditMatchPage() {
   const cookieStore = await cookies();
   const session = await getAdminSessionFromCookies(cookieStore);
   const isLeader = session?.role === "leader";
-  const { nodes, edges } = await buildKnowledgeGraphData();
 
   return (
     <AdminShell maxWidthClass="max-w-screen-2xl">
       <AdminPageHeader
-        eyebrow="知识图谱"
-        title="知识关系图谱"
+        eyebrow="AI 分析工具"
+        title="稽核表匹配共识"
         description={
           <>
-            用图谱视角查看规则、共识、外购、旧品、操作知识之间的关联网络。
+            上传稽核表与共识表
+            Excel，系统会先做候选召回，再结合语义匹配与模型判定输出可解释结果。
             <br />
-            节点来自现有知识表，连线来自手动链接和系统自动提取的关联。
+            第一版只导出分析和知识沉淀草稿，不会直接写入正式知识库。
           </>
         }
         actions={
@@ -41,22 +40,16 @@ export default async function KnowledgeGraphPage() {
               返回知识库
             </Link>
             <Link
-              href="/knowledge/health"
-              className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+              href="/knowledge/graph"
+              className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
             >
-              查看健康度
-            </Link>
-            <Link
-              href="/knowledge/audit-match"
-              className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
-            >
-              稽核共识匹配
+              查看知识图谱
             </Link>
           </div>
         }
       />
 
-      <KnowledgeGraphView initialNodes={nodes} initialEdges={edges} />
+      <AuditMatchWorkbench />
     </AdminShell>
   );
 }

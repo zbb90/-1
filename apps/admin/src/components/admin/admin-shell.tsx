@@ -9,7 +9,7 @@ export function AdminShell({
   maxWidthClass = "max-w-6xl",
 }: {
   children: ReactNode;
-  maxWidthClass?: "max-w-6xl" | "max-w-5xl";
+  maxWidthClass?: string;
 }) {
   return (
     <main className="min-h-screen bg-gray-50">

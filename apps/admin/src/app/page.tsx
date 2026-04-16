@@ -48,6 +48,12 @@ export default async function HomePage() {
     { href: "/reviews", label: "复核池", desc: "查看并处理待复核任务", icon: "📋" },
     { href: "/conversations", label: "问答日志", desc: "查看全部问答记录", icon: "💬" },
     { href: "/knowledge", label: "知识库", desc: "管理稽核规则数据", icon: "📚" },
+    {
+      href: "/knowledge/audit-match",
+      label: "稽核共识匹配",
+      desc: "上传 Excel 自动匹配条款与共识",
+      icon: "🧠",
+    },
     ...(isLeader
       ? [
           {
