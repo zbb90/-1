@@ -62,7 +62,13 @@ export default async function ReviewDetailPage({
         eyebrow="人工复核池"
         title="复核任务详情"
         description={`当前任务编号：${s(task.id)}`}
-        actions={<AdminNav current="reviews" showUsersLink={isLeader} />}
+        actions={
+          <AdminNav
+            current="reviews"
+            showUsersLink={isLeader}
+            showStorageLink={isLeader}
+          />
+        }
       />
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">

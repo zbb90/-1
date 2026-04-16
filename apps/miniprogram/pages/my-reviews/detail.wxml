@@ -1,4 +1,10 @@
 <view class="page">
+  <view wx:if="{{pollingPaused && pollHint}}" class="card empty-card">
+    <view class="empty-title">自动刷新已暂停</view>
+    <view class="empty-desc">{{pollHint}}</view>
+    <button class="btn btn-primary mt" bindtap="retryLoad">立即重试</button>
+  </view>
+
   <view wx:if="{{loading}}" class="card empty-card">
     <view class="empty-title">加载中...</view>
     <view class="empty-desc">正在读取复核详情。</view>
@@ -7,6 +13,7 @@
   <view wx:elif="{{errorMessage}}" class="card empty-card">
     <view class="empty-title">加载失败</view>
     <view class="empty-desc">{{errorMessage}}</view>
+    <button class="btn btn-primary mt" bindtap="retryLoad">重新加载</button>
   </view>
 
   <view wx:elif="{{review}}" class="detail-stack">

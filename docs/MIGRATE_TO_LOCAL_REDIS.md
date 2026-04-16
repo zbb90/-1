@@ -17,7 +17,7 @@ PONG
 
 ## 2. 更新服务环境变量
 
-若使用当前仓库自带的 CI/CD 部署，可直接跳过这一步，工作流会自动以 `-e REDIS_URL=redis://127.0.0.1:6379/0` 启动应用容器。
+若使用当前仓库自带的 CI/CD 部署，可直接跳过这一步。工作流会注入 `REDIS_URL=redis://127.0.0.1:6379/0`，并以 `podman --network host` 运行应用容器，使容器内的 `127.0.0.1` 指向宿主机 Redis。
 
 若你需要手动运行应用容器，再编辑 `/root/audit-admin.env`，加入：
 
@@ -58,8 +58,8 @@ podman stop audit-admin 2>/dev/null || true
 podman rm audit-admin 2>/dev/null || true
 podman run -d \
   --name audit-admin \
+  --network host \
   --env-file /root/audit-admin.env \
-  -p 127.0.0.1:3003:3003 \
   --restart=always \
   audit-admin:latest
 ```

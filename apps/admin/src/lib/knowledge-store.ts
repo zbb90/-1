@@ -13,12 +13,36 @@ import { KB_TABLE_HEADERS } from "@/lib/kb-schema";
 import { readTable as readCsvTable, writeTableRows } from "@/lib/knowledge-csv";
 import { invalidateKnowledgeBaseCache } from "@/lib/knowledge-loader";
 import { getRedis, isRedisConfigured } from "@/lib/redis-client";
+import type { RuleRow } from "@/lib/types";
+import { rebuildRuleVectorIndex } from "@/lib/vector-store";
 
 function rowsKey(table: KbTableName) {
   return `audit:kb:${table}:rows`;
 }
 
 type Row = Record<string, string>;
+
+const KB_TABLES: KbTableName[] = [
+  "rules",
+  "consensus",
+  "external-purchases",
+  "old-items",
+  "operations",
+];
+
+export type KnowledgeStorageDiagnostics = {
+  redisConfigured: boolean;
+  redisRowKeyCount: number;
+  redisCounts: Record<KbTableName, number>;
+  csvCounts: Record<KbTableName, number>;
+};
+
+export type KnowledgeRestoreReport = {
+  restoredTables: Record<KbTableName, number>;
+  vectorRebuild:
+    | { status: "skipped"; reason: string }
+    | { status: "done"; count: number };
+};
 
 /* ------------------------------------------------------------------ */
 /*  Read                                                               */
@@ -31,16 +55,12 @@ export async function readRows(table: KbTableName): Promise<Row[]> {
       const raw = await redis.get<string>(rowsKey(table));
       if (raw) {
         const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed as Row[];
+        if (Array.isArray(parsed)) return parsed as Row[];
       }
-      // Redis empty → seed from CSV
-      const csvRows = (await readCsvTable(table)) as unknown as Row[];
-      if (csvRows.length > 0) {
-        await redis.set(rowsKey(table), JSON.stringify(csvRows));
-      }
-      return csvRows;
+      return [];
     } catch (error) {
-      console.warn(`[knowledge-store] readRows fallback to CSV for ${table}`, error);
+      console.warn(`[knowledge-store] readRows failed for redis table ${table}`, error);
+      return [];
     }
   }
 
@@ -64,6 +84,18 @@ async function persistRows(table: KbTableName, rows: Row[]) {
     await writeTableRows(table, rows);
   }
   invalidateKnowledgeBaseCache();
+}
+
+async function getRedisTableRowCount(table: KbTableName) {
+  try {
+    const redis = await getRedis();
+    const raw = await redis.get<string>(rowsKey(table));
+    if (!raw) return 0;
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function idField(table: KbTableName): string {
@@ -167,6 +199,76 @@ export async function importRows(
 
   await persistRows(table, rows);
   return { added, total: rows.length };
+}
+
+export async function getKnowledgeStorageDiagnostics(): Promise<KnowledgeStorageDiagnostics> {
+  const csvEntries = await Promise.all(
+    KB_TABLES.map(
+      async (table) =>
+        [table, ((await readCsvTable(table)) as unknown as Row[]).length] as const,
+    ),
+  );
+  const csvCounts = Object.fromEntries(csvEntries) as Record<KbTableName, number>;
+
+  if (!isRedisConfigured()) {
+    return {
+      redisConfigured: false,
+      redisRowKeyCount: 0,
+      redisCounts: {
+        rules: 0,
+        consensus: 0,
+        "external-purchases": 0,
+        "old-items": 0,
+        operations: 0,
+      },
+      csvCounts,
+    };
+  }
+
+  const redis = await getRedis();
+  const [scanResult, ...counts] = await Promise.all([
+    redis.scan("0", { match: "audit:kb:*:rows", count: 100 }),
+    ...KB_TABLES.map((table) => getRedisTableRowCount(table)),
+  ]);
+
+  return {
+    redisConfigured: true,
+    redisRowKeyCount: scanResult[1].length,
+    redisCounts: {
+      rules: counts[0],
+      consensus: counts[1],
+      "external-purchases": counts[2],
+      "old-items": counts[3],
+      operations: counts[4],
+    },
+    csvCounts,
+  };
+}
+
+export async function restoreKnowledgeBaseFromCsv(): Promise<KnowledgeRestoreReport> {
+  const restoredTables = {
+    rules: 0,
+    consensus: 0,
+    "external-purchases": 0,
+    "old-items": 0,
+    operations: 0,
+  } as Record<KbTableName, number>;
+
+  for (const table of KB_TABLES) {
+    const rows = (await readCsvTable(table)) as unknown as Row[];
+    await persistRows(table, rows);
+    restoredTables[table] = rows.length;
+  }
+
+  const rules = ((await readCsvTable("rules")) as unknown as RuleRow[]) ?? [];
+  const vectorResult = await rebuildRuleVectorIndex(rules);
+
+  return {
+    restoredTables,
+    vectorRebuild: vectorResult.ok
+      ? { status: "done", count: vectorResult.count }
+      : { status: "skipped", reason: vectorResult.reason || "未配置向量能力" },
+  };
 }
 
 /* ------------------------------------------------------------------ */

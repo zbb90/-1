@@ -31,6 +31,20 @@ export interface AppUser {
 
 export type PublicAppUser = Omit<AppUser, "password" | "passwordHash">;
 
+export type UserStorageDiagnostics = {
+  redisConfigured: boolean;
+  userKeyCount: number;
+  phoneIndexCount: number;
+  roleSetCounts: Record<UserRole, number>;
+  envLeaderCount: number;
+};
+
+export type UserRepairReport = {
+  repairedUsers: number;
+  repairedPhoneIndexes: number;
+  roleSetCounts: Record<UserRole, number>;
+};
+
 function userKey(openid: string) {
   return `audit:user:${openid}`;
 }
@@ -41,6 +55,57 @@ function roleSetKey(role: UserRole) {
 
 function phoneKey(phone: string) {
   return `audit:user-by-phone:${phone}`;
+}
+
+async function scanUserKeys(match: string) {
+  const redis = await getRedis();
+  const keys: string[] = [];
+  let cursor = "0";
+
+  do {
+    const [nextCursor, batch] = await redis.scan(cursor, {
+      match,
+      count: 200,
+    });
+    cursor = nextCursor;
+    keys.push(...batch);
+  } while (cursor !== "0");
+
+  return keys;
+}
+
+async function listStoredUserKeys() {
+  return scanUserKeys(`${userKey("*")}`);
+}
+
+async function listPhoneIndexKeys() {
+  return scanUserKeys(`${phoneKey("*")}`);
+}
+
+async function listAllStoredUsers() {
+  const keys = await listStoredUserKeys();
+  if (keys.length === 0) {
+    return [];
+  }
+
+  const redis = await getRedis();
+  const pipeline = redis.pipeline();
+  for (const key of keys) {
+    pipeline.get(key);
+  }
+  const results = await pipeline.exec();
+  const users: AppUser[] = [];
+  for (const raw of results) {
+    if (!raw) continue;
+    const user =
+      typeof raw === "string"
+        ? (JSON.parse(raw) as AppUser)
+        : (raw as unknown as AppUser);
+    if (user?.openid) {
+      users.push(user);
+    }
+  }
+  return users;
 }
 
 /* ------------------------------------------------------------------ */
@@ -159,6 +224,111 @@ export async function listAllUsers(): Promise<AppUser[]> {
     console.warn("[user-store] listAllUsers failed", error);
     return [];
   }
+}
+
+export async function getUserStorageDiagnostics(): Promise<UserStorageDiagnostics> {
+  if (!isRedisConfigured()) {
+    return {
+      redisConfigured: false,
+      userKeyCount: 0,
+      phoneIndexCount: 0,
+      roleSetCounts: {
+        leader: 0,
+        supervisor: 0,
+        specialist: 0,
+      },
+      envLeaderCount: getLeaderAccounts().length,
+    };
+  }
+
+  try {
+    const redis = await getRedis();
+    const [userKeys, phoneKeys, leaderCount, supervisorCount, specialistCount] =
+      await Promise.all([
+        listStoredUserKeys(),
+        listPhoneIndexKeys(),
+        redis.scard(roleSetKey("leader")),
+        redis.scard(roleSetKey("supervisor")),
+        redis.scard(roleSetKey("specialist")),
+      ]);
+
+    return {
+      redisConfigured: true,
+      userKeyCount: userKeys.length,
+      phoneIndexCount: phoneKeys.length,
+      roleSetCounts: {
+        leader: leaderCount,
+        supervisor: supervisorCount,
+        specialist: specialistCount,
+      },
+      envLeaderCount: getLeaderAccounts().length,
+    };
+  } catch (error) {
+    console.warn("[user-store] diagnostics failed", error);
+    return {
+      redisConfigured: true,
+      userKeyCount: 0,
+      phoneIndexCount: 0,
+      roleSetCounts: {
+        leader: 0,
+        supervisor: 0,
+        specialist: 0,
+      },
+      envLeaderCount: getLeaderAccounts().length,
+    };
+  }
+}
+
+export async function repairUserIndexes(): Promise<UserRepairReport> {
+  if (!isRedisConfigured()) {
+    return {
+      repairedUsers: 0,
+      repairedPhoneIndexes: 0,
+      roleSetCounts: {
+        leader: 0,
+        supervisor: 0,
+        specialist: 0,
+      },
+    };
+  }
+
+  const [users, phoneKeys] = await Promise.all([
+    listAllStoredUsers(),
+    listPhoneIndexKeys(),
+  ]);
+  const redis = await getRedis();
+  const pipeline = redis.pipeline();
+
+  pipeline.del(roleSetKey("leader"));
+  pipeline.del(roleSetKey("supervisor"));
+  pipeline.del(roleSetKey("specialist"));
+  for (const key of phoneKeys) {
+    pipeline.del(key);
+  }
+
+  const roleSetCounts: Record<UserRole, number> = {
+    leader: 0,
+    supervisor: 0,
+    specialist: 0,
+  };
+  let repairedPhoneIndexes = 0;
+
+  for (const user of users) {
+    pipeline.sadd(roleSetKey(user.role), user.openid);
+    roleSetCounts[user.role] += 1;
+    if (user.phone.trim()) {
+      pipeline.set(phoneKey(user.phone), user.openid);
+      repairedPhoneIndexes += 1;
+    }
+  }
+
+  await pipeline.exec();
+
+  return {
+    repairedUsers: users.length,
+    repairedPhoneIndexes,
+    roleSetCounts,
+  };
 }
 
 export function toPublicUser(user: AppUser): PublicAppUser {

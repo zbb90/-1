@@ -8,7 +8,12 @@ function isLoginPath(pathname: string) {
 }
 
 function isLeaderOnlyPath(pathname: string) {
-  return pathname === "/users" || pathname.startsWith("/users/");
+  return (
+    pathname === "/users" ||
+    pathname.startsWith("/users/") ||
+    pathname === "/storage" ||
+    pathname.startsWith("/storage/")
+  );
 }
 
 function isProtectedPagePath(pathname: string) {
@@ -43,6 +48,7 @@ function isProtectedApiPath(request: NextRequest) {
     return true;
 
   if (pathname === "/api/users" || pathname.startsWith("/api/users/")) return true;
+  if (pathname === "/api/storage" || pathname.startsWith("/api/storage/")) return true;
 
   return false;
 }
@@ -106,10 +112,14 @@ export const config = {
     "/knowledge/:path*",
     "/users",
     "/users/:path*",
+    "/storage",
+    "/storage/:path*",
     "/api/reviews",
     "/api/reviews/:path*",
     "/api/knowledge/:path*",
     "/api/users",
     "/api/users/:path*",
+    "/api/storage",
+    "/api/storage/:path*",
   ],
 };

@@ -22,7 +22,13 @@ export default async function KnowledgePage() {
             支持在线新增、编辑、停用/启用、Excel 批量导入和导出。
           </>
         }
-        actions={<AdminNav current="knowledge" showUsersLink={isLeader} />}
+        actions={
+          <AdminNav
+            current="knowledge"
+            showUsersLink={isLeader}
+            showStorageLink={isLeader}
+          />
+        }
       />
 
       <KnowledgeTabs />

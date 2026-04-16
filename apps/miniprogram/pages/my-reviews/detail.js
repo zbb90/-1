@@ -1,6 +1,7 @@
 const { request } = require("../../utils/request");
 
 const POLL_INTERVAL = 15000;
+const MAX_SILENT_FAILURES = 3;
 
 const STATUS_LABEL = {
   待处理: "待处理",
@@ -51,6 +52,8 @@ Page({
     finalScoreInput: "",
     finalClauseInput: "",
     finalExplanationInput: "",
+    pollingPaused: false,
+    pollHint: "",
   },
 
   onLoad(options) {
@@ -86,7 +89,11 @@ Page({
 
   startPolling() {
     this.stopPolling();
+    this._silentFailureCount = 0;
+    this._pollingPaused = false;
+    this.setData({ pollingPaused: false, pollHint: "" });
     this._pollTimer = setInterval(() => {
+      if (this._pollingPaused) return;
       if (this._taskId) {
         this.loadDetail(this._taskId, { silent: true });
       }
@@ -97,6 +104,25 @@ Page({
     if (this._pollTimer) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
+    }
+  },
+
+  pausePolling(error, options = {}) {
+    const { showToast = false } = options;
+    this._pollingPaused = true;
+    this.stopPolling();
+    const requestUrl = error?.requestUrl || "";
+    const baseMessage =
+      error?.category === "tls_certificate"
+        ? "HTTPS 证书校验失败，已暂停自动刷新。"
+        : "网络连续异常，已暂停自动刷新。";
+    const pollHint = requestUrl ? `${baseMessage}\n当前地址：${requestUrl}` : baseMessage;
+    this.setData({ pollingPaused: true, pollHint });
+    if (showToast) {
+      wx.showToast({
+        title: error?.message || "已暂停自动刷新，请稍后重试",
+        icon: "none",
+      });
     }
   },
 
@@ -145,6 +171,10 @@ Page({
         finalClauseInput: review?.finalClause || "",
         finalExplanationInput: review?.finalExplanation || "",
       });
+      this._silentFailureCount = 0;
+      if (this.data.pollingPaused) {
+        this.setData({ pollingPaused: false, pollHint: "" });
+      }
 
       if (!isSupervisor && unreadReply) {
         this.markRequesterRead(id);
@@ -160,6 +190,16 @@ Page({
         });
       }
     } catch (error) {
+      if (silent) {
+        this._silentFailureCount = (this._silentFailureCount || 0) + 1;
+      }
+
+      if (error?.category === "tls_certificate") {
+        this.pausePolling(error, { showToast: !silent });
+      } else if (silent && this._silentFailureCount >= MAX_SILENT_FAILURES) {
+        this.pausePolling(error, { showToast: true });
+      }
+
       if (!silent) {
         this.setData({
           errorMessage: error?.message || "加载复核详情失败",
@@ -170,6 +210,13 @@ Page({
         this.setData({ loading: false });
       }
     }
+  },
+
+  retryLoad() {
+    if (!this._taskId) return;
+    this.setData({ errorMessage: "" });
+    this.startPolling();
+    this.loadDetail(this._taskId);
   },
 
   async markRequesterRead(id) {

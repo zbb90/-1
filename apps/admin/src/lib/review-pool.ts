@@ -22,6 +22,28 @@ import type {
 const IDX_ALL = "audit:review-task-ids";
 const LEGACY_KEY = "audit:review-tasks";
 
+export type ReviewStorageMode = "redis-only" | "file-only";
+
+export type ReviewRepairSource = "auto" | "redis" | "legacy" | "file";
+
+export type ReviewStorageDiagnostics = {
+  mode: ReviewStorageMode;
+  fileCount: number;
+  redisConfigured: boolean;
+  redisTaskKeyCount: number;
+  redisIndexCount: number;
+  redisRequesterBucketCount: number;
+  legacyTaskCount: number;
+};
+
+export type ReviewRepairReport = {
+  mode: ReviewStorageMode;
+  source: Exclude<ReviewRepairSource, "auto">;
+  totalTasks: number;
+  indexedTasks: number;
+  requesterBuckets: number;
+};
+
 function taskKey(id: string) {
   return `audit:review-task:${id}`;
 }
@@ -32,6 +54,10 @@ function requesterIdx(requesterId: string) {
 
 function isoToScore(iso: string) {
   return new Date(iso).getTime();
+}
+
+function getReviewStorageMode(): ReviewStorageMode {
+  return isRedisConfigured() ? "redis-only" : "file-only";
 }
 
 /* ------------------------------------------------------------------ */
@@ -103,38 +129,124 @@ async function writeToFile(tasks: ReviewTask[]) {
 
 let migrationDone = false;
 
+async function scanRedisKeys(match: string) {
+  const redis = await getRedis();
+  const keys: string[] = [];
+  let cursor = "0";
+
+  do {
+    const [nextCursor, batch] = await redis.scan(cursor, {
+      match,
+      count: 200,
+    });
+    cursor = nextCursor;
+    keys.push(...batch);
+  } while (cursor !== "0");
+
+  return keys;
+}
+
+async function listRedisTaskKeyIds() {
+  const keys = await scanRedisKeys(`${taskKey("*")}`);
+  return keys
+    .map((key) => key.slice(taskKey("").length))
+    .filter((id) => id && !id.includes("*"));
+}
+
+async function listRedisRequesterBucketKeys() {
+  return scanRedisKeys(`${requesterIdx("*")}`);
+}
+
+async function getLegacyRedisTasks() {
+  const redis = await getRedis();
+  const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
+  return Array.isArray(legacy)
+    ? legacy
+        .map((task, index) => parseReviewTask(task, `legacy:${index}`))
+        .filter((task): task is ReviewTask => Boolean(task))
+    : [];
+}
+
+function dedupeReviewTasks(tasks: ReviewTask[]) {
+  const byId = new Map<string, ReviewTask>();
+  for (const task of tasks) {
+    if (!task?.id) continue;
+    if (!byId.has(task.id)) {
+      byId.set(task.id, task);
+      continue;
+    }
+    const existing = byId.get(task.id)!;
+    byId.set(
+      task.id,
+      safeCreatedAt(task).localeCompare(safeCreatedAt(existing)) >= 0 ? task : existing,
+    );
+  }
+  return [...byId.values()].sort((a, b) =>
+    safeCreatedAt(b).localeCompare(safeCreatedAt(a)),
+  );
+}
+
+async function writeTasksToRedis(
+  tasks: ReviewTask[],
+  options: { clearTaskKeys: boolean },
+) {
+  const redis = await getRedis();
+  const requesterKeys = await listRedisRequesterBucketKeys();
+  const pipeline = redis.pipeline();
+
+  pipeline.del(IDX_ALL);
+  for (const key of requesterKeys) {
+    pipeline.del(key);
+  }
+
+  if (options.clearTaskKeys) {
+    const taskKeys = await scanRedisKeys(`${taskKey("*")}`);
+    for (const key of taskKeys) {
+      pipeline.del(key);
+    }
+  }
+
+  const requesterIds = new Set<string>();
+  for (const task of tasks) {
+    if (!task?.id) continue;
+    pipeline.set(taskKey(task.id), JSON.stringify(task));
+    pipeline.zadd(IDX_ALL, {
+      score: isoToScore(task.createdAt || new Date().toISOString()),
+      member: task.id,
+    });
+    if (task.requesterId?.trim()) {
+      requesterIds.add(task.requesterId.trim());
+      pipeline.sadd(requesterIdx(task.requesterId.trim()), task.id);
+    }
+  }
+
+  await pipeline.exec();
+  return {
+    totalTasks: tasks.length,
+    indexedTasks: tasks.filter((task) => Boolean(task?.id)).length,
+    requesterBuckets: requesterIds.size,
+  };
+}
+
+async function collectReviewTasksFromRedisKeys() {
+  const ids = await listRedisTaskKeyIds();
+  const tasks = await redisGetMany(ids);
+  return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+}
+
 async function ensureMigrated() {
-  if (migrationDone) return;
+  if (migrationDone || getReviewStorageMode() !== "redis-only") return;
   migrationDone = true;
 
   try {
     const redis = await getRedis();
-    const existsNew = await redis.exists(IDX_ALL);
-    const existingIds = existsNew
-      ? await redis.zrange(IDX_ALL, 0, 0, { rev: true })
-      : [];
-    if (existsNew && existingIds.length > 0) return;
+    const indexCount = await redis.zcard(IDX_ALL);
+    if (indexCount > 0) return;
 
-    const legacy = await redis.get<ReviewTask[]>(LEGACY_KEY);
-    const seedTasks =
-      legacy && Array.isArray(legacy) && legacy.length > 0
-        ? legacy
-        : await readFromFile();
-    if (!Array.isArray(seedTasks) || seedTasks.length === 0) return;
-
-    const pipeline = redis.pipeline();
-    for (const task of seedTasks) {
-      if (!task?.id) continue;
-      pipeline.set(taskKey(task.id), JSON.stringify(task));
-      pipeline.zadd(IDX_ALL, {
-        score: isoToScore(task.createdAt || new Date().toISOString()),
-        member: task.id,
-      });
-      if (task.requesterId?.trim()) {
-        pipeline.sadd(requesterIdx(task.requesterId), task.id);
-      }
+    const redisTasks = await collectReviewTasksFromRedisKeys();
+    if (redisTasks.length > 0) {
+      await writeTasksToRedis(redisTasks, { clearTaskKeys: false });
     }
-    await pipeline.exec();
   } catch (err) {
     console.warn("[review-pool] ensureMigrated failed, continuing anyway", err);
   }
@@ -226,18 +338,22 @@ async function redisGetMany(ids: string[]): Promise<ReviewTask[]> {
   return tasks;
 }
 
+async function listReviewTasksFromFile(requesterId?: string) {
+  const tasks = await readFromFile();
+  const filtered = requesterId
+    ? tasks.filter((t) => t.requesterId === requesterId)
+    : tasks;
+  return filtered.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+}
+
 /* ------------------------------------------------------------------ */
 /*  Unified CRUD                                                       */
 /* ------------------------------------------------------------------ */
 
 async function persistNewTask(task: ReviewTask) {
-  if (isRedisConfigured()) {
-    try {
-      await redisAddTask(task);
-      return task;
-    } catch (error) {
-      console.warn("[review-pool] persistNewTask fallback to file", error);
-    }
+  if (getReviewStorageMode() === "redis-only") {
+    await redisAddTask(task);
+    return task;
   }
   const tasks = await readFromFile();
   tasks.unshift(task);
@@ -281,28 +397,15 @@ function safeCreatedAt(t: ReviewTask): string {
 export async function listReviewTasks(filters?: { requesterId?: string }) {
   const requesterId = filters?.requesterId?.trim();
 
-  if (isRedisConfigured()) {
-    try {
-      const ids = await redisListIds(requesterId);
-      const tasks = await redisGetMany(ids);
-      if (tasks.length > 0) {
-        return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
-      }
-      console.warn("[review-pool] redis returned empty list, falling back to file");
-    } catch (err) {
-      console.error(
-        "[review-pool] listReviewTasks redis path crashed, falling back to file",
-        err,
-      );
-    }
+  if (getReviewStorageMode() === "redis-only") {
+    await ensureMigrated();
+    const ids = await redisListIds(requesterId);
+    const tasks = await redisGetMany(ids);
+    return tasks.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
   }
 
   try {
-    const tasks = await readFromFile();
-    const filtered = requesterId
-      ? tasks.filter((t) => t.requesterId === requesterId)
-      : tasks;
-    return filtered.sort((a, b) => safeCreatedAt(b).localeCompare(safeCreatedAt(a)));
+    return await listReviewTasksFromFile(requesterId);
   } catch (err) {
     console.error("[review-pool] listReviewTasks file path crashed, returning []", err);
     return [];
@@ -314,21 +417,13 @@ export async function getReviewTaskById(
   filters?: { requesterId?: string },
 ) {
   try {
-    if (isRedisConfigured()) {
-      try {
-        const task = await redisGetTask(id);
-        if (task) {
-          const requesterId = filters?.requesterId?.trim();
-          if (requesterId && task.requesterId !== requesterId) return null;
-          return task;
-        }
-        console.warn("[review-pool] redis task missing, falling back to file");
-      } catch (err) {
-        console.error(
-          "[review-pool] getReviewTaskById redis path crashed, falling back",
-          err,
-        );
-      }
+    if (getReviewStorageMode() === "redis-only") {
+      await ensureMigrated();
+      const task = await redisGetTask(id);
+      if (!task) return null;
+      const requesterId = filters?.requesterId?.trim();
+      if (requesterId && task.requesterId !== requesterId) return null;
+      return task;
     }
 
     const tasks = await listReviewTasks(filters);
@@ -343,12 +438,8 @@ export async function updateReviewTask(
   id: string,
   payload: Partial<ReviewTask> & { status?: ReviewTaskStatus },
 ) {
-  if (isRedisConfigured()) {
-    try {
-      return await redisUpdateTask(id, payload);
-    } catch (error) {
-      console.warn("[review-pool] updateReviewTask fallback to file", error);
-    }
+  if (getReviewStorageMode() === "redis-only") {
+    return redisUpdateTask(id, payload);
   }
 
   const tasks = await readFromFile();
@@ -387,7 +478,120 @@ export async function getReviewSummary() {
 }
 
 export function getStorageBackend() {
-  return isRedisConfigured() ? "redis" : "local-file";
+  return getReviewStorageMode() === "redis-only" ? "redis" : "local-file";
+}
+
+export async function getReviewStorageDiagnostics(): Promise<ReviewStorageDiagnostics> {
+  const mode = getReviewStorageMode();
+  const fileTasks = await readFromFile();
+
+  if (mode === "file-only") {
+    return {
+      mode,
+      fileCount: fileTasks.length,
+      redisConfigured: false,
+      redisTaskKeyCount: 0,
+      redisIndexCount: 0,
+      redisRequesterBucketCount: 0,
+      legacyTaskCount: 0,
+    };
+  }
+
+  try {
+    const redis = await getRedis();
+    const [redisTaskKeys, requesterBucketKeys, redisIndexCount, legacyTasks] =
+      await Promise.all([
+        listRedisTaskKeyIds(),
+        listRedisRequesterBucketKeys(),
+        redis.zcard(IDX_ALL),
+        getLegacyRedisTasks(),
+      ]);
+
+    return {
+      mode,
+      fileCount: fileTasks.length,
+      redisConfigured: true,
+      redisTaskKeyCount: redisTaskKeys.length,
+      redisIndexCount,
+      redisRequesterBucketCount: requesterBucketKeys.length,
+      legacyTaskCount: legacyTasks.length,
+    };
+  } catch (error) {
+    console.warn("[review-pool] diagnostics failed to query redis", error);
+    return {
+      mode,
+      fileCount: fileTasks.length,
+      redisConfigured: true,
+      redisTaskKeyCount: 0,
+      redisIndexCount: 0,
+      redisRequesterBucketCount: 0,
+      legacyTaskCount: 0,
+    };
+  }
+}
+
+export async function repairReviewTaskStorage(
+  source: ReviewRepairSource = "auto",
+): Promise<ReviewRepairReport> {
+  const mode = getReviewStorageMode();
+  if (mode !== "redis-only") {
+    const fileTasks = await readFromFile();
+    return {
+      mode,
+      source: "file",
+      totalTasks: fileTasks.length,
+      indexedTasks: fileTasks.length,
+      requesterBuckets: new Set(
+        fileTasks.map((task) => task.requesterId?.trim()).filter(Boolean),
+      ).size,
+    };
+  }
+
+  let selectedSource: Exclude<ReviewRepairSource, "auto"> =
+    source === "legacy" ? "legacy" : source === "file" ? "file" : "redis";
+  const redisTasks = await collectReviewTasksFromRedisKeys();
+  let tasks: ReviewTask[] = [];
+
+  if (source === "auto" || source === "redis") {
+    selectedSource = "redis";
+    tasks = redisTasks;
+  } else if (source === "legacy") {
+    selectedSource = "legacy";
+    tasks = dedupeReviewTasks([...redisTasks, ...(await getLegacyRedisTasks())]);
+  } else if (source === "file") {
+    selectedSource = "file";
+    tasks = dedupeReviewTasks([...redisTasks, ...(await readFromFile())]);
+  }
+
+  if (selectedSource === "redis") {
+    if (tasks.length === 0) {
+      return {
+        mode,
+        source: selectedSource,
+        totalTasks: 0,
+        indexedTasks: 0,
+        requesterBuckets: 0,
+      };
+    }
+    const result = await writeTasksToRedis(tasks, {
+      clearTaskKeys: false,
+    });
+    return {
+      mode,
+      source: selectedSource,
+      ...result,
+    };
+  }
+
+  const result = await writeTasksToRedis(tasks, {
+    clearTaskKeys: false,
+  });
+
+  return {
+    mode,
+    source: selectedSource,
+    ...result,
+  };
 }
 
 /* ------------------------------------------------------------------ */

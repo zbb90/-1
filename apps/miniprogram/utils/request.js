@@ -102,10 +102,15 @@ function request({ url, method = "GET", data, header = {}, adminAuth = false }) 
       fail: (error) => {
         logNetworkFailIfDevtools("request", error);
         maybeOfferLocalApiInDevtools(error);
-        const { shortMessage } = describeWxRequestFail(error);
+        const requestUrl = `${apiBaseUrl}${url}`;
+        const { shortMessage, category, retryable } = describeWxRequestFail(error);
         reject({
           ...error,
           message: shortMessage,
+          category,
+          retryable,
+          requestUrl,
+          apiBaseUrl,
         });
       },
     });

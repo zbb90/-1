@@ -27,6 +27,7 @@ export default async function ReviewsPage() {
           <AdminNav
             current="reviews"
             showUsersLink={isLeader}
+            showStorageLink={isLeader}
             extraActions={
               <Link
                 href="/api/reviews/export?format=csv"

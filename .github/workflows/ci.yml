@@ -118,8 +118,8 @@ jobs:
             podman rm audit-admin 2>/dev/null || true
             podman run -d \
               --name audit-admin \
+              --network host \
               --env-file /root/audit-admin.env \
-              -p 127.0.0.1:3003:3003 \
               --restart=always \
               audit-admin:latest
 
@@ -136,8 +136,8 @@ jobs:
               podman rm audit-admin 2>/dev/null || true
               podman run -d \
                 --name audit-admin \
+                --network host \
                 --env-file /root/audit-admin.env \
-                -p 127.0.0.1:3003:3003 \
                 --restart=always \
                 audit-admin:rollback
               echo 'Rolled back to previous image'

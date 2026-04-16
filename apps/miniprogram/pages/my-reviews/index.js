@@ -1,6 +1,7 @@
 const { request } = require("../../utils/request");
 
 const POLL_INTERVAL = 15000;
+const MAX_SILENT_FAILURES = 3;
 const SPECIALIST_TABS = [
   { key: "processing", label: "处理中" },
   { key: "replied", label: "主管已回复" },
@@ -65,6 +66,8 @@ Page({
     filteredReviews: [],
     unreadReplyCount: 0,
     isSupervisor: false,
+    pollingPaused: false,
+    pollHint: "",
   },
 
   onShow() {
@@ -81,6 +84,8 @@ Page({
 
   startPolling() {
     this.stopPolling();
+    this._silentFailureCount = 0;
+    this._pollingPaused = false;
     const supervisorAuth = wx.getStorageSync("supervisorAuth") || null;
     this._isSupervisor = Boolean(supervisorAuth && supervisorAuth.user);
     this._activeTab = this._isSupervisor ? "all" : "processing";
@@ -88,9 +93,12 @@ Page({
       isSupervisor: this._isSupervisor,
       tabs: this._isSupervisor ? SUPERVISOR_TABS : SPECIALIST_TABS,
       activeTab: this._activeTab,
+      pollingPaused: false,
+      pollHint: "",
     });
     this.loadReviews({ activeTab: this._activeTab });
     this._pollTimer = setInterval(() => {
+      if (this._pollingPaused) return;
       this.loadReviews({ silent: true, activeTab: this._activeTab });
     }, POLL_INTERVAL);
   },
@@ -99,6 +107,25 @@ Page({
     if (this._pollTimer) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
+    }
+  },
+
+  pausePolling(error, options = {}) {
+    const { showToast = false } = options;
+    this._pollingPaused = true;
+    this.stopPolling();
+    const requestUrl = error?.requestUrl || "";
+    const baseMessage =
+      error?.category === "tls_certificate"
+        ? "HTTPS 证书校验失败，已暂停自动刷新。"
+        : "网络连续异常，已暂停自动刷新。";
+    const pollHint = requestUrl ? `${baseMessage}\n当前地址：${requestUrl}` : baseMessage;
+    this.setData({ pollingPaused: true, pollHint });
+    if (showToast) {
+      wx.showToast({
+        title: error?.message || "已暂停自动刷新，请稍后重试",
+        icon: "none",
+      });
     }
   },
 
@@ -124,6 +151,10 @@ Page({
 
       this.setData({ reviews, unreadReplyCount });
       this.applyFilter(currentTab, reviews);
+      this._silentFailureCount = 0;
+      if (this.data.pollingPaused) {
+        this.setData({ pollingPaused: false, pollHint: "" });
+      }
 
       if (silent && this._loadedOnce && unreadReplyCount > prevUnreadReplyCount) {
         wx.vibrateShort({ type: "light" });
@@ -135,7 +166,17 @@ Page({
 
       this._loadedOnce = true;
     } catch (error) {
-      if (!silent) {
+      if (silent) {
+        this._silentFailureCount = (this._silentFailureCount || 0) + 1;
+      }
+
+      if (error?.category === "tls_certificate") {
+        this.pausePolling(error, { showToast: !silent });
+      } else if (silent && this._silentFailureCount >= MAX_SILENT_FAILURES) {
+        this.pausePolling(error, { showToast: true });
+      }
+
+      if (!silent && error?.category !== "tls_certificate") {
         wx.showToast({
           title: error?.message || "加载复核列表失败",
           icon: "none",
@@ -146,6 +187,10 @@ Page({
         this.setData({ loading: false });
       }
     }
+  },
+
+  retryLoad() {
+    this.startPolling();
   },
 
   handleTabChange(event) {

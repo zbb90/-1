@@ -142,7 +142,13 @@ export default async function ConversationsPage({
             已自动回答&rdquo; 的记录为答错，转入人工复核池。
           </>
         }
-        actions={<AdminNav current="conversations" showUsersLink={isLeader} />}
+        actions={
+          <AdminNav
+            current="conversations"
+            showUsersLink={isLeader}
+            showStorageLink={isLeader}
+          />
+        }
         footer={
           <div className="space-y-3">
             <div className="flex flex-wrap gap-3">

@@ -35,7 +35,7 @@ export default async function UsersPage() {
         eyebrow="负责人管理"
         title="账号与权限"
         description="三级角色：负责人（PC）→ 主管（PC）→ 专员（小程序微信登录）。"
-        actions={<AdminNav current="users" showUsersLink />}
+        actions={<AdminNav current="users" showUsersLink showStorageLink />}
       />
 
       <UserManagement

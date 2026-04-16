@@ -77,7 +77,11 @@ export default async function HomePage() {
     <AdminShell>
       {role ? (
         <div className="flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 md:px-5">
-          <AdminNav current="home" showUsersLink={isLeader} />
+          <AdminNav
+            current="home"
+            showUsersLink={isLeader}
+            showStorageLink={isLeader}
+          />
         </div>
       ) : null}
 

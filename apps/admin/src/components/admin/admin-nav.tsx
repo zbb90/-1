@@ -3,7 +3,13 @@ import type { ReactNode } from "react";
 import { adminLogoutAction } from "@/app/reviews/actions";
 import { TaskNotifier } from "@/components/admin/task-notifier";
 
-export type AdminNavKey = "home" | "reviews" | "conversations" | "knowledge" | "users";
+export type AdminNavKey =
+  | "home"
+  | "reviews"
+  | "conversations"
+  | "knowledge"
+  | "users"
+  | "storage";
 
 const navItem = (active: boolean) =>
   active
@@ -16,10 +22,12 @@ const navItem = (active: boolean) =>
 export function AdminNav({
   current,
   showUsersLink = false,
+  showStorageLink = false,
   extraActions,
 }: {
   current: AdminNavKey | null;
   showUsersLink?: boolean;
+  showStorageLink?: boolean;
   extraActions?: ReactNode;
 }) {
   return (
@@ -44,6 +52,11 @@ export function AdminNav({
         {showUsersLink ? (
           <Link href="/users" className={navItem(current === "users")}>
             账号管理
+          </Link>
+        ) : null}
+        {showStorageLink ? (
+          <Link href="/storage" className={navItem(current === "storage")}>
+            存储诊断
           </Link>
         ) : null}
         {extraActions}

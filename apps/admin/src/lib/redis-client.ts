@@ -11,6 +11,11 @@ type ZrangeOptions = {
   rev?: boolean;
 };
 
+type ScanOptions = {
+  match?: string;
+  count?: number;
+};
+
 function looksLikeJson(value: string) {
   const trimmed = value.trim();
   return trimmed.startsWith("{") || trimmed.startsWith("[");
@@ -123,8 +128,39 @@ class CompatRedis {
     return this.client.set(key, payload);
   }
 
+  async del(...keys: string[]) {
+    if (keys.length === 0) {
+      return 0;
+    }
+    return this.client.del(...keys);
+  }
+
   async smembers(key: string) {
     return this.client.smembers(key);
+  }
+
+  async scard(key: string) {
+    return this.client.scard(key);
+  }
+
+  async scan(cursor: string, options: ScanOptions = {}) {
+    if (options.match && options.count) {
+      return this.client.scan(cursor, "MATCH", options.match, "COUNT", options.count);
+    }
+    if (options.match) {
+      return this.client.scan(cursor, "MATCH", options.match);
+    }
+    if (options.count) {
+      return this.client.scan(cursor, "COUNT", options.count);
+    }
+    return this.client.scan(cursor);
+  }
+
+  async sadd(key: string, ...members: string[]) {
+    if (members.length === 0) {
+      return 0;
+    }
+    return this.client.sadd(key, ...members);
   }
 
   async zrange(key: string, start: number, stop: number, options?: ZrangeOptions) {
@@ -132,6 +168,10 @@ class CompatRedis {
       return this.client.zrevrange(key, start, stop);
     }
     return this.client.zrange(key, start, stop);
+  }
+
+  async zcard(key: string) {
+    return this.client.zcard(key);
   }
 
   pipeline() {

@@ -17,6 +17,8 @@ function describeWxRequestFail(error) {
       shortMessage: "连接被中断，请检查网络、代理或联系管理员排查服务器 HTTPS/Nginx",
       devtoolsDetail:
         "ERR_CONNECTION_CLOSED / ERR_CONNECTION_RESET：多为服务端 443/证书/Nginx、防火墙重置连接，或本机 VPN/代理。请在服务器确认 HTTPS 与反代；联调可在设置页切到 http://127.0.0.1:3003 并本地起后台。",
+      category: "network_disconnect",
+      retryable: true,
     };
   }
 
@@ -24,6 +26,8 @@ function describeWxRequestFail(error) {
     return {
       shortMessage: "HTTPS 证书异常，请联系管理员",
       devtoolsDetail: errMsg,
+      category: "tls_certificate",
+      retryable: false,
     };
   }
 
@@ -31,12 +35,16 @@ function describeWxRequestFail(error) {
     return {
       shortMessage: "请求超时，请稍后重试",
       devtoolsDetail: errMsg,
+      category: "timeout",
+      retryable: true,
     };
   }
 
   return {
     shortMessage: "网络请求失败，请检查接口地址或网络连接",
     devtoolsDetail: errMsg || JSON.stringify(error),
+    category: "network_unknown",
+    retryable: true,
   };
 }
 
