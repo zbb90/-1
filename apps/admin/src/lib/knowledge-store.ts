@@ -88,7 +88,10 @@ async function persistRows(table: KbTableName, rows: Row[]) {
     const { rebuildKnowledgeTagIndex } = await import("@/lib/knowledge-tags");
     await rebuildKnowledgeTagIndex();
   } catch (error) {
-    console.warn(`[knowledge-store] rebuildKnowledgeTagIndex skipped for ${table}`, error);
+    console.warn(
+      `[knowledge-store] rebuildKnowledgeTagIndex skipped for ${table}`,
+      error,
+    );
   }
 }
 

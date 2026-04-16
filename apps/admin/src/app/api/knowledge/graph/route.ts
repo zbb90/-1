@@ -42,11 +42,16 @@ function buildNodeLabel(table: KbTableName, row: Record<string, string>) {
 
 export async function GET(request: NextRequest) {
   if (!(await isAdminSessionOrBasicAuthorized(request))) {
-    return NextResponse.json({ ok: false, message: "需要管理员身份。" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "需要管理员身份。" },
+      { status: 401 },
+    );
   }
 
   try {
-    const tableFilter = request.nextUrl.searchParams.get("table")?.trim() as KbTableName | null;
+    const tableFilter = request.nextUrl.searchParams
+      .get("table")
+      ?.trim() as KbTableName | null;
     const tagFilter = request.nextUrl.searchParams.get("tag")?.trim() || "";
     const includeIsolated = request.nextUrl.searchParams.get("includeIsolated") !== "0";
     const tables: KbTableName[] = [
@@ -113,7 +118,9 @@ export async function GET(request: NextRequest) {
         targetLabel: link.targetLabel,
         sourceKind: link.source,
       }))
-      .filter((edge) => allowedNodeIds.has(edge.source) && allowedNodeIds.has(edge.target));
+      .filter(
+        (edge) => allowedNodeIds.has(edge.source) && allowedNodeIds.has(edge.target),
+      );
 
     return NextResponse.json({
       ok: true,
@@ -125,14 +132,20 @@ export async function GET(request: NextRequest) {
           edges: edges.length,
           isolatedNodes: nodes.filter((node) => node.isIsolated).length,
           tables: Object.fromEntries(
-            tables.map((table) => [table, nodes.filter((node) => node.table === table).length]),
+            tables.map((table) => [
+              table,
+              nodes.filter((node) => node.table === table).length,
+            ]),
           ),
         },
       },
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, message: error instanceof Error ? error.message : "读取知识图谱失败" },
+      {
+        ok: false,
+        message: error instanceof Error ? error.message : "读取知识图谱失败",
+      },
       { status: 500 },
     );
   }

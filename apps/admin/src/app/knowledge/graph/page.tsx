@@ -101,7 +101,11 @@ export default async function KnowledgeGraphPage() {
           </>
         }
         actions={
-          <AdminNav current="knowledge" showUsersLink={isLeader} showStorageLink={isLeader} />
+          <AdminNav
+            current="knowledge"
+            showUsersLink={isLeader}
+            showStorageLink={isLeader}
+          />
         }
         footer={
           <div className="flex flex-wrap gap-2">
@@ -122,15 +126,17 @@ export default async function KnowledgeGraphPage() {
       />
 
       <KnowledgeGraphView
-        initialNodes={nodes as Array<{
-          id: string;
-          table: KbTableName;
-          itemId: string;
-          label: string;
-          tags: string[];
-          degree: number;
-          isIsolated: boolean;
-        }>}
+        initialNodes={
+          nodes as Array<{
+            id: string;
+            table: KbTableName;
+            itemId: string;
+            label: string;
+            tags: string[];
+            degree: number;
+            isIsolated: boolean;
+          }>
+        }
         initialEdges={edges}
       />
     </AdminShell>

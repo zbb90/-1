@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   if (!(await isAdminSessionOrBasicAuthorized(request))) {
-    return NextResponse.json({ ok: false, message: "需要管理员身份。" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "需要管理员身份。" },
+      { status: 401 },
+    );
   }
 
   try {

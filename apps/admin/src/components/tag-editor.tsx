@@ -14,17 +14,25 @@ type TagEditorProps = {
 };
 
 function normalizeTags(raw: string) {
-  return [...new Set(raw
-    .split(/[，,、；;\n]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean))];
+  return [
+    ...new Set(
+      raw
+        .split(/[，,、；;\n]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function stringifyTags(tags: string[]) {
   return normalizeTags(tags.join(",")).join(",");
 }
 
-export function TagEditor({ value, onChange, placeholder = "输入标签后回车，如：效期,仓储" }: TagEditorProps) {
+export function TagEditor({
+  value,
+  onChange,
+  placeholder = "输入标签后回车，如：效期,仓储",
+}: TagEditorProps) {
   const [draft, setDraft] = useState("");
   const [suggestions, setSuggestions] = useState<TagStatsItem[]>([]);
   const [loading, setLoading] = useState(false);

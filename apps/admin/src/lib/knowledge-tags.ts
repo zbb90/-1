@@ -61,10 +61,14 @@ function primaryField(table: KbTableName) {
 }
 
 export function normalizeTags(raw: string | undefined | null) {
-  return [...new Set((raw || "")
-    .split(/[，,、；;\n]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean))];
+  return [
+    ...new Set(
+      (raw || "")
+        .split(/[，,、；;\n]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 export function stringifyTags(tags: string[]) {
@@ -109,12 +113,19 @@ async function writeTagIndex(index: KnowledgeTagIndex) {
       await redis.set(TAG_INDEX_KEY, index);
       return;
     } catch (error) {
-      console.warn("[knowledge-tags] failed to persist tag index to redis, fallback to file", error);
+      console.warn(
+        "[knowledge-tags] failed to persist tag index to redis, fallback to file",
+        error,
+      );
     }
   }
 
   await ensureTagIndexFile();
-  await writeFile(getTagIndexFilePath(), `${JSON.stringify(index, null, 2)}\n`, "utf-8");
+  await writeFile(
+    getTagIndexFilePath(),
+    `${JSON.stringify(index, null, 2)}\n`,
+    "utf-8",
+  );
 }
 
 async function readPersistedTagIndex(): Promise<KnowledgeTagIndex> {
@@ -123,7 +134,10 @@ async function readPersistedTagIndex(): Promise<KnowledgeTagIndex> {
       const redis = await getRedis();
       return parseStoredIndex(await redis.get(TAG_INDEX_KEY));
     } catch (error) {
-      console.warn("[knowledge-tags] failed to read tag index from redis, fallback to file", error);
+      console.warn(
+        "[knowledge-tags] failed to read tag index from redis, fallback to file",
+        error,
+      );
     }
   }
 

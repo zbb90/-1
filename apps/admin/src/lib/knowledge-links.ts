@@ -99,7 +99,12 @@ function parseStoredLink(raw: unknown): KnowledgeLink | null {
   };
 }
 
-function linkSignature(link: Pick<KnowledgeLink, "sourceTable" | "sourceId" | "targetTable" | "targetId" | "linkType">) {
+function linkSignature(
+  link: Pick<
+    KnowledgeLink,
+    "sourceTable" | "sourceId" | "targetTable" | "targetId" | "linkType"
+  >,
+) {
   return [
     link.sourceTable,
     link.sourceId,
@@ -131,9 +136,14 @@ async function readStoredLinks(): Promise<KnowledgeLink[]> {
       const redis = await getRedis();
       const raw = await redis.get<unknown[]>(LINK_STORE_KEY);
       if (!Array.isArray(raw)) return [];
-      return raw.map(parseStoredLink).filter((item): item is KnowledgeLink => Boolean(item));
+      return raw
+        .map(parseStoredLink)
+        .filter((item): item is KnowledgeLink => Boolean(item));
     } catch (error) {
-      console.warn("[knowledge-links] failed to read redis links, fallback to file", error);
+      console.warn(
+        "[knowledge-links] failed to read redis links, fallback to file",
+        error,
+      );
     }
   }
 
@@ -142,7 +152,9 @@ async function readStoredLinks(): Promise<KnowledgeLink[]> {
   try {
     const parsed = JSON.parse(raw) as unknown[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.map(parseStoredLink).filter((item): item is KnowledgeLink => Boolean(item));
+    return parsed
+      .map(parseStoredLink)
+      .filter((item): item is KnowledgeLink => Boolean(item));
   } catch (error) {
     console.warn("[knowledge-links] failed to parse local links file", error);
     return [];
@@ -160,12 +172,19 @@ async function writeStoredLinks(links: KnowledgeLink[]) {
       await redis.set(LINK_STORE_KEY, manualOnly);
       return;
     } catch (error) {
-      console.warn("[knowledge-links] failed to persist links to redis, fallback to file", error);
+      console.warn(
+        "[knowledge-links] failed to persist links to redis, fallback to file",
+        error,
+      );
     }
   }
 
   await ensureLinkFile();
-  await writeFile(getLinkFilePath(), `${JSON.stringify(manualOnly, null, 2)}\n`, "utf-8");
+  await writeFile(
+    getLinkFilePath(),
+    `${JSON.stringify(manualOnly, null, 2)}\n`,
+    "utf-8",
+  );
 }
 
 async function buildEntryMaps() {
@@ -197,9 +216,14 @@ function getEntryLabel(table: KbTableName, row: Row | undefined, fallbackId: str
 }
 
 async function buildDerivedLinks(): Promise<KnowledgeLink[]> {
-  const [rules, consensus] = await Promise.all([readRows("rules"), readRows("consensus")]);
+  const [rules, consensus] = await Promise.all([
+    readRows("rules"),
+    readRows("consensus"),
+  ]);
   const links: KnowledgeLink[] = [];
-  const consensusIds = new Set(consensus.map((row) => row.consensus_id?.trim()).filter(Boolean));
+  const consensusIds = new Set(
+    consensus.map((row) => row.consensus_id?.trim()).filter(Boolean),
+  );
   const rulesByClause = new Map<string, string[]>();
 
   for (const rule of rules) {
@@ -298,7 +322,9 @@ export async function getKnowledgeLinksForEntry(table: KbTableName, id: string) 
   const links = await listKnowledgeLinks();
   return {
     forward: links.filter((link) => link.sourceTable === table && link.sourceId === id),
-    backward: links.filter((link) => link.targetTable === table && link.targetId === id),
+    backward: links.filter(
+      (link) => link.targetTable === table && link.targetId === id,
+    ),
   };
 }
 
@@ -339,7 +365,9 @@ export async function addKnowledgeLink(input: {
   };
 
   const existingLinks = await listKnowledgeLinks();
-  const duplicate = existingLinks.find((link) => linkSignature(link) === linkSignature(next));
+  const duplicate = existingLinks.find(
+    (link) => linkSignature(link) === linkSignature(next),
+  );
   if (duplicate) {
     return duplicate;
   }
@@ -357,7 +385,10 @@ export async function removeKnowledgeLink(id: string) {
 }
 
 export async function materializeDerivedKnowledgeLinks() {
-  const [manualLinks, derivedLinks] = await Promise.all([readStoredLinks(), buildDerivedLinks()]);
+  const [manualLinks, derivedLinks] = await Promise.all([
+    readStoredLinks(),
+    buildDerivedLinks(),
+  ]);
   const manualSignatures = new Set(manualLinks.map((link) => linkSignature(link)));
   const seeded: KnowledgeLink[] = [];
 

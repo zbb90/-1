@@ -23,7 +23,10 @@ function isKbTableName(value: string | null): value is KbTableName {
 
 export async function GET(request: NextRequest) {
   if (!(await isAdminSessionOrBasicAuthorized(request))) {
-    return NextResponse.json({ ok: false, message: "需要管理员身份。" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "需要管理员身份。" },
+      { status: 401 },
+    );
   }
 
   const table = request.nextUrl.searchParams.get("table");
@@ -48,7 +51,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!(await isAdminSessionOrBasicAuthorized(request))) {
-    return NextResponse.json({ ok: false, message: "需要管理员身份。" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "需要管理员身份。" },
+      { status: 401 },
+    );
   }
 
   try {
@@ -60,7 +66,10 @@ export async function POST(request: NextRequest) {
       linkType: "references" | "supports" | "related" | "supersedes" | "contradicts";
     };
     if (!isKbTableName(body.sourceTable) || !isKbTableName(body.targetTable)) {
-      return NextResponse.json({ ok: false, message: "知识表类型无效。" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: "知识表类型无效。" },
+        { status: 400 },
+      );
     }
 
     const link = await addKnowledgeLink(body);
@@ -75,19 +84,28 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   if (!(await isAdminSessionOrBasicAuthorized(request))) {
-    return NextResponse.json({ ok: false, message: "需要管理员身份。" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "需要管理员身份。" },
+      { status: 401 },
+    );
   }
 
   try {
     const body = (await request.json()) as { id?: string };
     const id = body.id?.trim();
     if (!id) {
-      return NextResponse.json({ ok: false, message: "缺少关联 ID。" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: "缺少关联 ID。" },
+        { status: 400 },
+      );
     }
 
     const removed = await removeKnowledgeLink(id);
     if (!removed) {
-      return NextResponse.json({ ok: false, message: "未找到可删除的手动关联。" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, message: "未找到可删除的手动关联。" },
+        { status: 404 },
+      );
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

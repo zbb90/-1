@@ -97,7 +97,9 @@ export async function getKnowledgeHealthReport() {
   const linkedRules = ruleItems.filter((item) => item.linkCount > 0).length;
   const activeRules30d = recentHitSet.size;
 
-  const orphanRules = ruleItems.filter((item) => item.linkCount === 0 && !item.hasConsensusSource);
+  const orphanRules = ruleItems.filter(
+    (item) => item.linkCount === 0 && !item.hasConsensusSource,
+  );
   const consensusGapRules = ruleItems.filter((item) => !item.hasConsensusSource);
   const coldRules = ruleItems.filter((item) => item.hitCount === 0);
   const highTrafficWithoutConsensus = ruleItems.filter(
@@ -108,12 +110,15 @@ export async function getKnowledgeHealthReport() {
     summary: {
       totalRules,
       rulesWithConsensus,
-      consensusCoveragePct: totalRules > 0 ? Math.round((rulesWithConsensus / totalRules) * 100) : 0,
+      consensusCoveragePct:
+        totalRules > 0 ? Math.round((rulesWithConsensus / totalRules) * 100) : 0,
       linkedRules,
-      linkCoveragePct: totalRules > 0 ? Math.round((linkedRules / totalRules) * 100) : 0,
+      linkCoveragePct:
+        totalRules > 0 ? Math.round((linkedRules / totalRules) * 100) : 0,
       orphanRules: orphanRules.length,
       activeRules30d,
-      activeRules30dPct: totalRules > 0 ? Math.round((activeRules30d / totalRules) * 100) : 0,
+      activeRules30dPct:
+        totalRules > 0 ? Math.round((activeRules30d / totalRules) * 100) : 0,
       coldRules: coldRules.length,
     },
     topHitRules: sortByHits(ruleItems).slice(0, 10),

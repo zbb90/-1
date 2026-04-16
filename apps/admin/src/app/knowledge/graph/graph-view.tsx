@@ -39,7 +39,8 @@ type GraphEdge = {
 };
 
 type PositionedNode = GraphNode & SimulationNodeDatum;
-type PositionedEdge = Omit<GraphEdge, "source" | "target"> & SimulationLinkDatum<PositionedNode>;
+type PositionedEdge = Omit<GraphEdge, "source" | "target"> &
+  SimulationLinkDatum<PositionedNode>;
 
 const TABLE_LABELS: Record<TableKey, string> = {
   rules: "规则",
@@ -117,12 +118,12 @@ export function KnowledgeGraphView({
     const nodes: PositionedNode[] = filtered.nodes.map((node) => ({ ...node }));
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
     const edges = filtered.edges.reduce<PositionedEdge[]>((acc, edge) => {
-        const source = nodeMap.get(edge.source);
-        const target = nodeMap.get(edge.target);
-        if (!source || !target) return acc;
-        acc.push({ ...edge, source, target });
-        return acc;
-      }, []);
+      const source = nodeMap.get(edge.source);
+      const target = nodeMap.get(edge.target);
+      if (!source || !target) return acc;
+      acc.push({ ...edge, source, target });
+      return acc;
+    }, []);
 
     if (nodes.length === 0) {
       return { layoutNodes: [], layoutEdges: [] };
@@ -131,7 +132,12 @@ export function KnowledgeGraphView({
     const simulation = forceSimulation<PositionedNode>(nodes)
       .force("charge", forceManyBody().strength(-190))
       .force("center", forceCenter(width / 2, height / 2))
-      .force("collision", forceCollide<PositionedNode>().radius((node) => 18 + Math.min(node.degree, 6) * 2))
+      .force(
+        "collision",
+        forceCollide<PositionedNode>().radius(
+          (node) => 18 + Math.min(node.degree, 6) * 2,
+        ),
+      )
       .force(
         "link",
         forceLink<PositionedNode, PositionedEdge>(edges)
@@ -213,7 +219,13 @@ export function KnowledgeGraphView({
                   y2={target.y || 0}
                   stroke={edgeStroke(edge)}
                   strokeWidth={edge.linkType === "contradicts" ? 2.5 : 1.6}
-                  strokeDasharray={edge.linkType === "related" ? "6 4" : edge.linkType === "supersedes" ? "2 3" : undefined}
+                  strokeDasharray={
+                    edge.linkType === "related"
+                      ? "6 4"
+                      : edge.linkType === "supersedes"
+                        ? "2 3"
+                        : undefined
+                  }
                   opacity={0.7}
                 />
               );
@@ -260,7 +272,10 @@ export function KnowledgeGraphView({
             </div>
             <div className="mt-4 grid gap-2">
               {Object.entries(TABLE_LABELS).map(([table, label]) => (
-                <div key={table} className="flex items-center gap-2 text-xs text-gray-600">
+                <div
+                  key={table}
+                  className="flex items-center gap-2 text-xs text-gray-600"
+                >
                   <span
                     className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: TABLE_COLORS[table as TableKey] }}

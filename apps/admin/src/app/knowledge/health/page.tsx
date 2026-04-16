@@ -31,12 +31,16 @@ function HealthPanel({
       ) : (
         <div className="mt-4 space-y-3">
           {items.map((item) => (
-            <div key={`${title}-${item.ruleId}`} className="rounded-xl bg-gray-50 px-4 py-3">
+            <div
+              key={`${title}-${item.ruleId}`}
+              className="rounded-xl bg-gray-50 px-4 py-3"
+            >
               <p className="text-sm font-medium text-gray-900">
                 {item.ruleId}｜{item.clauseTitle || "-"}
               </p>
               <p className="mt-1 text-xs text-gray-500">
-                条款号 {item.clauseNo || "-"} · 命中 {item.hitCount} 次 · 关联 {item.linkCount} 条
+                条款号 {item.clauseNo || "-"} · 命中 {item.hitCount} 次 · 关联{" "}
+                {item.linkCount} 条
               </p>
               {item.lastHitAt ? (
                 <p className="mt-1 text-xs text-gray-400">最近命中：{item.lastHitAt}</p>
@@ -68,7 +72,11 @@ export default async function KnowledgeHealthPage() {
           </>
         }
         actions={
-          <AdminNav current="knowledge" showUsersLink={isLeader} showStorageLink={isLeader} />
+          <AdminNav
+            current="knowledge"
+            showUsersLink={isLeader}
+            showStorageLink={isLeader}
+          />
         }
         footer={
           <div className="flex flex-wrap gap-2">
@@ -91,7 +99,9 @@ export default async function KnowledgeHealthPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
           <p className="text-xs font-medium text-gray-500">规则总数</p>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{report.summary.totalRules}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {report.summary.totalRules}
+          </p>
         </div>
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
           <p className="text-xs font-medium text-gray-500">共识覆盖</p>
@@ -99,7 +109,8 @@ export default async function KnowledgeHealthPage() {
             {report.summary.consensusCoveragePct}%
           </p>
           <p className="mt-1 text-xs text-gray-500">
-            {report.summary.rulesWithConsensus}/{report.summary.totalRules} 条规则已绑定共识
+            {report.summary.rulesWithConsensus}/{report.summary.totalRules}{" "}
+            条规则已绑定共识
           </p>
         </div>
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
@@ -108,7 +119,8 @@ export default async function KnowledgeHealthPage() {
             {report.summary.linkCoveragePct}%
           </p>
           <p className="mt-1 text-xs text-gray-500">
-            {report.summary.linkedRules}/{report.summary.totalRules} 条规则已进入知识网络
+            {report.summary.linkedRules}/{report.summary.totalRules}{" "}
+            条规则已进入知识网络
           </p>
         </div>
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">

@@ -122,10 +122,14 @@ function buildRowOptionLabel(tab: TabKey, row: Row) {
 }
 
 function normalizeTags(raw: string) {
-  return [...new Set((raw || "")
-    .split(/[，,、；;\n]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean))];
+  return [
+    ...new Set(
+      (raw || "")
+        .split(/[，,、；;\n]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function HealthList({
@@ -153,8 +157,8 @@ function HealthList({
                 {item.ruleId}｜{item.clauseTitle || "-"}
               </p>
               <p className="mt-1 text-xs text-gray-500">
-                条款号 {item.clauseNo || "-"} · 命中 {item.hitCount} 次 · 关联 {item.linkCount} 条
-                · 最近 {formatDateLabel(item.lastHitAt)}
+                条款号 {item.clauseNo || "-"} · 命中 {item.hitCount} 次 · 关联{" "}
+                {item.linkCount} 条 · 最近 {formatDateLabel(item.lastHitAt)}
               </p>
             </div>
           ))}
@@ -241,7 +245,9 @@ export function KnowledgeTabs() {
     setTagLoading(true);
     setTagError("");
     try {
-      const url = tag ? `/api/knowledge/tags?tag=${encodeURIComponent(tag)}` : "/api/knowledge/tags";
+      const url = tag
+        ? `/api/knowledge/tags?tag=${encodeURIComponent(tag)}`
+        : "/api/knowledge/tags";
       const res = await fetch(url);
       const json = await res.json();
       if (json.ok) {
@@ -261,7 +267,9 @@ export function KnowledgeTabs() {
     setLinkLoading(true);
     setLinkMsg("");
     try {
-      const res = await fetch(`/api/knowledge/links?table=${tab}&id=${encodeURIComponent(id)}`);
+      const res = await fetch(
+        `/api/knowledge/links?table=${tab}&id=${encodeURIComponent(id)}`,
+      );
       const json = await res.json();
       if (json.ok) {
         setForwardLinks((json.data?.forward ?? []) as LinkItem[]);
@@ -348,7 +356,11 @@ export function KnowledgeTabs() {
   }
 
   async function refreshAfterMutation(tab: TabKey) {
-    await Promise.all([fetchRows(tab), fetchHealth(), fetchTags(selectedTag || undefined)]);
+    await Promise.all([
+      fetchRows(tab),
+      fetchHealth(),
+      fetchTags(selectedTag || undefined),
+    ]);
   }
 
   async function toggleStatus(row: Row) {
@@ -529,10 +541,14 @@ export function KnowledgeTabs() {
             .includes(search.toLowerCase()),
         )
       : true;
-    const tagMatched = selectedTag ? normalizeTags(r.tags || "").includes(selectedTag) : true;
+    const tagMatched = selectedTag
+      ? normalizeTags(r.tags || "").includes(selectedTag)
+      : true;
     return searchMatched && tagMatched;
   });
-  const selectedTargetOption = targetOptions.find((row) => row[idField(targetTable)] === targetId);
+  const selectedTargetOption = targetOptions.find(
+    (row) => row[idField(targetTable)] === targetId,
+  );
 
   return (
     <div className="space-y-4">
@@ -572,28 +588,36 @@ export function KnowledgeTabs() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-xl bg-gray-50 px-4 py-3">
                 <p className="text-xs text-gray-500">规则总数</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-900">{health.summary.totalRules}</p>
+                <p className="mt-1 text-2xl font-semibold text-gray-900">
+                  {health.summary.totalRules}
+                </p>
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-3">
                 <p className="text-xs text-gray-500">有共识支撑</p>
                 <p className="mt-1 text-2xl font-semibold text-gray-900">
                   {health.summary.rulesWithConsensus}
                 </p>
-                <p className="text-xs text-green-700">{health.summary.consensusCoveragePct}% 覆盖</p>
+                <p className="text-xs text-green-700">
+                  {health.summary.consensusCoveragePct}% 覆盖
+                </p>
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-3">
                 <p className="text-xs text-gray-500">已建立关联</p>
                 <p className="mt-1 text-2xl font-semibold text-gray-900">
                   {health.summary.linkedRules}
                 </p>
-                <p className="text-xs text-blue-700">{health.summary.linkCoveragePct}% 覆盖</p>
+                <p className="text-xs text-blue-700">
+                  {health.summary.linkCoveragePct}% 覆盖
+                </p>
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-3">
                 <p className="text-xs text-gray-500">近 30 天有命中</p>
                 <p className="mt-1 text-2xl font-semibold text-gray-900">
                   {health.summary.activeRules30d}
                 </p>
-                <p className="text-xs text-emerald-700">{health.summary.activeRules30dPct}% 活跃</p>
+                <p className="text-xs text-emerald-700">
+                  {health.summary.activeRules30dPct}% 活跃
+                </p>
               </div>
               <div className="rounded-xl bg-red-50 px-4 py-3 ring-1 ring-red-100">
                 <p className="text-xs text-red-700">需关注</p>
@@ -601,7 +625,8 @@ export function KnowledgeTabs() {
                   {health.summary.orphanRules + health.summary.coldRules}
                 </p>
                 <p className="text-xs text-red-600">
-                  孤立规则 {health.summary.orphanRules}，冷规则 {health.summary.coldRules}
+                  孤立规则 {health.summary.orphanRules}，冷规则{" "}
+                  {health.summary.coldRules}
                 </p>
               </div>
             </div>
@@ -676,7 +701,9 @@ export function KnowledgeTabs() {
         {selectedTag ? (
           <div className="mt-4 rounded-xl bg-gray-50 p-4 ring-1 ring-gray-100">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-gray-900">#{selectedTag} 的跨表结果</p>
+              <p className="text-sm font-medium text-gray-900">
+                #{selectedTag} 的跨表结果
+              </p>
               <p className="text-xs text-gray-500">当前表格也会按该标签同步筛选</p>
             </div>
             {selectedTagEntries.length === 0 ? (
@@ -689,7 +716,9 @@ export function KnowledgeTabs() {
                     className="rounded-xl border border-gray-100 bg-white px-3 py-2"
                   >
                     <p className="text-sm font-medium text-gray-900">{entry.label}</p>
-                    <p className="mt-1 text-xs text-gray-500">来源表：{TABS.find((tab) => tab.key === entry.table)?.label}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      来源表：{TABS.find((tab) => tab.key === entry.table)?.label}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -703,7 +732,9 @@ export function KnowledgeTabs() {
           <p className="text-sm text-gray-500">
             共 <span className="font-semibold text-gray-800">{rows.length}</span> 条
             {search.trim() && filteredRows.length !== rows.length && (
-              <span className="ml-1 text-amber-600">（筛选出 {filteredRows.length} 条）</span>
+              <span className="ml-1 text-amber-600">
+                （筛选出 {filteredRows.length} 条）
+              </span>
             )}
           </p>
           <input
@@ -954,7 +985,9 @@ export function KnowledgeTabs() {
                       这里新增的是独立链接，不会覆盖现有规则、共识或清单字段。
                     </p>
                   </div>
-                  {linkLoading ? <span className="text-xs text-gray-400">处理中...</span> : null}
+                  {linkLoading ? (
+                    <span className="text-xs text-gray-400">处理中...</span>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-[160px_minmax(0,1fr)_auto]">
@@ -966,23 +999,30 @@ export function KnowledgeTabs() {
                     }}
                     className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
                   >
-                    {TABS.filter((tab) => tab.key !== activeTab || rows.length > 1).map((tab) => (
-                      <option key={tab.key} value={tab.key}>
-                        {tab.label}
-                      </option>
-                    ))}
+                    {TABS.filter((tab) => tab.key !== activeTab || rows.length > 1).map(
+                      (tab) => (
+                        <option key={tab.key} value={tab.key}>
+                          {tab.label}
+                        </option>
+                      ),
+                    )}
                   </select>
                   <div>
                     <input
                       list="knowledge-link-targets"
                       value={targetId}
                       onChange={(e) => setTargetId(e.target.value)}
-                      placeholder={targetLoading ? "正在加载可选条目..." : "输入目标条目编号"}
+                      placeholder={
+                        targetLoading ? "正在加载可选条目..." : "输入目标条目编号"
+                      }
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
                     />
                     <datalist id="knowledge-link-targets">
                       {targetOptions.map((row) => (
-                        <option key={`${targetTable}-${row[idField(targetTable)]}`} value={row[idField(targetTable)]}>
+                        <option
+                          key={`${targetTable}-${row[idField(targetTable)]}`}
+                          value={row[idField(targetTable)]}
+                        >
                           {buildRowOptionLabel(targetTable, row)}
                         </option>
                       ))}
@@ -1020,9 +1060,14 @@ export function KnowledgeTabs() {
                             key={link.id}
                             className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
                           >
-                            <p className="text-sm font-medium text-gray-900">{link.targetLabel}</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {link.targetLabel}
+                            </p>
                             <p className="mt-1 text-xs text-gray-500">
-                              类型：{LINK_TYPE_OPTIONS.find((item) => item.value === link.linkType)?.label || link.linkType}
+                              类型：
+                              {LINK_TYPE_OPTIONS.find(
+                                (item) => item.value === link.linkType,
+                              )?.label || link.linkType}
                               · 来源：{link.source === "manual" ? "手动" : "派生"}
                             </p>
                             {link.source === "manual" ? (
@@ -1050,9 +1095,14 @@ export function KnowledgeTabs() {
                             key={link.id}
                             className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
                           >
-                            <p className="text-sm font-medium text-gray-900">{link.sourceLabel}</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {link.sourceLabel}
+                            </p>
                             <p className="mt-1 text-xs text-gray-500">
-                              类型：{LINK_TYPE_OPTIONS.find((item) => item.value === link.linkType)?.label || link.linkType}
+                              类型：
+                              {LINK_TYPE_OPTIONS.find(
+                                (item) => item.value === link.linkType,
+                              )?.label || link.linkType}
                               · 来源：{link.source === "manual" ? "手动" : "派生"}
                             </p>
                           </div>
