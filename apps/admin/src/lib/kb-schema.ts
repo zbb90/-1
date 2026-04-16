@@ -24,6 +24,7 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "示例问法",
     "备注",
     "状态",
+    "tags",
   ],
   consensus: [
     "consensus_id",
@@ -38,6 +39,7 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "来源文件",
     "备注",
     "状态",
+    "tags",
   ],
   "external-purchases": [
     "item_id",
@@ -49,6 +51,7 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "说明",
     "备注",
     "状态",
+    "tags",
   ],
   "old-items": [
     "item_id",
@@ -60,6 +63,7 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "参考图片名称",
     "备注",
     "状态",
+    "tags",
   ],
   operations: [
     "op_id",
@@ -73,6 +77,7 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "来源文件",
     "备注",
     "状态",
+    "tags",
   ],
 };
 

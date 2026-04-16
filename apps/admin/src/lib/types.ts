@@ -14,6 +14,7 @@ export interface RuleRow {
   示例问法: string;
   状态: string;
   备注: string;
+  tags: string;
 }
 
 export interface ConsensusRow {
@@ -30,6 +31,7 @@ export interface ConsensusRow {
   更新时间: string;
   状态: string;
   备注: string;
+  tags: string;
 }
 
 export interface ExternalPurchaseRow {
@@ -42,6 +44,7 @@ export interface ExternalPurchaseRow {
   说明: string;
   状态: string;
   备注: string;
+  tags: string;
 }
 
 export interface OldItemRow {
@@ -54,6 +57,7 @@ export interface OldItemRow {
   参考图片名称: string;
   状态: string;
   备注: string;
+  tags: string;
 }
 
 export interface OperationRow {
@@ -68,6 +72,7 @@ export interface OperationRow {
   来源文件: string;
   状态: string;
   备注: string;
+  tags: string;
 }
 
 export interface KnowledgeBase {

@@ -84,6 +84,12 @@ async function persistRows(table: KbTableName, rows: Row[]) {
     await writeTableRows(table, rows);
   }
   invalidateKnowledgeBaseCache();
+  try {
+    const { rebuildKnowledgeTagIndex } = await import("@/lib/knowledge-tags");
+    await rebuildKnowledgeTagIndex();
+  } catch (error) {
+    console.warn(`[knowledge-store] rebuildKnowledgeTagIndex skipped for ${table}`, error);
+  }
 }
 
 async function getRedisTableRowCount(table: KbTableName) {
@@ -120,8 +126,14 @@ function nextId(table: KbTableName, rows: Row[]): string {
 }
 
 export function getHeaders(table: KbTableName, rows: Row[]): string[] {
-  if (rows.length > 0) return Object.keys(rows[0]);
-  return KB_TABLE_HEADERS[table];
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const merged = [...headers];
+  for (const header of KB_TABLE_HEADERS[table]) {
+    if (!merged.includes(header)) {
+      merged.push(header);
+    }
+  }
+  return merged.length > 0 ? merged : KB_TABLE_HEADERS[table];
 }
 
 /* ------------------------------------------------------------------ */

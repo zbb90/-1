@@ -7,6 +7,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { readCsvAsObjects } from "@/lib/csv";
 import { invalidateKnowledgeBaseCache } from "@/lib/knowledge-loader";
+import { KB_TABLE_HEADERS } from "@/lib/kb-schema";
 import type {
   ConsensusRow,
   ExternalPurchaseRow,
@@ -102,6 +103,17 @@ async function readCsvHeaders(filePath: string): Promise<string[]> {
   return firstLine.split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
 }
 
+function mergeHeaders(table: KbTableName, headers: string[]) {
+  const existing = headers.filter(Boolean);
+  const merged = [...existing];
+  for (const header of KB_TABLE_HEADERS[table]) {
+    if (!merged.includes(header)) {
+      merged.push(header);
+    }
+  }
+  return merged;
+}
+
 export async function patchRowStatus(
   table: KbTableName,
   id: string,
@@ -110,7 +122,7 @@ export async function patchRowStatus(
   const path = getCsvPath(table);
   if (!path) return null;
 
-  const headers = await readCsvHeaders(path);
+  const headers = mergeHeaders(table, await readCsvHeaders(path));
   const rows = (await readTable(table)) as unknown as Record<string, string>[];
   const field = idField(table);
   const idx = rows.findIndex((r) => r[field] === id);
@@ -129,7 +141,7 @@ export async function appendRow(
   const path = getCsvPath(table);
   if (!path) throw new Error("当前部署环境无本地 CSV 文件，无法写入。");
 
-  const headers = await readCsvHeaders(path);
+  const headers = mergeHeaders(table, await readCsvHeaders(path));
   const rows = (await readTable(table)) as unknown as Record<string, string>[];
 
   const field = idField(table);
@@ -165,7 +177,7 @@ export async function writeTableRows(
   const path = getCsvPath(table);
   if (!path) throw new Error("当前部署环境无本地 CSV 文件，无法写入。");
 
-  const headers = await readCsvHeaders(path);
+  const headers = mergeHeaders(table, await readCsvHeaders(path));
   const normalizedRows = rows.map((row) => {
     const normalizedRow: Record<string, string> = {};
     for (const h of headers) {
