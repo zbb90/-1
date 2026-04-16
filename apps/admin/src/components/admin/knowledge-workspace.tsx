@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import Link from "next/link";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 export function WorkspaceSection({
   title,
@@ -106,5 +107,92 @@ export function StatusPill({
     >
       {children}
     </span>
+  );
+}
+
+export function WorkspaceEmptyState({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-10 text-center shadow-sm">
+      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+      <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-gray-500">{description}</p>
+      {actions ? <div className="mt-4 flex flex-wrap justify-center gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
+type WorkspaceTone = "slate" | "green" | "amber" | "blue" | "red" | "violet";
+
+function toneClass(tone: WorkspaceTone, outline = false) {
+  const filled = {
+    slate: "bg-slate-900 text-white hover:bg-slate-800",
+    green: "bg-green-700 text-white hover:bg-green-800",
+    amber: "bg-amber-500 text-white hover:bg-amber-600",
+    blue: "bg-blue-600 text-white hover:bg-blue-700",
+    red: "bg-rose-600 text-white hover:bg-rose-700",
+    violet: "bg-violet-600 text-white hover:bg-violet-700",
+  }[tone];
+  const ghost = {
+    slate: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+    green: "border border-green-200 bg-green-50 text-green-700 hover:bg-green-100",
+    amber: "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
+    blue: "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
+    red: "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
+    violet: "border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100",
+  }[tone];
+  return outline ? ghost : filled;
+}
+
+export function WorkspaceActionLink({
+  href,
+  tone = "slate",
+  outline = false,
+  children,
+}: {
+  href: string;
+  tone?: WorkspaceTone;
+  outline?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium transition ${toneClass(
+        tone,
+        outline,
+      )}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+export function WorkspaceActionButton({
+  tone = "slate",
+  outline = false,
+  className = "",
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  tone?: WorkspaceTone;
+  outline?: boolean;
+}) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${toneClass(
+        tone,
+        outline,
+      )} ${className}`}
+    >
+      {children}
+    </button>
   );
 }

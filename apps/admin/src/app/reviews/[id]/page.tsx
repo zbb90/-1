@@ -5,6 +5,7 @@ import { getReviewTaskById } from "@/lib/review-pool";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { StatusPill, WorkspaceSection } from "@/components/admin/knowledge-workspace";
 import { ReviewTaskForm } from "./review-task-form";
 
 function parseSourcePayload(sourcePayload: string) {
@@ -73,19 +74,17 @@ export default async function ReviewDetailPage({
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
         <div className="space-y-6">
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-200 md:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium tracking-wide text-slate-500">
-                  任务概览
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-gray-900">任务信息</h2>
-              </div>
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+          <WorkspaceSection
+            title="任务信息"
+            description="统一查看当前复核任务的状态、来源与提问信息。"
+            actions={
+              <StatusPill tone={task.status === "待处理" ? "amber" : task.status === "已处理" ? "green" : task.status === "AI已自动回答" ? "blue" : "slate"}>
                 当前状态：{s(task.status)}
-              </div>
-            </div>
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              </StatusPill>
+            }
+            className="md:p-0"
+          >
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs text-gray-500">任务类型</p>
                 <p className="mt-1 text-sm font-medium text-gray-800">{s(task.type)}</p>
@@ -127,26 +126,16 @@ export default async function ReviewDetailPage({
                 </p>
               </div>
             </div>
-          </div>
+          </WorkspaceSection>
 
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-200 md:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium tracking-wide text-slate-500">
-                  原始提问
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-gray-900">
-                  专员提交内容
-                </h2>
-              </div>
-              {source.autoAnswer ? (
-                <div className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
-                  含 AI 初步回答
-                </div>
-              ) : null}
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <WorkspaceSection
+            title="专员提交内容"
+            description="保留原始提问快照，方便对照 AI 初判与主管最终处理。"
+            actions={
+              source.autoAnswer ? <StatusPill tone="blue">含 AI 初步回答</StatusPill> : null
+            }
+          >
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs text-gray-500">门店问题</p>
                 <p className="mt-1 text-sm leading-6 text-gray-800">
@@ -178,9 +167,12 @@ export default async function ReviewDetailPage({
                 </p>
               </div>
             </div>
-          </div>
+          </WorkspaceSection>
 
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+          <WorkspaceSection
+            title="原始技术数据"
+            description="仅用于排查和技术核对，日常处理一般不需要展开。"
+          >
             <details>
               <summary className="cursor-pointer list-none text-sm font-medium text-slate-700">
                 查看原始技术数据
@@ -192,7 +184,7 @@ export default async function ReviewDetailPage({
                 {task.sourcePayload}
               </pre>
             </details>
-          </div>
+          </WorkspaceSection>
         </div>
 
         <div>

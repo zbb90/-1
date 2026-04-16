@@ -283,6 +283,29 @@ function ruleAllowsReminderOrVerification(rule: RuleRow) {
   return rule.是否扣分 === "否" || rule.是否扣分 === "按场景判定";
 }
 
+function ruleIsHealthCertificateAbsenceOrExpiry(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    rule.rule_id === "R-0001" ||
+    rule.条款编号 === "H1.1" ||
+    blob.includes("无证或健康证过期") ||
+    blob.includes("员工持有有效的健康证明")
+  );
+}
+
+function ruleIsHealthCertificateSystemManagement(rule: RuleRow) {
+  const blob = ruleTextBlob(rule);
+  return (
+    rule.rule_id === "R-0002" ||
+    rule.条款编号 === "H1.2" ||
+    blob.includes("员工健康证管理") ||
+    blob.includes("未录入门店宝") ||
+    blob.includes("未上传门店宝") ||
+    blob.includes("有效日期与原证不一致") ||
+    blob.includes("人证不匹配")
+  );
+}
+
 function ruleEmphasizesStorageDiscard(rule: RuleRow) {
   const blob = ruleTextBlob(rule);
   return (
@@ -398,6 +421,38 @@ function applyIntentSignalScore(
   ) {
     score += 10;
     scoreReasons.push("意图理解：问题聚焦无效期/过期");
+  }
+
+  const hasHealthAbsenceOrExpiryIntent = intent.issueTags.some(
+    (tag) => tag === "无健康证" || tag === "健康证过期",
+  );
+  const hasHealthSystemIntent = intent.issueTags.some(
+    (tag) =>
+      tag === "未录入系统" ||
+      tag === "未上传健康证" ||
+      tag === "健康证信息不一致",
+  );
+
+  if (hasHealthAbsenceOrExpiryIntent) {
+    if (ruleIsHealthCertificateAbsenceOrExpiry(rule)) {
+      score += 42;
+      scoreReasons.push("意图理解：已明确是无健康证/健康证过期，提升 H1.1");
+    }
+    if (ruleIsHealthCertificateSystemManagement(rule)) {
+      score -= 34;
+      scoreReasons.push("意图理解：无证/过期不等于系统未录入，降低 H1.2");
+    }
+  }
+
+  if (hasHealthSystemIntent) {
+    if (ruleIsHealthCertificateSystemManagement(rule)) {
+      score += 42;
+      scoreReasons.push("意图理解：已明确是门店宝录入/上传/信息异常，提升 H1.2");
+    }
+    if (ruleIsHealthCertificateAbsenceOrExpiry(rule)) {
+      score -= 34;
+      scoreReasons.push("意图理解：系统未录入/未上传不等于无健康证，降低 H1.1");
+    }
   }
 
   if (

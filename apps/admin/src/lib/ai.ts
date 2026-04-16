@@ -85,6 +85,12 @@ function formatMatchedReasons(reasons?: string[]) {
 function buildDeterministicRegularQuestionExplanation(answer: RegularQuestionAnswer) {
   const conclusion = normalizeText(answer.shouldDeduct);
   const score = normalizeText(answer.deductScore);
+  if (answer.clauseNo === "H1.1") {
+    return `本次命中「${normalizeText(answer.clauseTitle)}」，核心判断是现场人员未持有有效健康证，或健康证本身已经过期。系统结论为「${conclusion}」，对应分值为「${score}」。请先核实证件真伪与有效期，确认无证或过期后按规则处理。`;
+  }
+  if (answer.clauseNo === "H1.2") {
+    return `本次命中「${normalizeText(answer.clauseTitle)}」，核心判断是人员健康证管理异常，不等于现场无健康证。系统结论为「${conclusion}」，对应分值为「${score}」。请重点核实门店宝是否已录入、是否已上传、是否及时更新，以及人证和有效期信息是否一致。`;
+  }
   return `本条命中「${normalizeText(answer.clauseTitle)}」。共识要点见条款解释：${normalizeText(answer.explanation)}。系统判定结论为「${conclusion}」，对应扣分分值为「${score}」。请严格按稽核共识与现场情况执行；如需个案判断请走人工复核。`;
 }
 
@@ -305,6 +311,10 @@ export async function generateRegularQuestionAiExplanation(
   request: RegularQuestionRequest,
   answer: RegularQuestionAnswer,
 ) {
+  if (answer.clauseNo === "H1.1" || answer.clauseNo === "H1.2") {
+    return buildDeterministicRegularQuestionExplanation(answer);
+  }
+
   const conclusion = normalizeText(answer.shouldDeduct);
   const rulesBlock = `
 【硬性对齐，必须遵守】
@@ -314,6 +324,8 @@ export async function generateRegularQuestionAiExplanation(
 - 若判定结论为「按场景判定」：不得擅自给出「一定不扣分」或「一定扣分」的终局结论；应说明须结合现场与共识条款核对，必要时人工复核。
 - 禁止编造「水浴/平冷/转移」等流程细节，除非这些词出现在下面的「条款片段」或「原始解释」中。
 - 优先复述「原始解释」中的共识逻辑；可结合用户描述点出现场，但不得与判定结论矛盾。
+- 若条款编号为 H1.1：必须表述为“无健康证或健康证过期”，禁止改写成“仅系统未录入/未上传”。
+- 若条款编号为 H1.2：必须表述为“健康证管理/系统录入上传更新异常”，禁止改写成“现场无健康证”。
 
 用户提交信息：
 - 问题分类：${normalizeText(request.category)}

@@ -1,6 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import {
+  WorkspaceActionButton,
+  WorkspaceMetric,
+  WorkspaceSection,
+} from "@/components/admin/knowledge-workspace";
 import type { PublicAppUser } from "@/lib/user-store";
 
 const roleLabels: Record<string, string> = {
@@ -160,8 +165,10 @@ export function UserManagement({
 
   return (
     <div className="space-y-6">
-      {/* 权限说明 */}
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
+      <WorkspaceSection
+        title="角色与权限"
+        description="统一说明负责人、主管、专员的来源与权限边界。"
+      >
         <h2 className="text-sm font-semibold text-slate-900">角色与权限</h2>
         <ul className="mt-3 space-y-2 text-sm text-slate-600">
           <li>
@@ -197,31 +204,32 @@ export function UserManagement({
             </span>
           </p>
         ) : null}
-      </div>
+      </WorkspaceSection>
 
-      {/* 操作区 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <button
+      <WorkspaceSection title="账号操作" description="创建主管/副负责人并切换账号筛选。">
+        <div className="flex flex-wrap items-center gap-3">
+        <WorkspaceActionButton
           type="button"
           onClick={() =>
             setCreateMode(createMode === "supervisor" ? null : "supervisor")
           }
-          className="rounded-xl bg-green-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-green-800"
+          tone="green"
         >
           {createMode === "supervisor" ? "取消" : "添加主管"}
-        </button>
+        </WorkspaceActionButton>
         {canDelegate ? (
-          <button
+          <WorkspaceActionButton
             type="button"
             onClick={() =>
               setCreateMode(
                 createMode === "delegated_leader" ? null : "delegated_leader",
               )
             }
-            className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-2.5 text-sm font-medium text-amber-900 transition hover:bg-amber-100"
+            tone="amber"
+            outline
           >
             {createMode === "delegated_leader" ? "取消" : "添加副负责人"}
-          </button>
+          </WorkspaceActionButton>
         ) : (
           <span className="text-xs text-slate-400">
             仅主负责人可添加副负责人（请使用主账号手机号登录）
@@ -244,19 +252,14 @@ export function UserManagement({
             </button>
           ))}
         </div>
-      </div>
+        </div>
+      </WorkspaceSection>
 
       {createMode && (
-        <div
-          className={`rounded-2xl border p-6 space-y-4 ${
-            createMode === "delegated_leader"
-              ? "border-amber-200 bg-amber-50/50"
-              : "border-green-100 bg-green-50/50"
-          }`}
+        <WorkspaceSection
+          title={createMode === "delegated_leader" ? "新建副负责人" : "新建主管"}
+          description="创建成功后会显示一次性临时密码，请立即告知对应人员，并要求首次使用后尽快改密。"
         >
-          <h3 className="text-sm font-semibold text-gray-900">
-            {createMode === "delegated_leader" ? "新建副负责人" : "新建主管"}
-          </h3>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-1.5 text-sm text-gray-700">
               <span>姓名</span>
@@ -279,42 +282,26 @@ export function UserManagement({
               />
             </label>
           </div>
-          <p className="text-xs text-gray-500">
-            创建成功后会显示一次性临时密码，请立即告知对应人员，并要求首次使用后尽快改密。
-          </p>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <button
+          <WorkspaceActionButton
             type="button"
             onClick={handleCreate}
             disabled={isPending}
-            className="rounded-xl bg-green-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-green-800 disabled:bg-green-400"
+            tone={createMode === "delegated_leader" ? "amber" : "green"}
           >
             {isPending ? "提交中…" : "确认创建"}
-          </button>
-        </div>
+          </WorkspaceActionButton>
+        </WorkspaceSection>
       )}
 
-      {/* 统计 */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-          <p className="text-xs text-gray-500">环境内负责人</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{envSummaries.length}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-          <p className="text-xs text-gray-500">副负责人</p>
-          <p className="mt-1 text-2xl font-bold text-amber-700">{delegatedCount}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-          <p className="text-xs text-gray-500">主管</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{supervisorCount}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-          <p className="text-xs text-gray-500">专员</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{specialistCount}</p>
-        </div>
+        <WorkspaceMetric label="环境内负责人" value={envSummaries.length} />
+        <WorkspaceMetric label="副负责人" value={delegatedCount} tone="amber" />
+        <WorkspaceMetric label="主管" value={supervisorCount} tone="blue" />
+        <WorkspaceMetric label="专员" value={specialistCount} tone="violet" />
       </div>
 
-      {/* 表格 */}
+      <WorkspaceSection title="账号列表" description="统一查看 PC 账号与小程序专员账号状态。">
       <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
         <table className="w-full text-left text-sm">
           <thead>
@@ -434,6 +421,7 @@ export function UserManagement({
           </tbody>
         </table>
       </div>
+      </WorkspaceSection>
 
       {/* 重置密码弹窗 */}
       {resetTarget && (
@@ -457,21 +445,22 @@ export function UserManagement({
             </label>
             {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
             <div className="mt-5 flex justify-end gap-3">
-              <button
+              <WorkspaceActionButton
                 type="button"
                 onClick={() => setResetTarget(null)}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                tone="slate"
+                outline
               >
                 取消
-              </button>
-              <button
+              </WorkspaceActionButton>
+              <WorkspaceActionButton
                 type="button"
                 onClick={handleResetPassword}
                 disabled={isPending || newPassword.trim().length < 8}
-                className="rounded-xl bg-green-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-800 disabled:bg-green-400"
+                tone="green"
               >
                 {isPending ? "保存中…" : "确认修改"}
-              </button>
+              </WorkspaceActionButton>
             </div>
           </div>
         </div>

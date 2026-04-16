@@ -5,6 +5,12 @@ import { listReviewTasks } from "@/lib/review-pool";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminShell } from "@/components/admin/admin-shell";
+import {
+  StatusPill,
+  WorkspaceActionLink,
+  WorkspaceEmptyState,
+  WorkspaceSection,
+} from "@/components/admin/knowledge-workspace";
 
 export default async function ReviewsPage() {
   let tasks: Awaited<ReturnType<typeof listReviewTasks>> = [];
@@ -29,22 +35,24 @@ export default async function ReviewsPage() {
             showUsersLink={isLeader}
             showStorageLink={isLeader}
             extraActions={
-              <Link
-                href="/api/reviews/export?format=csv"
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
-              >
+              <WorkspaceActionLink href="/api/reviews/export?format=csv" tone="slate" outline>
                 导出 CSV
-              </Link>
+              </WorkspaceActionLink>
             }
           />
         }
       />
 
-      <section className="space-y-4">
+      <WorkspaceSection
+        title="复核任务"
+        description="统一使用知识库工作台风格的列表卡片展示全部复核任务。"
+      >
+        <div className="space-y-4">
         {tasks.length === 0 ? (
-          <div className="rounded-2xl bg-white p-8 text-sm text-gray-500 shadow-sm ring-1 ring-gray-200">
-            目前还没有复核任务。后续当系统无法判断时，会自动进入这里。
-          </div>
+          <WorkspaceEmptyState
+            title="目前还没有复核任务"
+            description="后续当系统无法判断时，相关问题会自动进入人工复核池。"
+          />
         ) : (
           tasks.map((task) => {
             const id = String(task?.id ?? "-");
@@ -60,7 +68,7 @@ export default async function ReviewsPage() {
               <Link
                 key={id}
                 href={`/reviews/${id}`}
-                className="block rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:ring-green-200"
+                className="block rounded-2xl border border-gray-100 bg-slate-50/70 p-6 transition hover:border-green-200 hover:bg-green-50/50"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -69,9 +77,9 @@ export default async function ReviewsPage() {
                       {type}｜门店编码：{storeCode}
                     </p>
                   </div>
-                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                  <StatusPill tone={status === "待处理" ? "amber" : status === "已处理" ? "green" : "slate"}>
                     {status}
-                  </span>
+                  </StatusPill>
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -104,7 +112,8 @@ export default async function ReviewsPage() {
             );
           })
         )}
-      </section>
+        </div>
+      </WorkspaceSection>
     </AdminShell>
   );
 }

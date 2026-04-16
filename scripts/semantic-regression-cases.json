@@ -158,5 +158,25 @@
       "selfJudgment": "待人工确认"
     },
     "expectedRuleId": "R-0076"
+  },
+  {
+    "name": "健康证未录入系统应命中 H1.2",
+    "input": {
+      "category": "证照/记录/人员规范",
+      "issueTitle": "员工健康证未录入门店宝",
+      "description": "现场人员都有健康证，但其中一名员工未录入门店宝架构，且健康证照片未上传系统",
+      "selfJudgment": "扣 3 分"
+    },
+    "expectedRuleId": "R-0002"
+  },
+  {
+    "name": "无健康证应命中 H1.1",
+    "input": {
+      "category": "证照/记录/人员规范",
+      "issueTitle": "督导无健康证",
+      "description": "巡检时发现当班督导无法提供有效健康证，现场也未见电子健康证或纸质证件",
+      "selfJudgment": "扣分"
+    },
+    "expectedRuleId": "R-0001"
   }
 ]

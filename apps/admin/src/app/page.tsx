@@ -4,7 +4,15 @@ import { getReviewSummary } from "@/lib/review-pool";
 import { getAdminSessionFromCookies } from "@/lib/admin-session";
 import { listAllUsers } from "@/lib/user-store";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminShell } from "@/components/admin/admin-shell";
+import {
+  StatusPill,
+  WorkspaceActionLink,
+  WorkspaceEmptyState,
+  WorkspaceMetric,
+  WorkspaceSection,
+} from "@/components/admin/knowledge-workspace";
 
 export default async function HomePage() {
   let reviewSummary = {
@@ -81,104 +89,84 @@ export default async function HomePage() {
 
   return (
     <AdminShell>
-      {role ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200/80 md:px-5">
-          <AdminNav
-            current="home"
-            showUsersLink={isLeader}
-            showStorageLink={isLeader}
-          />
-        </div>
-      ) : null}
-
-      <section className="rounded-3xl bg-gradient-to-br from-green-700 to-green-900 p-8 text-white shadow-lg">
-        <p className="text-sm font-medium text-green-200">稽核 AI 助手</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">管理工作台</h1>
-        <p className="mt-2 text-sm leading-6 text-green-100">
-          {isLeader
-            ? "您已以负责人身份登录，可管理复核、知识库与全部账号。"
+      <AdminPageHeader
+        eyebrow="稽核 AI 助手"
+        title="管理工作台"
+        description={
+          isLeader
+            ? "您已以负责人身份登录，可统一管理复核、知识库、问答日志与全部账号。"
             : role === "supervisor"
-              ? "您已以主管身份登录，可处理复核任务与管理知识库。"
-              : "请先登录后使用管理功能。"}
-        </p>
-        {!role && (
-          <Link
-            href="/reviews/login"
-            className="mt-4 inline-block rounded-xl bg-white px-5 py-2.5 text-sm font-medium text-green-800 shadow transition hover:bg-green-50"
-          >
-            登录
-          </Link>
-        )}
-      </section>
+              ? "您已以主管身份登录，可处理复核任务、查看问答日志并维护知识库。"
+              : "请先登录后使用管理功能。"
+        }
+        actions={
+          role ? (
+            <AdminNav current="home" showUsersLink={isLeader} showStorageLink={isLeader} />
+          ) : (
+            <WorkspaceActionLink href="/reviews/login" tone="green">
+              登录
+            </WorkspaceActionLink>
+          )
+        }
+      />
 
       <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {stats.map((s) => (
-          <div
-            key={s.label}
-            className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200"
-          >
-            <p className="text-xs font-medium text-gray-500">{s.label}</p>
-            <p className={`mt-2 text-3xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
+          <WorkspaceMetric key={s.label} label={s.label} value={s.value} />
         ))}
       </section>
 
       {isLeader && (
         <section className="grid grid-cols-2 gap-4 md:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-            <p className="text-xs font-medium text-gray-500">主管人数</p>
-            <p className="mt-2 text-3xl font-bold text-gray-900">
-              {userCounts.supervisor}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-            <p className="text-xs font-medium text-gray-500">专员人数</p>
-            <p className="mt-2 text-3xl font-bold text-gray-900">
-              {userCounts.specialist}
-            </p>
-          </div>
+          <WorkspaceMetric label="主管人数" value={userCounts.supervisor} tone="blue" />
+          <WorkspaceMetric label="专员人数" value={userCounts.specialist} tone="violet" />
         </section>
       )}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {navItems.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className="group flex items-start gap-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:shadow-md hover:ring-green-200"
-          >
-            <span className="text-2xl">{item.icon}</span>
-            <div>
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-green-700">
-                {item.label}
-              </p>
-              <p className="mt-1 text-xs text-gray-500">{item.desc}</p>
-            </div>
-          </Link>
-        ))}
-      </section>
-
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">最新复核任务</h2>
-          <Link
-            href="/reviews"
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
-          >
-            查看全部
-          </Link>
+      <WorkspaceSection
+        title="工作入口"
+        description="统一按知识库工作台样式组织常用入口。"
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          {navItems.map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className="group flex items-start gap-4 rounded-2xl border border-gray-100 bg-slate-50/70 p-5 transition hover:border-green-200 hover:bg-green-50/60"
+            >
+              <span className="text-2xl">{item.icon}</span>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 group-hover:text-green-700">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-gray-500">{item.desc}</p>
+              </div>
+            </Link>
+          ))}
         </div>
-        <div className="mt-4 space-y-3">
+      </WorkspaceSection>
+
+      <WorkspaceSection
+        title="最新复核任务"
+        description="保持与小程序“我的复核”一致的最新处理列表。"
+        actions={
+          <WorkspaceActionLink href="/reviews" tone="slate" outline>
+            查看全部
+          </WorkspaceActionLink>
+        }
+      >
+        <div className="space-y-3">
           {latestTasks.length === 0 ? (
-            <p className="text-sm text-gray-400">
-              暂无复核任务，专员在小程序提问后会自动产生。
-            </p>
+            <WorkspaceEmptyState
+              title="暂无复核任务"
+              description="专员在小程序提问后，系统会自动生成复核任务并出现在这里。"
+            />
           ) : (
             latestTasks.map((r) => (
               <Link
                 key={r.id}
                 href={`/reviews/${r.id}`}
-                className="flex items-center justify-between rounded-xl border border-gray-200 p-4 transition hover:bg-gray-50"
+                className="flex items-center justify-between rounded-2xl border border-gray-100 bg-slate-50/70 p-4 transition hover:border-green-200 hover:bg-green-50/60"
               >
                 <div>
                   <p className="text-sm font-medium text-gray-900">{r.description}</p>
@@ -186,22 +174,22 @@ export default async function HomePage() {
                     {r.category} · {r.id}
                   </p>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                <StatusPill
+                  tone={
                     r.status === "待处理"
-                      ? "bg-amber-50 text-amber-700"
+                      ? "amber"
                       : r.status === "已处理"
-                        ? "bg-green-50 text-green-700"
-                        : "bg-slate-100 text-slate-600"
-                  }`}
+                        ? "green"
+                        : "slate"
+                  }
                 >
                   {r.status}
-                </span>
+                </StatusPill>
               </Link>
             ))
           )}
         </div>
-      </section>
+      </WorkspaceSection>
     </AdminShell>
   );
 }

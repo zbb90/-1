@@ -11,6 +11,11 @@ import type {
   ReviewTaskStatus,
 } from "@/lib/types";
 import { MarkWrongButton } from "./mark-wrong-button";
+import {
+  StatusPill,
+  WorkspaceEmptyState,
+  WorkspaceSection,
+} from "@/components/admin/knowledge-workspace";
 
 const STATUS_LABELS: Record<ReviewTaskStatus, string> = {
   AI已自动回答: "AI 已自动回答",
@@ -203,10 +208,7 @@ export default async function ConversationsPage({
             data: [...topEntries(judgeModeStats, 3), ...topEntries(retrievalStats, 3)],
           },
         ].map((panel) => (
-          <div
-            key={panel.title}
-            className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200"
-          >
+          <div key={panel.title} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
             <p className="text-xs font-medium tracking-wide text-gray-500">
               错判分析视图
             </p>
@@ -250,11 +252,16 @@ export default async function ConversationsPage({
         ))}
       </div>
 
-      <section className="space-y-4">
+      <WorkspaceSection
+        title="问答明细"
+        description="按知识库工作台样式统一展示 AI 自动回答、调试快照与人工纠偏入口。"
+      >
+        <div className="space-y-4">
         {tasks.length === 0 ? (
-          <div className="rounded-2xl bg-white p-8 text-sm text-gray-500 shadow-sm ring-1 ring-gray-200">
-            暂无符合条件的问答记录。
-          </div>
+          <WorkspaceEmptyState
+            title="暂无符合条件的问答记录"
+            description="可切换上方筛选条件，或等待新的专员提问进入系统。"
+          />
         ) : (
           tasks.map((task) => {
             const autoAnswer = parseAutoAnswer(task);
@@ -262,7 +269,7 @@ export default async function ConversationsPage({
             return (
               <div
                 key={task.id}
-                className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200"
+                className="rounded-2xl border border-gray-100 bg-slate-50/60 p-6"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -272,10 +279,20 @@ export default async function ConversationsPage({
                       {new Date(task.createdAt).toLocaleString("zh-CN")}
                     </p>
                   </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_COLORS[task.status as ReviewTaskStatus] ?? "bg-gray-50 text-gray-700"}`}
-                  >
+                  <span className="inline-flex">
+                    <StatusPill
+                      tone={
+                        task.status === "AI已自动回答"
+                          ? "blue"
+                          : task.status === "待处理"
+                            ? "amber"
+                            : task.status === "已处理" || task.status === "已加入知识库"
+                              ? "green"
+                              : "red"
+                      }
+                    >
                     {STATUS_LABELS[task.status as ReviewTaskStatus] ?? task.status}
+                    </StatusPill>
                   </span>
                 </div>
 
@@ -296,7 +313,7 @@ export default async function ConversationsPage({
                   </div>
 
                   {autoAnswer && (
-                    <div className="md:col-span-2 rounded-xl bg-blue-50 p-4">
+                    <div className="md:col-span-2 rounded-2xl bg-blue-50 p-4 ring-1 ring-blue-100">
                       <p className="mb-2 text-xs font-medium text-blue-700">
                         AI 自动回答
                       </p>
@@ -335,7 +352,7 @@ export default async function ConversationsPage({
                   )}
 
                   {debug && (
-                    <div className="md:col-span-2 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <div className="md:col-span-2 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                       <p className="mb-2 text-xs font-medium text-slate-600">
                         匹配调试快照
                       </p>
@@ -406,7 +423,8 @@ export default async function ConversationsPage({
             );
           })
         )}
-      </section>
+        </div>
+      </WorkspaceSection>
     </AdminShell>
   );
 }

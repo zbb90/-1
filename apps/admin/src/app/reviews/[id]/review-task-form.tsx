@@ -7,6 +7,10 @@ import {
   saveAndSinkReviewTaskAction,
   type SaveReviewFormState,
 } from "../actions";
+import {
+  WorkspaceActionButton,
+  WorkspaceSection,
+} from "@/components/admin/knowledge-workspace";
 import type { ReviewTask, ReviewTaskStatus } from "@/lib/types";
 
 const statuses: ReviewTaskStatus[] = [
@@ -128,24 +132,20 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
   return (
     <div className="space-y-6">
       {autoAnswer && (
-        <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50 via-white to-blue-50 shadow-sm ring-1 ring-sky-100">
-          <div className="border-b border-sky-100 px-6 py-4">
-            <p className="text-xs font-medium tracking-wide text-sky-600">
-              AI 初步判断
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-900">
-              AI 原始回答仅供主管复核参考
-            </h2>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm">
+        <WorkspaceSection
+          title="AI 初步判断"
+          description="AI 原始回答仅供主管复核参考，最终结论以主管人工处理为准。"
+          className="overflow-hidden ring-sky-100"
+        >
+          <div className="grid gap-3 text-sm md:grid-cols-2">
             {autoAnswer.verdict && (
-              <div className="px-6">
+              <div className="rounded-2xl bg-sky-50 p-4">
                 <p className="text-xs text-sky-500">判定结论</p>
                 <p className="mt-1 font-medium text-slate-900">{autoAnswer.verdict}</p>
               </div>
             )}
             {autoAnswer.deductionScore !== undefined && (
-              <div className="px-6">
+              <div className="rounded-2xl bg-sky-50 p-4">
                 <p className="text-xs text-sky-500">AI 建议扣分</p>
                 <p className="mt-1 font-medium text-slate-900">
                   {autoAnswer.deductionScore} 分
@@ -153,19 +153,19 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
               </div>
             )}
             {autoAnswer.clauseTitle && (
-              <div className="px-6">
+              <div className="rounded-2xl bg-sky-50 p-4">
                 <p className="text-xs text-sky-500">规则标题</p>
                 <p className="mt-1 text-slate-900">{autoAnswer.clauseTitle}</p>
               </div>
             )}
             {autoAnswer.clauseCode && (
-              <div className="px-6">
+              <div className="rounded-2xl bg-sky-50 p-4">
                 <p className="text-xs text-sky-500">规则编号</p>
                 <p className="mt-1 text-slate-900">{autoAnswer.clauseCode}</p>
               </div>
             )}
             {autoAnswer.aiExplanation && (
-              <div className="px-6 pb-6 md:col-span-2">
+              <div className="rounded-2xl bg-sky-50 p-4 md:col-span-2">
                 <p className="text-xs text-sky-500">AI 解释</p>
                 <p className="mt-1 leading-6 text-slate-700">
                   {autoAnswer.aiExplanation}
@@ -173,28 +173,20 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
               </div>
             )}
           </div>
-        </div>
+        </WorkspaceSection>
       )}
 
-      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium tracking-wide text-emerald-600">
-              主管处理区
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-gray-900">
-              人工回复与知识沉淀
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              主管无需手填规则编号，可直接填写判定原因和给专员的回复内容。
-            </p>
-          </div>
+      <WorkspaceSection
+        title="人工回复与知识沉淀"
+        description="主管无需手填规则编号，可直接填写判定原因和给专员的回复内容。"
+        actions={
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600 ring-1 ring-slate-200">
             建议顺序：先写结论，再写原因，最后补专员可执行的整改回复。
           </div>
-        </div>
+        }
+      >
 
-        <div className="mt-5 rounded-2xl bg-amber-50/80 p-4 ring-1 ring-amber-100">
+        <div className="rounded-2xl bg-amber-50/80 p-4 ring-1 ring-amber-100">
           <p className="text-sm font-medium text-amber-900">快捷模板</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {replyTemplates.map((template) => (
@@ -300,14 +292,15 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
         </form>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <button
+          <WorkspaceActionButton
             type="submit"
             form={`save-form-${task.id}`}
             disabled={pending}
-            className="rounded-2xl bg-green-700 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-green-400"
+            tone="green"
+            className="px-5 py-3"
           >
             {savePending ? "保存中..." : "保存并回复专员"}
-          </button>
+          </WorkspaceActionButton>
 
           <SinkButton
             taskId={task.id}
@@ -325,7 +318,7 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
             </p>
           ) : null}
         </div>
-      </div>
+      </WorkspaceSection>
     </div>
   );
 }
@@ -360,13 +353,14 @@ function SinkButton({
   }
 
   return (
-    <button
+    <WorkspaceActionButton
       type="button"
       onClick={handleSink}
       disabled={pending}
-      className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-400"
+      tone="green"
+      className="bg-emerald-700 px-5 py-3 hover:bg-emerald-800"
     >
       {pending ? "处理中..." : "保存并加入知识库"}
-    </button>
+    </WorkspaceActionButton>
   );
 }
