@@ -24,7 +24,9 @@ export default async function ReviewsPage() {
   const session = await getAdminSessionFromCookies(cookieStore);
   const isLeader = session?.role === "leader";
   const pendingCount = tasks.filter((task) => task.status === "待处理").length;
-  const autoAnsweredCount = tasks.filter((task) => task.status === "AI已自动回答").length;
+  const autoAnsweredCount = tasks.filter(
+    (task) => task.status === "AI已自动回答",
+  ).length;
   const completedCount = tasks.filter(
     (task) => task.status === "已处理" || task.status === "已加入知识库",
   ).length;
@@ -41,7 +43,11 @@ export default async function ReviewsPage() {
             showUsersLink={isLeader}
             showStorageLink={isLeader}
             extraActions={
-              <WorkspaceActionLink href="/api/reviews/export?format=csv" tone="slate" outline>
+              <WorkspaceActionLink
+                href="/api/reviews/export?format=csv"
+                tone="slate"
+                outline
+              >
                 导出 CSV
               </WorkspaceActionLink>
             }
@@ -121,11 +127,15 @@ export default async function ReviewsPage() {
                       </div>
                       <div className="md:col-span-2">
                         <p className="text-xs text-gray-500">问题描述</p>
-                        <p className="mt-1 text-sm leading-6 text-gray-800">{description}</p>
+                        <p className="mt-1 text-sm leading-6 text-gray-800">
+                          {description}
+                        </p>
                       </div>
                       <div className="md:col-span-2">
                         <p className="text-xs text-gray-500">系统拒答原因</p>
-                        <p className="mt-1 text-sm leading-6 text-gray-800">{rejectReason}</p>
+                        <p className="mt-1 text-sm leading-6 text-gray-800">
+                          {rejectReason}
+                        </p>
                       </div>
                     </div>
                   </Link>
@@ -154,7 +164,9 @@ export default async function ReviewsPage() {
               <div className="rounded-2xl bg-blue-50 p-4 ring-1 ring-blue-200">
                 <div className="flex items-center gap-2">
                   <StatusPill tone="blue">AI 已回答</StatusPill>
-                  <p className="text-sm font-medium text-blue-900">需要核对 AI 是否答对</p>
+                  <p className="text-sm font-medium text-blue-900">
+                    需要核对 AI 是否答对
+                  </p>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-blue-800">
                   若 AI 判定有误，进入详情后改写主管结论，必要时沉淀回知识库。
@@ -164,7 +176,9 @@ export default async function ReviewsPage() {
               <div className="rounded-2xl bg-green-50 p-4 ring-1 ring-green-200">
                 <div className="flex items-center gap-2">
                   <StatusPill tone="green">已完成</StatusPill>
-                  <p className="text-sm font-medium text-green-900">结果已沉淀或已回复</p>
+                  <p className="text-sm font-medium text-green-900">
+                    结果已沉淀或已回复
+                  </p>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-green-800">
                   可继续抽样复盘高频问题，筛选是否需要补规则或修订共识。
@@ -178,7 +192,11 @@ export default async function ReviewsPage() {
             description="保持和知识库页面相同的右侧工具区使用方式。"
           >
             <div className="flex flex-col gap-3">
-              <WorkspaceActionLink href="/api/reviews/export?format=csv" tone="slate" outline>
+              <WorkspaceActionLink
+                href="/api/reviews/export?format=csv"
+                tone="slate"
+                outline
+              >
                 导出当前复核列表
               </WorkspaceActionLink>
               <WorkspaceActionLink href="/conversations" tone="blue" outline>

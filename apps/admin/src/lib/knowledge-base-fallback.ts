@@ -428,9 +428,7 @@ function applyIntentSignalScore(
   );
   const hasHealthSystemIntent = intent.issueTags.some(
     (tag) =>
-      tag === "未录入系统" ||
-      tag === "未上传健康证" ||
-      tag === "健康证信息不一致",
+      tag === "未录入系统" || tag === "未上传健康证" || tag === "健康证信息不一致",
   );
 
   if (hasHealthAbsenceOrExpiryIntent) {
