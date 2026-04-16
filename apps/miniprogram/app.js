@@ -20,48 +20,75 @@ App({
     userInfo: null,
   },
 
-  wxLogin() {
-    const savedToken = wx.getStorageSync("auth_token");
-    const savedUser = wx.getStorageSync("auth_user");
-    if (savedToken && savedUser) {
-      this.globalData.token = savedToken;
-      this.globalData.userInfo = savedUser;
-      return;
+  wxLogin(options = {}) {
+    const { forceRefresh = false } = options;
+    if (this._loginPromise) {
+      return this._loginPromise;
     }
 
-    wx.login({
-      success: (res) => {
-        if (!res.code) return;
-        const apiBase = this.globalData.apiBaseUrl || getApiBaseUrl();
-        wx.request({
-          url: `${apiBase}/auth/wx-login`,
-          method: "POST",
-          data: { code: res.code },
-          header: { "Content-Type": "application/json" },
-          timeout: 20000,
-          success: (loginRes) => {
-            const data = loginRes.data || {};
-            if (loginRes.statusCode === 200 && data.token) {
-              this.globalData.token = data.token;
-              this.globalData.userInfo = data.user;
-              wx.setStorageSync("auth_token", data.token);
-              wx.setStorageSync("auth_user", data.user);
-            }
-          },
-          fail: (err) => {
-            const msg = err && err.errMsg ? err.errMsg : String(err);
-            console.warn("[wx-login]", msg);
-            logNetworkFailIfDevtools("wx-login", err);
-            maybeOfferLocalApiInDevtools(err);
-            if (isDevToolsEnvironment()) {
-              console.warn(
-                "联调：详情→本地设置勾选「不校验合法域名」，设置页「切到本地」指向 http://127.0.0.1:3003 并本地起后台。",
+    const savedToken = wx.getStorageSync("auth_token");
+    const savedUser = wx.getStorageSync("auth_user");
+    if (!forceRefresh && savedToken && savedUser) {
+      this.globalData.token = savedToken;
+      this.globalData.userInfo = savedUser;
+      return Promise.resolve({
+        token: savedToken,
+        user: savedUser,
+      });
+    }
+
+    this._loginPromise = new Promise((resolve, reject) => {
+      wx.login({
+        success: (res) => {
+          if (!res.code) {
+            reject(new Error("微信登录失败，未拿到 code"));
+            return;
+          }
+          const apiBase = this.globalData.apiBaseUrl || getApiBaseUrl();
+          wx.request({
+            url: `${apiBase}/auth/wx-login`,
+            method: "POST",
+            data: { code: res.code },
+            header: { "Content-Type": "application/json" },
+            timeout: 20000,
+            success: (loginRes) => {
+              const data = loginRes.data || {};
+              if (loginRes.statusCode === 200 && data.token) {
+                this.globalData.token = data.token;
+                this.globalData.userInfo = data.user;
+                wx.setStorageSync("auth_token", data.token);
+                wx.setStorageSync("auth_user", data.user);
+                resolve(data);
+                return;
+              }
+              reject(
+                new Error(
+                  data?.message || data?.error || `微信登录失败（${loginRes.statusCode}）`,
+                ),
               );
-            }
-          },
-        });
-      },
+            },
+            fail: (err) => {
+              const msg = err && err.errMsg ? err.errMsg : String(err);
+              console.warn("[wx-login]", msg);
+              logNetworkFailIfDevtools("wx-login", err);
+              maybeOfferLocalApiInDevtools(err);
+              if (isDevToolsEnvironment()) {
+                console.warn(
+                  "联调：详情→本地设置勾选「不校验合法域名」，设置页「切到本地」指向 http://127.0.0.1:3003 并本地起后台。",
+                );
+              }
+              reject(err);
+            },
+          });
+        },
+        fail: reject,
+        complete: () => {
+          this._loginPromise = null;
+        },
+      });
     });
+
+    return this._loginPromise;
   },
 
   getToken() {

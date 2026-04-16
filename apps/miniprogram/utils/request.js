@@ -50,11 +50,8 @@ function resolveAdminAuth(adminAuth) {
   return null;
 }
 
-function request({ url, method = "GET", data, header = {}, adminAuth = false }) {
+function sendRequest({ app, apiBaseUrl, url, method, data, header, adminAuth }) {
   return new Promise((resolve, reject) => {
-    const app = getApp();
-    const apiBaseUrl =
-      (app && app.globalData && app.globalData.apiBaseUrl) || getApiBaseUrl();
     const reqHeader = { ...header };
 
     const token = app && typeof app.getToken === "function" ? app.getToken() : null;
@@ -80,16 +77,6 @@ function request({ url, method = "GET", data, header = {}, adminAuth = false }) 
           return;
         }
 
-        if (
-          (res.statusCode === 401 || res.statusCode === 403) &&
-          !adminCreds
-        ) {
-          if (app && typeof app.wxLogin === "function") {
-            app.logout();
-            app.wxLogin();
-          }
-        }
-
         reject({
           ...res.data,
           message: buildErrorMessage(
@@ -97,6 +84,8 @@ function request({ url, method = "GET", data, header = {}, adminAuth = false }) 
             `请求失败（${res.statusCode}），请稍后重试`,
           ),
           statusCode: res.statusCode,
+          requiresRelogin:
+            (res.statusCode === 401 || res.statusCode === 403) && !adminCreds,
         });
       },
       fail: (error) => {
@@ -117,6 +106,60 @@ function request({ url, method = "GET", data, header = {}, adminAuth = false }) 
   });
 }
 
+async function request({ url, method = "GET", data, header = {}, adminAuth = false }) {
+  const app = getApp();
+  const apiBaseUrl =
+    (app && app.globalData && app.globalData.apiBaseUrl) || getApiBaseUrl();
+
+  try {
+    return await sendRequest({
+      app,
+      apiBaseUrl,
+      url,
+      method,
+      data,
+      header,
+      adminAuth,
+    });
+  } catch (error) {
+    if (
+      error?.requiresRelogin &&
+      app &&
+      typeof app.wxLogin === "function" &&
+      typeof app.logout === "function"
+    ) {
+      try {
+        app.logout();
+        await app.wxLogin({ forceRefresh: true });
+        return await sendRequest({
+          app,
+          apiBaseUrl,
+          url,
+          method,
+          data,
+          header,
+          adminAuth,
+        });
+      } catch (loginError) {
+        throw {
+          ...error,
+          message: "需要重新登录",
+          reloginFailed: true,
+          loginError,
+        };
+      }
+    }
+
+    throw error;
+  }
+}
+
+function requestLegacy(args) {
+  return new Promise((resolve, reject) => {
+    request(args).then(resolve).catch(reject);
+  });
+}
+
 module.exports = {
-  request,
+  request: requestLegacy,
 };
