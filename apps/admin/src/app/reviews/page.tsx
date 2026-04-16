@@ -9,6 +9,7 @@ import {
   StatusPill,
   WorkspaceActionLink,
   WorkspaceEmptyState,
+  WorkspaceMetric,
   WorkspaceSection,
 } from "@/components/admin/knowledge-workspace";
 
@@ -22,6 +23,11 @@ export default async function ReviewsPage() {
   const cookieStore = await cookies();
   const session = await getAdminSessionFromCookies(cookieStore);
   const isLeader = session?.role === "leader";
+  const pendingCount = tasks.filter((task) => task.status === "待处理").length;
+  const autoAnsweredCount = tasks.filter((task) => task.status === "AI已自动回答").length;
+  const completedCount = tasks.filter(
+    (task) => task.status === "已处理" || task.status === "已加入知识库",
+  ).length;
 
   return (
     <AdminShell>
@@ -43,9 +49,16 @@ export default async function ReviewsPage() {
         }
       />
 
+      <section className="grid gap-4 md:grid-cols-4">
+        <WorkspaceMetric label="全部任务" value={tasks.length} tone="slate" />
+        <WorkspaceMetric label="待处理" value={pendingCount} tone="amber" />
+        <WorkspaceMetric label="AI 已回答" value={autoAnsweredCount} tone="blue" />
+        <WorkspaceMetric label="已完成" value={completedCount} tone="green" />
+      </section>
+
       <WorkspaceSection
         title="复核任务"
-        description="统一使用知识库工作台风格的列表卡片展示全部复核任务。"
+        description="按知识库工作台结构展示任务总览、状态指标和卡片列表，而不是单纯的普通列表页。"
       >
         <div className="space-y-4">
         {tasks.length === 0 ? (
