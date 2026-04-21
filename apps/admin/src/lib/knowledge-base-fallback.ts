@@ -5,8 +5,12 @@ import {
 import { matchExternalPurchase, matchOldItem } from "@/lib/catalog-matchers";
 import { getKnowledgeSummary, loadKnowledgeBase } from "@/lib/knowledge-loader";
 import { matchOperationQuestion } from "@/lib/operation-matchers";
-import { isSemanticSearchConfigured, searchRuleVectors } from "@/lib/vector-store";
 import { analyzeRegularQuestionIntent } from "@/lib/llm-intent";
+import {
+  buildRegularQuestionMaterialText,
+  detectMaterialMismatch,
+} from "@/lib/rule-material-guard";
+import { isSemanticSearchConfigured, searchRuleVectors } from "@/lib/vector-store";
 import type {
   ConsensusRow,
   ExternalPurchaseRequest,
@@ -1363,7 +1367,9 @@ export async function matchRegularQuestionFallback(
       )
     : null;
 
-  const candidates = candidatePool
+  const materialText = buildRegularQuestionMaterialText(request);
+
+  const rankedBeforeMaterial = candidatePool
     .map((rule) => {
       const { score: baseScore, reasons: baseReasons } = scoreRuleMatch(
         rule,
@@ -1393,6 +1399,10 @@ export async function matchRegularQuestionFallback(
     })
     .sort((left, right) => right.score - left.score);
 
+  const candidates = rankedBeforeMaterial.filter(
+    (item) => !detectMaterialMismatch(materialText, item.rule).mismatch,
+  );
+
   if (candidates.length === 0) {
     console.info("[regular-question-match]", {
       retrievalMode: debug.retrievalMode,
@@ -1404,7 +1414,10 @@ export async function matchRegularQuestionFallback(
     });
     return {
       matched: false,
-      rejectReason: "未在知识库中找到与该问题直接相关的规则，建议进入人工复核池。",
+      rejectReason:
+        rankedBeforeMaterial.length > 0
+          ? "您描述的具体物料与检索到的条款范围不一致（例如不同小料不得混用），建议进入人工复核池。"
+          : "未在知识库中找到与该问题直接相关的规则，建议进入人工复核池。",
       candidates: [],
       debug: {
         ...debug,

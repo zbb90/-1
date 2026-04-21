@@ -174,6 +174,18 @@ class CompatRedis {
     return this.client.zcard(key);
   }
 
+  async incr(key: string) {
+    return this.client.incr(key);
+  }
+
+  async pexpire(key: string, ms: number) {
+    return this.client.pexpire(key, ms);
+  }
+
+  async pttl(key: string) {
+    return this.client.pttl(key);
+  }
+
   pipeline() {
     return new CompatPipeline(this.client.pipeline());
   }

@@ -1,6 +1,6 @@
 import { readRows } from "@/lib/knowledge-store";
 import { upsertRuleVectors } from "@/lib/vector-store";
-import { patchRowStatus } from "@/lib/knowledge-csv";
+import { patchRowStatus, type KbTableName } from "@/lib/knowledge-csv";
 import type {
   ConsensusRow,
   ExternalPurchaseRow,
@@ -10,11 +10,65 @@ import type {
   RuleRow,
 } from "@/lib/types";
 
-let cache: KnowledgeBase | null = null;
+const TABLE_TTL_MS = 60_000;
+
+interface TableCacheEntry<T> {
+  rows: T[];
+  expireAt: number;
+}
+
+const tableCache = new Map<KbTableName, TableCacheEntry<unknown>>();
+
+let knowledgeBaseCache: KnowledgeBase | null = null;
 let pendingSyncRunning = false;
 
 export function invalidateKnowledgeBaseCache() {
-  cache = null;
+  knowledgeBaseCache = null;
+  tableCache.clear();
+}
+
+export function invalidateKnowledgeTableCache(name: KbTableName) {
+  tableCache.delete(name);
+  // 任一表变化会让聚合视图失效，避免数据不一致。
+  knowledgeBaseCache = null;
+}
+
+function isFreshEntry<T>(entry: TableCacheEntry<T> | undefined, now: number) {
+  return Boolean(entry && entry.expireAt > now);
+}
+
+type RowWithStatus = { 状态?: string };
+
+const FILTERS: Record<KbTableName, (row: RowWithStatus) => boolean> = {
+  rules: (row) => row.状态 !== "停用" && row.状态 !== "待向量同步",
+  consensus: (row) => row.状态 !== "停用",
+  "external-purchases": (row) => row.状态 !== "停用",
+  "old-items": (row) => row.状态 !== "停用",
+  operations: (row) => row.状态 !== "停用",
+};
+
+export async function loadKnowledgeTable<T>(name: KbTableName): Promise<T[]> {
+  const now = Date.now();
+  const entry = tableCache.get(name) as TableCacheEntry<T> | undefined;
+  if (isFreshEntry(entry, now)) {
+    return entry!.rows;
+  }
+
+  const raw = (await readRows(name)) as unknown as T[];
+  const filterFn = FILTERS[name];
+  const rows = filterFn
+    ? raw.filter((row) => filterFn(row as unknown as RowWithStatus))
+    : raw;
+  tableCache.set(name, {
+    rows: rows as unknown[],
+    expireAt: now + TABLE_TTL_MS,
+  });
+
+  if (name === "rules") {
+    catchUpPendingVectorSync(raw as unknown as RuleRow[]).catch(() => {});
+  }
+
+  return rows;
 }
 
 async function catchUpPendingVectorSync(allRules: RuleRow[]) {
@@ -30,7 +84,7 @@ async function catchUpPendingVectorSync(allRules: RuleRow[]) {
         await patchRowStatus("rules", rule.rule_id, "启用");
       }
       console.info(`[vector-catchup] synced ${pending.length} pending rules`);
-      cache = null;
+      invalidateKnowledgeBaseCache();
     }
   } catch (err) {
     console.warn("[vector-catchup] failed", err);
@@ -39,34 +93,33 @@ async function catchUpPendingVectorSync(allRules: RuleRow[]) {
   }
 }
 
-export async function loadKnowledgeBase(forceRefresh = false) {
-  if (cache && !forceRefresh) {
-    return cache;
+export async function loadKnowledgeBase(forceRefresh = false): Promise<KnowledgeBase> {
+  if (knowledgeBaseCache && !forceRefresh) {
+    return knowledgeBaseCache;
+  }
+  if (forceRefresh) {
+    tableCache.clear();
   }
 
   const [rules, consensus, externalPurchases, oldItems, operations] = await Promise.all(
     [
-      readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
-      readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
-      readRows("external-purchases") as Promise<unknown> as Promise<
-        ExternalPurchaseRow[]
-      >,
-      readRows("old-items") as Promise<unknown> as Promise<OldItemRow[]>,
-      readRows("operations") as Promise<unknown> as Promise<OperationRow[]>,
+      loadKnowledgeTable<RuleRow>("rules"),
+      loadKnowledgeTable<ConsensusRow>("consensus"),
+      loadKnowledgeTable<ExternalPurchaseRow>("external-purchases"),
+      loadKnowledgeTable<OldItemRow>("old-items"),
+      loadKnowledgeTable<OperationRow>("operations"),
     ],
   );
 
-  catchUpPendingVectorSync(rules).catch(() => {});
-
-  cache = {
-    rules: rules.filter((item) => item.状态 !== "停用" && item.状态 !== "待向量同步"),
-    consensus: consensus.filter((item) => item.状态 !== "停用"),
-    externalPurchases: externalPurchases.filter((item) => item.状态 !== "停用"),
-    oldItems: oldItems.filter((item) => item.状态 !== "停用"),
-    operations: operations.filter((item) => item.状态 !== "停用"),
+  knowledgeBaseCache = {
+    rules,
+    consensus,
+    externalPurchases,
+    oldItems,
+    operations,
   };
 
-  return cache;
+  return knowledgeBaseCache;
 }
 
 export async function getKnowledgeSummary() {

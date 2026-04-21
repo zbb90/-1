@@ -14,7 +14,7 @@ import {
 } from "@/lib/review-pool";
 
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(request, "regular-question-ask", 40);
+  const limited = await rateLimit(request, "regular-question-ask", 40);
   if (!limited.ok) {
     return NextResponse.json(
       { ok: false, message: "请求过于频繁，请稍后再试" },

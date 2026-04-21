@@ -4,7 +4,7 @@ import { getUserByOpenid, updateUser } from "@/lib/user-store";
 import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(request, "auth-update-profile", 20);
+  const limited = await rateLimit(request, "auth-update-profile", 20);
   if (!limited.ok) {
     return NextResponse.json(
       { ok: false, message: "请求过于频繁" },

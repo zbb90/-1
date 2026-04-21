@@ -17,7 +17,7 @@ import { resolvePcLogin } from "@/lib/user-store";
  * Body: { phone: string; password: string }
  */
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(request, "auth-pc-login", 30);
+  const limited = await rateLimit(request, "auth-pc-login", 30);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "登录尝试过于频繁，请稍后再试" },
