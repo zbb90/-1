@@ -16,7 +16,7 @@ import { getUserByOpenid, createUser, type AppUser } from "@/lib/user-store";
  *   3. Return JWT token + user info
  */
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(request, "auth-wx-login", 60);
+  const limited = await rateLimit(request, "auth-wx-login", 60);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "请求过于频繁，请稍后再试" },
@@ -43,7 +43,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const wxUrl = `https://api.weixin.qq.com/sns/jscode2session?appid=${appId}&secret=${appSecret}&js_code=${body.code}&grant_type=authorization_code`;
+  // 用 URLSearchParams 拼装；secret 仍会出现在最终请求中（微信 jscode2session 仅支持 GET），
+  // 但错误日志/上报里只保留 errcode/errmsg，避免把 secret 带进任何日志链路。
+  const wxParams = new URLSearchParams({
+    appid: appId,
+    secret: appSecret,
+    js_code: body.code,
+    grant_type: "authorization_code",
+  });
+  const wxUrl = `https://api.weixin.qq.com/sns/jscode2session?${wxParams.toString()}`;
 
   let openid: string;
   try {
@@ -56,6 +64,10 @@ export async function POST(request: NextRequest) {
     };
 
     if (!wxData.openid) {
+      logRouteError("/api/auth/wx-login", {
+        errcode: wxData.errcode ?? null,
+        errmsg: wxData.errmsg ?? null,
+      });
       return NextResponse.json(
         { error: `微信登录失败: ${wxData.errmsg || "未知错误"}` },
         { status: 401 },
@@ -63,7 +75,12 @@ export async function POST(request: NextRequest) {
     }
     openid = wxData.openid;
   } catch (err) {
-    logRouteError("/api/auth/wx-login", err);
+    // 兜底脱敏：只记录错误名称与 message，避免把含 secret 的 URL 写入日志。
+    const safeErr =
+      err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { name: "UnknownError", message: "wx jscode2session failed" };
+    logRouteError("/api/auth/wx-login", safeErr);
     return NextResponse.json(
       { error: "微信登录服务暂时不可用，请稍后重试。" },
       { status: 502 },

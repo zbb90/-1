@@ -37,15 +37,12 @@ function isProtectedApiPath(request: NextRequest) {
   )
     return true;
 
-  if (
-    (pathname === "/api/knowledge/sink" ||
-      pathname.startsWith("/api/knowledge/rules") ||
-      pathname.startsWith("/api/knowledge/consensus") ||
-      pathname.startsWith("/api/knowledge/external-purchases") ||
-      pathname.startsWith("/api/knowledge/old-items")) &&
-    request.method !== "GET"
-  )
+  // 知识库相关接口（含 GET）默认要求管理员身份；
+  // 小程序业务链路（regular-question / old-item / external-purchase / reviews / auth）
+  // 不通过 /api/knowledge 调用，所以这里全部纳入保护，避免知识表被匿名拉取。
+  if (pathname === "/api/knowledge" || pathname.startsWith("/api/knowledge/")) {
     return true;
+  }
 
   if (pathname === "/api/users" || pathname.startsWith("/api/users/")) return true;
   if (pathname === "/api/storage" || pathname.startsWith("/api/storage/")) return true;

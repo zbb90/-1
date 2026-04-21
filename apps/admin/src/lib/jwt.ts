@@ -3,25 +3,47 @@
  * Only supports HS256.
  */
 
+const PROD_MIN_SECRET_LENGTH = 32;
+const NON_PROD_MIN_SECRET_LENGTH = 8;
+
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 function getSecret(): string {
   const s = process.env.JWT_SECRET?.trim();
   if (!s) throw new Error("JWT_SECRET environment variable is required.");
-  if (s.length < 8) {
+  const minLength = isProductionEnv()
+    ? PROD_MIN_SECRET_LENGTH
+    : NON_PROD_MIN_SECRET_LENGTH;
+  if (s.length < minLength) {
     throw new Error(
-      "JWT_SECRET must be at least 8 characters (use 32+ in production).",
+      `JWT_SECRET must be at least ${minLength} characters` +
+        (isProductionEnv() ? " in production." : "."),
     );
   }
   return s;
 }
 
+const MIN_EXPIRES_SECONDS = 300;
+const MAX_EXPIRES_SECONDS = 30 * 24 * 3600;
+const DEFAULT_EXPIRES_SECONDS = 7 * 24 * 3600;
+
 function getExpiresInSeconds(): number {
   const raw = process.env.JWT_EXPIRES_SECONDS?.trim();
-  if (!raw) return 7 * 24 * 3600;
+  if (!raw) return DEFAULT_EXPIRES_SECONDS;
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < 300) {
-    return 7 * 24 * 3600;
+  if (!Number.isFinite(n)) {
+    throw new Error(
+      `JWT_EXPIRES_SECONDS must be a positive integer between ${MIN_EXPIRES_SECONDS} and ${MAX_EXPIRES_SECONDS}, got "${raw}".`,
+    );
   }
-  return Math.min(n, 30 * 24 * 3600);
+  if (n < MIN_EXPIRES_SECONDS || n > MAX_EXPIRES_SECONDS) {
+    throw new Error(
+      `JWT_EXPIRES_SECONDS must be between ${MIN_EXPIRES_SECONDS} and ${MAX_EXPIRES_SECONDS}, got ${n}.`,
+    );
+  }
+  return n;
 }
 
 function base64url(buf: ArrayBuffer): string {

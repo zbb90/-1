@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
 import { readRows } from "@/lib/knowledge-store";
 import { getHeaders } from "@/lib/knowledge-store";
 import type { KbTableName } from "@/lib/knowledge-csv";
@@ -21,6 +22,13 @@ const TABLE_NAMES: Record<KbTableName, string> = {
 };
 
 export async function GET(request: NextRequest) {
+  if (!(await isAdminSessionOrBasicAuthorized(request))) {
+    return NextResponse.json(
+      { ok: false, message: "需要管理员身份。" },
+      { status: 401 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const table = searchParams.get("table") as KbTableName;
   const type = searchParams.get("type") ?? "data";
