@@ -17,15 +17,15 @@
 
 ## 2. 仓库结构（npm workspaces）
 
-| 目录 | 作用 |
-| --- | --- |
-| `apps/admin` | 后台管理端 + API（Next.js 16 + React 19 + TypeScript） |
-| `apps/miniprogram` | 微信小程序（原生目录结构） |
-| `packages/shared` | 前后端共享的常量与类型 |
-| `data/templates` | 知识库初始 CSV 模板，无 Redis 时也作为只读回退数据 |
-| `docs/` | 架构、运维、安全、E2E、小程序使用等文档 |
-| `scripts/` | 向量同步、链接物化、语义回归、Excel 校验、压测等脚本 |
-| `.github/workflows/ci.yml` | GitHub Actions：lint/test/build + 推送到 ECS 部署 |
+| 目录                       | 作用                                                   |
+| -------------------------- | ------------------------------------------------------ |
+| `apps/admin`               | 后台管理端 + API（Next.js 16 + React 19 + TypeScript） |
+| `apps/miniprogram`         | 微信小程序（原生目录结构）                             |
+| `packages/shared`          | 前后端共享的常量与类型                                 |
+| `data/templates`           | 知识库初始 CSV 模板，无 Redis 时也作为只读回退数据     |
+| `docs/`                    | 架构、运维、安全、E2E、小程序使用等文档                |
+| `scripts/`                 | 向量同步、链接物化、语义回归、Excel 校验、压测等脚本   |
+| `.github/workflows/ci.yml` | GitHub Actions：lint/test/build + 推送到 ECS 部署      |
 
 ## 3. 技术栈速览
 
@@ -41,19 +41,19 @@
 
 ## 4. 后台主要页面（`apps/admin/src/app`）
 
-| 路由 | 用途 | 权限 |
-| --- | --- | --- |
-| `/` | 主管工作台首页：复核摘要、知识入口、用户统计 | 登录 |
-| `/reviews` | 复核任务列表 | 主管/负责人 |
-| `/reviews/[id]` | 单条复核处理 | 主管/负责人 |
-| `/reviews/login` | PC 端账号密码登录 | 公开 |
-| `/conversations` | 命中/对话视图，可标记答错 | 登录 |
-| `/knowledge` | 五张知识表的浏览、编辑、标签、导入导出 | 登录 |
-| `/knowledge/graph` | 知识条目关联力导向图 | 登录 |
-| `/knowledge/health` | 知识库健康度看板（覆盖率、冷热规则） | 登录 |
-| `/knowledge/audit-match` | 上传稽核表 + 共识表，AI 自动匹配工作台 | 登录 |
-| `/users` | 账号管理 | 仅负责人 |
-| `/storage` | Redis/复核/知识存储诊断与一键修复 | 仅负责人 |
+| 路由                     | 用途                                         | 权限        |
+| ------------------------ | -------------------------------------------- | ----------- |
+| `/`                      | 主管工作台首页：复核摘要、知识入口、用户统计 | 登录        |
+| `/reviews`               | 复核任务列表                                 | 主管/负责人 |
+| `/reviews/[id]`          | 单条复核处理                                 | 主管/负责人 |
+| `/reviews/login`         | PC 端账号密码登录                            | 公开        |
+| `/conversations`         | 命中/对话视图，可标记答错                    | 登录        |
+| `/knowledge`             | 五张知识表的浏览、编辑、标签、导入导出       | 登录        |
+| `/knowledge/graph`       | 知识条目关联力导向图                         | 登录        |
+| `/knowledge/health`      | 知识库健康度看板（覆盖率、冷热规则）         | 登录        |
+| `/knowledge/audit-match` | 上传稽核表 + 共识表，AI 自动匹配工作台       | 登录        |
+| `/users`                 | 账号管理                                     | 仅负责人    |
+| `/storage`               | Redis/复核/知识存储诊断与一键修复            | 仅负责人    |
 
 ## 5. 后台 API 一览（`apps/admin/src/app/api`）
 
@@ -74,13 +74,13 @@
 
 定义在 `apps/admin/src/lib/kb-schema.ts`，UI 主展示列见 `apps/admin/src/app/knowledge/knowledge-tabs.tsx`：
 
-| 表名 | idField | 主展示列 | 业务含义 |
-| --- | --- | --- | --- |
-| `rules` | `rule_id` | `条款标题` | 常规问题规则（核心匹配源） |
-| `consensus` | `consensus_id` | `标题` | 共识解释（沉淀的判定标准） |
-| `external-purchases` | `item_id` | `物品名称` | 外购物品清单 |
-| `old-items` | `item_id` | `物品名称` | 旧品清单 |
-| `operations` | `op_id` | `标题` | 操作类知识 |
+| 表名                 | idField        | 主展示列   | 业务含义                   |
+| -------------------- | -------------- | ---------- | -------------------------- |
+| `rules`              | `rule_id`      | `条款标题` | 常规问题规则（核心匹配源） |
+| `consensus`          | `consensus_id` | `标题`     | 共识解释（沉淀的判定标准） |
+| `external-purchases` | `item_id`      | `物品名称` | 外购物品清单               |
+| `old-items`          | `item_id`      | `物品名称` | 旧品清单                   |
+| `operations`         | `op_id`        | `标题`     | 操作类知识                 |
 
 数据可从 `data/templates` 下的 CSV 模板批量导入，运行时优先存 Redis；Excel 导入前可用 `npm run validate:knowledge-excel` 校验表头。
 
@@ -161,27 +161,27 @@ npm run validate:knowledge-excel -- path/to/file.xlsx [表名]
 
 ## 11. 小程序页面（`apps/miniprogram/pages`）
 
-| 页面 | 用途 |
-| --- | --- |
-| `index/index` | 首页与功能入口 |
-| `regular-question/{index,result}` | 常规问题提交与结果 |
-| `old-item/{index,result}` | 旧品查询 |
-| `external-purchase/{index,result}` | 外购查询 |
-| `my-reviews/{index,detail}` | 我的复核 |
-| `settings/index` | 设置（含 API 地址切换） |
+| 页面                               | 用途                    |
+| ---------------------------------- | ----------------------- |
+| `index/index`                      | 首页与功能入口          |
+| `regular-question/{index,result}`  | 常规问题提交与结果      |
+| `old-item/{index,result}`          | 旧品查询                |
+| `external-purchase/{index,result}` | 外购查询                |
+| `my-reviews/{index,detail}`        | 我的复核                |
+| `settings/index`                   | 设置（含 API 地址切换） |
 
 ## 12. 文档索引
 
-| 文档 | 路径 | 适合场景 |
-| --- | --- | --- |
-| 架构概览 | `docs/architecture.md` | 一期范围与目录定位 |
-| 安全与限流 | `docs/SECURITY.md` | 上线前安全自检 |
-| 阿里云运维 | `docs/OPS_ALIYUN.md` | ECS 部署、Nginx、证书 |
-| 账号预配置 | `docs/ACCOUNT_ONBOARDING.md` | 新建负责人/主管账号 |
-| 本地 E2E 清单 | `docs/LOCAL_E2E_CHECKLIST.md` | 本地全链路验证 |
-| 迁移到本机 Redis | `docs/MIGRATE_TO_LOCAL_REDIS.md` | Redis 迁移与切换 |
-| 小程序使用 | `docs/USAGE_MINIPROGRAM.md` | 专员/主管使用说明 |
-| 知识库模板 | `data/README.md` | CSV/Excel 模板说明 |
+| 文档             | 路径                             | 适合场景              |
+| ---------------- | -------------------------------- | --------------------- |
+| 架构概览         | `docs/architecture.md`           | 一期范围与目录定位    |
+| 安全与限流       | `docs/SECURITY.md`               | 上线前安全自检        |
+| 阿里云运维       | `docs/OPS_ALIYUN.md`             | ECS 部署、Nginx、证书 |
+| 账号预配置       | `docs/ACCOUNT_ONBOARDING.md`     | 新建负责人/主管账号   |
+| 本地 E2E 清单    | `docs/LOCAL_E2E_CHECKLIST.md`    | 本地全链路验证        |
+| 迁移到本机 Redis | `docs/MIGRATE_TO_LOCAL_REDIS.md` | Redis 迁移与切换      |
+| 小程序使用       | `docs/USAGE_MINIPROGRAM.md`      | 专员/主管使用说明     |
+| 知识库模板       | `data/README.md`                 | CSV/Excel 模板说明    |
 
 ## 13. 上手建议
 
