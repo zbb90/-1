@@ -151,3 +151,26 @@
   flex-shrink: 0;
   line-height: 1;
 }
+
+.entry-disabled {
+  opacity: 0.55;
+}
+
+.entry-disabled .entry-title {
+  color: #6e6e73;
+}
+
+.entry-disabled .entry-desc {
+  color: #a1a1a6;
+}
+
+.entry-badge {
+  flex-shrink: 0;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  background: #f2f2f7;
+  color: #8e8e93;
+  font-size: 22rpx;
+  font-weight: 500;
+  letter-spacing: 1rpx;
+}

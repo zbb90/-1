@@ -36,15 +36,21 @@ Page({
     wx.navigateTo({ url: "/pages/regular-question/index" });
   },
 
-  goToOldItem() {
-    wx.navigateTo({ url: "/pages/old-item/index" });
-  },
-
-  goToExternalPurchase() {
-    wx.navigateTo({ url: "/pages/external-purchase/index" });
-  },
-
   goToMyReviews() {
     wx.navigateTo({ url: "/pages/my-reviews/index" });
+  },
+
+  showComingSoon(event) {
+    const feature =
+      (event &&
+        event.currentTarget &&
+        event.currentTarget.dataset &&
+        event.currentTarget.dataset.feature) ||
+      "该功能";
+    wx.showToast({
+      title: `${feature}暂未开放，敬请期待`,
+      icon: "none",
+      duration: 2000,
+    });
   },
 });
