@@ -1,7 +1,18 @@
 import type { KbTableName } from "@/lib/kb-schema";
+import { listPendingSuggestionsForGraph } from "@/lib/knowledge-link-suggestions";
 import { listKnowledgeLinks } from "@/lib/link-store";
 import { readRows } from "@/lib/knowledge-store";
 import { normalizeTags } from "@/lib/knowledge-tags";
+
+const DEFAULT_AI_SUGGESTION_MIN_CONFIDENCE = 0.6;
+
+function aiSuggestionMinConfidence() {
+  const raw = process.env.KB_LINK_GRAPH_MIN_CONFIDENCE?.trim();
+  if (!raw) return DEFAULT_AI_SUGGESTION_MIN_CONFIDENCE;
+  const n = Number.parseFloat(raw);
+  if (!Number.isFinite(n)) return DEFAULT_AI_SUGGESTION_MIN_CONFIDENCE;
+  return Math.max(0, Math.min(1, n));
+}
 
 export type GraphNode = {
   id: string;
@@ -24,7 +35,9 @@ export type GraphEdge = {
   linkType: "references" | "supports" | "related" | "supersedes" | "contradicts";
   sourceLabel: string;
   targetLabel: string;
-  sourceKind: "manual" | "derived";
+  // "ai-suggested" 表示仍在审核池中的 AI 建议，用于图谱渲染虚线。
+  sourceKind: "manual" | "derived" | "ai" | "ai-suggested";
+  aiConfidence?: number;
 };
 
 const TABLES: KbTableName[] = [
@@ -121,9 +134,19 @@ function buildNodeGroup(table: KbTableName, row: Record<string, string>) {
   return normalizeText(row[groupField(table)]) || "";
 }
 
-export async function buildKnowledgeGraphData() {
-  const [links, ...tableRows] = await Promise.all([
+export async function buildKnowledgeGraphData(options?: {
+  includeAiSuggestions?: boolean;
+  minSuggestionConfidence?: number;
+}) {
+  const includeAi = options?.includeAiSuggestions ?? true;
+  const minSuggestionConfidence =
+    options?.minSuggestionConfidence ?? aiSuggestionMinConfidence();
+
+  const [links, aiSuggestions, ...tableRows] = await Promise.all([
     listKnowledgeLinks(),
+    includeAi
+      ? listPendingSuggestionsForGraph(minSuggestionConfidence)
+      : Promise.resolve([]),
     ...TABLES.map((table) => readRows(table)),
   ]);
 
@@ -131,6 +154,12 @@ export async function buildKnowledgeGraphData() {
   for (const link of links) {
     const source = `${link.sourceTable}:${link.sourceId}`;
     const target = `${link.targetTable}:${link.targetId}`;
+    degreeMap.set(source, (degreeMap.get(source) ?? 0) + 1);
+    degreeMap.set(target, (degreeMap.get(target) ?? 0) + 1);
+  }
+  for (const s of aiSuggestions) {
+    const source = `${s.sourceTable}:${s.sourceId}`;
+    const target = `${s.targetTable}:${s.targetId}`;
     degreeMap.set(source, (degreeMap.get(source) ?? 0) + 1);
     degreeMap.set(target, (degreeMap.get(target) ?? 0) + 1);
   }
@@ -159,7 +188,9 @@ export async function buildKnowledgeGraphData() {
       .filter((node): node is GraphNode => node !== null);
   });
 
-  const edges = links.map(
+  const nodeLabelMap = new Map(nodes.map((node) => [node.id, node.label]));
+
+  const baseEdges = links.map(
     (link) =>
       ({
         id: link.id,
@@ -169,8 +200,24 @@ export async function buildKnowledgeGraphData() {
         sourceLabel: link.sourceLabel,
         targetLabel: link.targetLabel,
         sourceKind: link.source,
+        aiConfidence: link.aiConfidence,
       }) satisfies GraphEdge,
   );
 
-  return { nodes, edges, tables: TABLES };
+  const suggestionEdges = aiSuggestions.map((s) => {
+    const source = `${s.sourceTable}:${s.sourceId}`;
+    const target = `${s.targetTable}:${s.targetId}`;
+    return {
+      id: `suggestion-${s.id}`,
+      source,
+      target,
+      linkType: s.linkType,
+      sourceLabel: nodeLabelMap.get(source) ?? s.sourceId,
+      targetLabel: nodeLabelMap.get(target) ?? s.targetId,
+      sourceKind: "ai-suggested" as const,
+      aiConfidence: s.confidence,
+    } satisfies GraphEdge;
+  });
+
+  return { nodes, edges: [...baseEdges, ...suggestionEdges], tables: TABLES };
 }

@@ -14,7 +14,7 @@ export type KnowledgeLinkType =
   | "supersedes"
   | "contradicts";
 
-export type KnowledgeLinkSource = "manual" | "derived";
+export type KnowledgeLinkSource = "manual" | "derived" | "ai";
 
 export type KnowledgeLink = {
   id: string;
@@ -25,6 +25,9 @@ export type KnowledgeLink = {
   linkType: KnowledgeLinkType;
   createdAt: string;
   source: KnowledgeLinkSource;
+  // AI 采纳路径会额外携带一段简短原因；manual/derived 时为 undefined。
+  aiConfidence?: number;
+  aiReason?: string;
 };
 
 export type KnowledgeLinkWithLabels = KnowledgeLink & {
@@ -87,6 +90,8 @@ function parseStoredLink(raw: unknown): KnowledgeLink | null {
   ) {
     return null;
   }
+  // 老数据没有 source 字段，按 manual 处理；新增 ai 来源需要保留其置信度/理由。
+  const rawSource = value.source === "ai" ? "ai" : "manual";
   return {
     id: value.id,
     sourceTable: value.sourceTable as KbTableName,
@@ -95,7 +100,15 @@ function parseStoredLink(raw: unknown): KnowledgeLink | null {
     targetId: value.targetId,
     linkType: (value.linkType as KnowledgeLinkType) || "related",
     createdAt: value.createdAt || new Date(0).toISOString(),
-    source: "manual",
+    source: rawSource,
+    aiConfidence:
+      rawSource === "ai" && typeof value.aiConfidence === "number"
+        ? value.aiConfidence
+        : undefined,
+    aiReason:
+      rawSource === "ai" && typeof value.aiReason === "string"
+        ? value.aiReason
+        : undefined,
   };
 }
 
@@ -162,14 +175,34 @@ async function readStoredLinks(): Promise<KnowledgeLink[]> {
 }
 
 async function writeStoredLinks(links: KnowledgeLink[]) {
-  const manualOnly = links
-    .filter((link) => link.source === "manual")
-    .map(({ source, ...link }) => link);
+  // 只持久化 manual 与 ai 两类；derived 每次动态生成。
+  const persistable = links
+    .filter((link) => link.source === "manual" || link.source === "ai")
+    .map((link) => {
+      const base = {
+        id: link.id,
+        sourceTable: link.sourceTable,
+        sourceId: link.sourceId,
+        targetTable: link.targetTable,
+        targetId: link.targetId,
+        linkType: link.linkType,
+        createdAt: link.createdAt,
+        source: link.source,
+      };
+      if (link.source === "ai") {
+        return {
+          ...base,
+          aiConfidence: link.aiConfidence ?? null,
+          aiReason: link.aiReason ?? null,
+        };
+      }
+      return base;
+    });
 
   if (isRedisConfigured()) {
     try {
       const redis = await getRedis();
-      await redis.set(LINK_STORE_KEY, manualOnly);
+      await redis.set(LINK_STORE_KEY, persistable);
       return;
     } catch (error) {
       console.warn(
@@ -182,7 +215,7 @@ async function writeStoredLinks(links: KnowledgeLink[]) {
   await ensureLinkFile();
   await writeFile(
     getLinkFilePath(),
-    `${JSON.stringify(manualOnly, null, 2)}\n`,
+    `${JSON.stringify(persistable, null, 2)}\n`,
     "utf-8",
   );
 }
@@ -334,6 +367,10 @@ export async function addKnowledgeLink(input: {
   targetTable: KbTableName;
   targetId: string;
   linkType: KnowledgeLinkType;
+  // 显式标注来源：默认 manual；AI 审核通过后调用方传 "ai" 并附带置信度/理由。
+  origin?: Extract<KnowledgeLinkSource, "manual" | "ai">;
+  aiConfidence?: number;
+  aiReason?: string;
 }) {
   const sourceId = input.sourceId.trim();
   const targetId = input.targetId.trim();
@@ -352,7 +389,9 @@ export async function addKnowledgeLink(input: {
     throw new Error("关联条目不存在，请检查编号。");
   }
 
-  const manualLinks = await readStoredLinks();
+  const stored = await readStoredLinks();
+  const origin: Extract<KnowledgeLinkSource, "manual" | "ai"> =
+    input.origin ?? "manual";
   const next: KnowledgeLink = {
     id: buildLinkId(),
     sourceTable: input.sourceTable,
@@ -361,7 +400,9 @@ export async function addKnowledgeLink(input: {
     targetId,
     linkType: input.linkType,
     createdAt: new Date().toISOString(),
-    source: "manual",
+    source: origin,
+    aiConfidence: origin === "ai" ? input.aiConfidence : undefined,
+    aiReason: origin === "ai" ? input.aiReason : undefined,
   };
 
   const existingLinks = await listKnowledgeLinks();
@@ -372,7 +413,7 @@ export async function addKnowledgeLink(input: {
     return duplicate;
   }
 
-  await writeStoredLinks([...manualLinks, next]);
+  await writeStoredLinks([...stored, next]);
   return resolveLinks([next]).then((items) => items[0]);
 }
 
@@ -385,15 +426,15 @@ export async function removeKnowledgeLink(id: string) {
 }
 
 export async function materializeDerivedKnowledgeLinks() {
-  const [manualLinks, derivedLinks] = await Promise.all([
+  const [storedLinks, derivedLinks] = await Promise.all([
     readStoredLinks(),
     buildDerivedLinks(),
   ]);
-  const manualSignatures = new Set(manualLinks.map((link) => linkSignature(link)));
+  const existingSignatures = new Set(storedLinks.map((link) => linkSignature(link)));
   const seeded: KnowledgeLink[] = [];
 
   for (const link of derivedLinks) {
-    if (manualSignatures.has(linkSignature(link))) continue;
+    if (existingSignatures.has(linkSignature(link))) continue;
     seeded.push({
       ...link,
       id: buildLinkId(),
@@ -403,11 +444,32 @@ export async function materializeDerivedKnowledgeLinks() {
   }
 
   if (seeded.length > 0) {
-    await writeStoredLinks([...manualLinks, ...seeded]);
+    await writeStoredLinks([...storedLinks, ...seeded]);
   }
 
   return {
     added: seeded.length,
-    totalManual: manualLinks.length + seeded.length,
+    totalManual: storedLinks.length + seeded.length,
   };
+}
+
+/**
+ * 对外暴露"所有已持久化的链路签名"，供 suggester 做去重判断。
+ * 返回值形如 `rules::R-0001::consensus::C-0003::supports`。
+ */
+export async function listStoredLinkSignatures(): Promise<Set<string>> {
+  const [stored, derived] = await Promise.all([readStoredLinks(), buildDerivedLinks()]);
+  return new Set([...stored, ...derived].map((link) => linkSignature(link)));
+}
+
+/**
+ * 无向配对签名：忽略方向与 linkType，用于 blocklist/去重。
+ */
+export function pairSignature(
+  a: { table: KbTableName; id: string },
+  b: { table: KbTableName; id: string },
+) {
+  const left = `${a.table}::${a.id}`;
+  const right = `${b.table}::${b.id}`;
+  return left < right ? `${left}||${right}` : `${right}||${left}`;
 }

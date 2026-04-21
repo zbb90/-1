@@ -1,0 +1,590 @@
+import {
+  getDashScopeApiKey,
+  getDashScopeComplexModelName,
+  parseJsonObject,
+  requestDashScopeChat,
+} from "@/lib/dashscope-client";
+import { embedTexts, isEmbeddingConfigured } from "@/lib/embeddings";
+import type { KbTableName } from "@/lib/kb-schema";
+import { loadKnowledgeTable } from "@/lib/knowledge-loader";
+import type { KnowledgeLinkType } from "@/lib/knowledge-links";
+import { listStoredLinkSignatures } from "@/lib/knowledge-links";
+import {
+  addSuggestions,
+  listBlocklistSignatures,
+  listSuggestions,
+} from "@/lib/knowledge-link-suggestions";
+import { normalizeTags } from "@/lib/knowledge-tags";
+import type { ConsensusRow, RuleRow } from "@/lib/types";
+
+/** 支持进入 Suggester 的条目。内部统一成这种结构，避免裸表类型扩散。 */
+type Entry = {
+  table: KbTableName;
+  id: string;
+  title: string;
+  subtitle: string;
+  tags: string[];
+  doc: string;
+  snippet: string;
+};
+
+export type GenerateSuggestionsOptions = {
+  /** dryRun 时仅返回候选对数与预估 token；不调用 LLM。 */
+  dryRun?: boolean;
+  /** 只扫描与这些 ID 相关的候选（用于 CSV 导入后增量扫描）。 */
+  changedIds?: Array<{ table: KbTableName; id: string }>;
+  /** 上限：本次最多给 LLM 判几对（防成本）。默认 env KB_LINK_MAX_PAIRS 或 200。 */
+  maxPairs?: number;
+  /** 每个条目最多保留多少个向量邻居。默认 5。 */
+  topKPerEntry?: number;
+  /** 向量相似度入围门槛（0~1），默认 0.55。 */
+  minVectorSimilarity?: number;
+  /** LLM 采纳阈值（低于此置信度直接不入队）。默认 0.55。 */
+  minAcceptConfidence?: number;
+  /** 触发者身份（仅用于审计，写入 suggestions.reason 前缀）。 */
+  actor?: string;
+};
+
+export type GenerateSuggestionsResult = {
+  ok: boolean;
+  dryRun: boolean;
+  totalEntries: number;
+  totalCandidates: number;
+  judgedPairs: number;
+  added: number;
+  skippedByBlocklist: number;
+  skippedByExisting: number;
+  skippedByPending: number;
+  rejectedByLlm: number;
+  estimatedLlmCalls: number;
+  /** 出现的警告：如 LLM 不可用、Embedding 失败等。 */
+  warnings: string[];
+  elapsedMs: number;
+};
+
+const DEFAULT_MAX_PAIRS = 200;
+const DEFAULT_TOP_K = 5;
+const DEFAULT_MIN_SIM = 0.55;
+const DEFAULT_MIN_CONFIDENCE = 0.55;
+const LLM_CONCURRENCY = (() => {
+  const raw = process.env.KB_LINK_LLM_CONCURRENCY?.trim();
+  if (!raw) return 4;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return 4;
+  return Math.min(n, 16);
+})();
+
+function envMaxPairs() {
+  const raw = process.env.KB_LINK_MAX_PAIRS?.trim();
+  if (!raw) return DEFAULT_MAX_PAIRS;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAX_PAIRS;
+  return Math.min(n, 2000);
+}
+
+export function isLinkSuggestionsEnabled() {
+  return process.env.KB_LINK_SUGGESTIONS_ENABLED === "1";
+}
+
+function truncate(text: string, max: number) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max).trim()}...`;
+}
+
+function buildRuleEntry(rule: RuleRow): Entry | null {
+  const id = rule.rule_id?.trim();
+  if (!id) return null;
+  const title = rule.条款标题?.trim() || "-";
+  const subtitle = rule.条款编号?.trim() || "";
+  const doc = [
+    `问题分类：${rule.问题分类 || "-"}`,
+    `关键词：${rule.问题子类或关键词 || "-"}`,
+    `场景描述：${rule.场景描述 || "-"}`,
+    `触发条件：${rule.触发条件 || "-"}`,
+    `条款标题：${rule.条款标题 || "-"}`,
+    `条款编号：${rule.条款编号 || "-"}`,
+    `条款片段：${rule.条款关键片段 || "-"}`,
+    `条款解释：${rule.条款解释 || "-"}`,
+  ].join("\n");
+  const snippet = truncate(
+    [rule.条款关键片段, rule.条款解释, rule.场景描述].filter(Boolean).join("；"),
+    180,
+  );
+  return {
+    table: "rules",
+    id,
+    title,
+    subtitle,
+    tags: normalizeTags(rule.tags),
+    doc,
+    snippet,
+  };
+}
+
+function buildConsensusEntry(row: ConsensusRow): Entry | null {
+  const id = row.consensus_id?.trim();
+  if (!id) return null;
+  const title = row.标题?.trim() || "-";
+  const subtitle = row.判定结果?.trim() || "";
+  const doc = [
+    `标题：${row.标题 || "-"}`,
+    `关联条款编号：${row.关联条款编号 || "-"}`,
+    `适用场景：${row.适用场景 || "-"}`,
+    `解释内容：${row.解释内容 || "-"}`,
+    `判定结果：${row.判定结果 || "-"}`,
+    `关键词：${row.关键词 || "-"}`,
+  ].join("\n");
+  const snippet = truncate(
+    [row.解释内容, row.适用场景, row.判定结果].filter(Boolean).join("；"),
+    180,
+  );
+  return {
+    table: "consensus",
+    id,
+    title,
+    subtitle,
+    tags: normalizeTags(row.tags),
+    doc,
+    snippet,
+  };
+}
+
+function cosineSimilarity(a: number[], b: number[]) {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0;
+  let la = 0;
+  let lb = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+    la += a[i] * a[i];
+    lb += b[i] * b[i];
+  }
+  if (la === 0 || lb === 0) return 0;
+  return dot / (Math.sqrt(la) * Math.sqrt(lb));
+}
+
+function normalizeSim(v: number) {
+  return Math.max(0, Math.min(1, (v + 1) / 2));
+}
+
+function entryKey(e: { table: KbTableName; id: string }) {
+  return `${e.table}::${e.id}`;
+}
+
+type PairCandidate = {
+  a: Entry;
+  b: Entry;
+  similarity: number;
+  tagOverlap: string[];
+};
+
+function buildPairCandidates(
+  entries: Entry[],
+  vectors: Map<string, number[]>,
+  options: { topK: number; minSim: number; allowedEntryKeys?: Set<string> | null },
+): PairCandidate[] {
+  const { topK, minSim, allowedEntryKeys } = options;
+  const tagIndex = new Map<string, Entry[]>();
+  for (const e of entries) {
+    for (const tag of e.tags) {
+      const list = tagIndex.get(tag) ?? [];
+      list.push(e);
+      tagIndex.set(tag, list);
+    }
+  }
+
+  const pairs = new Map<string, PairCandidate>();
+  const pushPair = (a: Entry, b: Entry, similarity: number) => {
+    if (a.table === b.table && a.id === b.id) return;
+    const ka = entryKey(a);
+    const kb = entryKey(b);
+    const [left, right, leftKey, rightKey] = ka < kb ? [a, b, ka, kb] : [b, a, kb, ka];
+    const pairKey = `${leftKey}||${rightKey}`;
+    const overlaps = left.tags.filter((t) => right.tags.includes(t));
+    const existing = pairs.get(pairKey);
+    if (existing) {
+      if (similarity > existing.similarity) {
+        existing.similarity = similarity;
+        existing.tagOverlap = overlaps;
+      }
+      return;
+    }
+    pairs.set(pairKey, { a: left, b: right, similarity, tagOverlap: overlaps });
+  };
+
+  // 1) 向量 top-K 邻居
+  for (const e of entries) {
+    const vec = vectors.get(entryKey(e));
+    if (!vec) continue;
+    const scored: Array<{ other: Entry; sim: number }> = [];
+    for (const other of entries) {
+      if (other === e) continue;
+      const ov = vectors.get(entryKey(other));
+      if (!ov) continue;
+      const sim = normalizeSim(cosineSimilarity(vec, ov));
+      if (sim < minSim) continue;
+      scored.push({ other, sim });
+    }
+    scored.sort((x, y) => y.sim - x.sim);
+    for (const { other, sim } of scored.slice(0, topK)) {
+      if (
+        allowedEntryKeys &&
+        !allowedEntryKeys.has(entryKey(e)) &&
+        !allowedEntryKeys.has(entryKey(other))
+      ) {
+        continue;
+      }
+      pushPair(e, other, sim);
+    }
+  }
+
+  // 2) tag 交集兜底（即便向量召回不到，也把标签完全重合的条目拉进来）
+  for (const [, list] of tagIndex) {
+    if (list.length < 2 || list.length > 40) continue;
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        const a = list[i];
+        const b = list[j];
+        if (
+          allowedEntryKeys &&
+          !allowedEntryKeys.has(entryKey(a)) &&
+          !allowedEntryKeys.has(entryKey(b))
+        ) {
+          continue;
+        }
+        const va = vectors.get(entryKey(a));
+        const vb = vectors.get(entryKey(b));
+        const sim = va && vb ? normalizeSim(cosineSimilarity(va, vb)) : 0;
+        pushPair(a, b, sim);
+      }
+    }
+  }
+
+  return [...pairs.values()];
+}
+
+type LlmVerdict = {
+  verdict?: "accept" | "reject";
+  linkType?: KnowledgeLinkType;
+  direction?: "a_to_b" | "b_to_a" | "bidirectional";
+  confidence?: number;
+  reason?: string;
+  evidenceSourceSpan?: string;
+  evidenceTargetSpan?: string;
+};
+
+function buildLlmPrompt(pair: PairCandidate) {
+  const labelA = `【${pair.a.table}｜${pair.a.id}｜${pair.a.title}${
+    pair.a.subtitle ? `｜${pair.a.subtitle}` : ""
+  }】`;
+  const labelB = `【${pair.b.table}｜${pair.b.id}｜${pair.b.title}${
+    pair.b.subtitle ? `｜${pair.b.subtitle}` : ""
+  }】`;
+  return `你将判断两条知识条目之间是否存在值得在知识图谱中显式关联的关系。
+
+A 条目：
+${labelA}
+${pair.a.doc}
+
+B 条目：
+${labelB}
+${pair.b.doc}
+
+说明：
+- 若 A 与 B 表达的是同一主题且相互佐证，用 "supports"
+- 若其中一方引用另一方（如条款编号/共识编号互指），用 "references"
+- 若 A 与 B 相互替代（新旧版本、通用/特殊规定覆盖关系），用 "supersedes"
+- 若两者在同一情景给出相反结论，用 "contradicts"
+- 若仅是话题相关、没有明显因果，用 "related"
+- 若两者无显著关系或关系牵强（例如只是都来自"食品安全"这种宽泛领域），必须返回 verdict = "reject"
+- supports/contradicts/related 属于对称关系，direction 请返回 "bidirectional"
+- supersedes/references 属于有方向关系，需要判断是 a_to_b（A 指向/替代 B）还是 b_to_a
+
+严格输出 JSON：
+{
+  "verdict": "accept" | "reject",
+  "linkType": "references | supports | related | supersedes | contradicts",
+  "direction": "a_to_b | b_to_a | bidirectional",
+  "confidence": 0-1,
+  "reason": "<=60 字中文理由，需指明触发关系的核心语义，不得编造条目外信息",
+  "evidenceSourceSpan": "摘自 A 原文，<=40 字",
+  "evidenceTargetSpan": "摘自 B 原文，<=40 字"
+}`;
+}
+
+async function judgePair(pair: PairCandidate): Promise<LlmVerdict | null> {
+  if (!getDashScopeApiKey()) return null;
+  const raw = await requestDashScopeChat(
+    "你是知识图谱关系判定助手。只能依据给定两条条目的原文判断，不得编造。返回严格 JSON。",
+    buildLlmPrompt(pair),
+    {
+      responseFormat: "json_object",
+      maxTokens: 360,
+      timeoutMs: 15000,
+      modelName: getDashScopeComplexModelName(),
+    },
+  );
+  return parseJsonObject<LlmVerdict>(raw);
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const runners: Array<Promise<void>> = [];
+  const runnerCount = Math.min(concurrency, items.length);
+  for (let i = 0; i < runnerCount; i += 1) {
+    runners.push(
+      (async () => {
+        while (true) {
+          const index = cursor;
+          cursor += 1;
+          if (index >= items.length) return;
+          results[index] = await worker(items[index], index);
+        }
+      })(),
+    );
+  }
+  await Promise.all(runners);
+  return results;
+}
+
+export async function generateLinkSuggestions(
+  options: GenerateSuggestionsOptions = {},
+): Promise<GenerateSuggestionsResult> {
+  const startedAt = Date.now();
+  const warnings: string[] = [];
+
+  const maxPairs = options.maxPairs ?? envMaxPairs();
+  const topKPerEntry = options.topKPerEntry ?? DEFAULT_TOP_K;
+  const minSim = options.minVectorSimilarity ?? DEFAULT_MIN_SIM;
+  const minAccept = options.minAcceptConfidence ?? DEFAULT_MIN_CONFIDENCE;
+
+  const [ruleRows, consensusRows] = await Promise.all([
+    loadKnowledgeTable<RuleRow>("rules"),
+    loadKnowledgeTable<ConsensusRow>("consensus"),
+  ]);
+
+  const entries: Entry[] = [
+    ...ruleRows.map(buildRuleEntry).filter((x): x is Entry => Boolean(x)),
+    ...consensusRows.map(buildConsensusEntry).filter((x): x is Entry => Boolean(x)),
+  ];
+
+  if (entries.length < 2) {
+    return {
+      ok: true,
+      dryRun: Boolean(options.dryRun),
+      totalEntries: entries.length,
+      totalCandidates: 0,
+      judgedPairs: 0,
+      added: 0,
+      skippedByBlocklist: 0,
+      skippedByExisting: 0,
+      skippedByPending: 0,
+      rejectedByLlm: 0,
+      estimatedLlmCalls: 0,
+      warnings: ["可用条目不足以构成候选对。"],
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+
+  // 1) embed 全部条目（使用现有缓存/并发控制，增量调用基本命中缓存）
+  const vectors = new Map<string, number[]>();
+  if (!isEmbeddingConfigured()) {
+    warnings.push("未配置 DashScope Embedding，候选生成依赖 Tag 交集。");
+  } else {
+    const docs = entries.map((e) => e.doc);
+    const vecList = await embedTexts(docs);
+    if (vecList && vecList.length === entries.length) {
+      vecList.forEach((vec, i) => vectors.set(entryKey(entries[i]), vec));
+    } else {
+      warnings.push("Embedding 批量生成失败，回退到 Tag 交集召回。");
+    }
+  }
+
+  // 2) 候选对生成
+  const changedKeys = options.changedIds?.length
+    ? new Set(options.changedIds.map((x) => entryKey(x)))
+    : null;
+  const pairs = buildPairCandidates(entries, vectors, {
+    topK: topKPerEntry,
+    minSim,
+    allowedEntryKeys: changedKeys,
+  }).sort((a, b) => b.similarity - a.similarity);
+
+  // 3) 过滤已存在 / blocklist / 已 pending
+  const [existingSignatures, blocklist, pendingSuggestions] = await Promise.all([
+    listStoredLinkSignatures(),
+    listBlocklistSignatures(),
+    listSuggestions({ status: "pending", limit: 10000 }),
+  ]);
+  const pendingPairKeys = new Set<string>();
+  for (const p of pendingSuggestions.items) {
+    const ka = entryKey({ table: p.sourceTable, id: p.sourceId });
+    const kb = entryKey({ table: p.targetTable, id: p.targetId });
+    pendingPairKeys.add(ka < kb ? `${ka}||${kb}` : `${kb}||${ka}`);
+  }
+
+  let skippedByBlocklist = 0;
+  let skippedByExisting = 0;
+  let skippedByPending = 0;
+  const enqueued: PairCandidate[] = [];
+  for (const pair of pairs) {
+    const ka = entryKey(pair.a);
+    const kb = entryKey(pair.b);
+    const pairKey = ka < kb ? `${ka}||${kb}` : `${kb}||${ka}`;
+    if (blocklist.has(pairKey)) {
+      skippedByBlocklist += 1;
+      continue;
+    }
+    if (pendingPairKeys.has(pairKey)) {
+      skippedByPending += 1;
+      continue;
+    }
+    // 同方向/同类型已存在的持久化链路 => 跳过（简单粗暴：只要任一类型的该方向已有，就视为已覆盖）
+    let existsAny = false;
+    for (const linkType of [
+      "references",
+      "supports",
+      "related",
+      "supersedes",
+      "contradicts",
+    ]) {
+      if (
+        existingSignatures.has(
+          [pair.a.table, pair.a.id, pair.b.table, pair.b.id, linkType].join("::"),
+        ) ||
+        existingSignatures.has(
+          [pair.b.table, pair.b.id, pair.a.table, pair.a.id, linkType].join("::"),
+        )
+      ) {
+        existsAny = true;
+        break;
+      }
+    }
+    if (existsAny) {
+      skippedByExisting += 1;
+      continue;
+    }
+    enqueued.push(pair);
+    if (enqueued.length >= maxPairs) break;
+  }
+
+  const estimatedLlmCalls = enqueued.length;
+
+  if (options.dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      totalEntries: entries.length,
+      totalCandidates: pairs.length,
+      judgedPairs: 0,
+      added: 0,
+      skippedByBlocklist,
+      skippedByExisting,
+      skippedByPending,
+      rejectedByLlm: 0,
+      estimatedLlmCalls,
+      warnings,
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+
+  if (!getDashScopeApiKey()) {
+    warnings.push("未配置 DASHSCOPE_API_KEY，无法调用 LLM 裁判。");
+    return {
+      ok: false,
+      dryRun: false,
+      totalEntries: entries.length,
+      totalCandidates: pairs.length,
+      judgedPairs: 0,
+      added: 0,
+      skippedByBlocklist,
+      skippedByExisting,
+      skippedByPending,
+      rejectedByLlm: 0,
+      estimatedLlmCalls,
+      warnings,
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+
+  // 4) LLM 并发判决
+  const verdicts = await runWithConcurrency(
+    enqueued,
+    async (pair) => ({ pair, verdict: await judgePair(pair) }),
+    LLM_CONCURRENCY,
+  );
+
+  let rejectedByLlm = 0;
+  const drafts: Parameters<typeof addSuggestions>[0] = [];
+  const modelName = getDashScopeComplexModelName();
+
+  for (const { pair, verdict } of verdicts) {
+    if (!verdict || verdict.verdict !== "accept") {
+      rejectedByLlm += 1;
+      continue;
+    }
+    const linkType =
+      verdict.linkType &&
+      ["references", "supports", "related", "supersedes", "contradicts"].includes(
+        verdict.linkType,
+      )
+        ? (verdict.linkType as KnowledgeLinkType)
+        : "related";
+    const confidence =
+      typeof verdict.confidence === "number"
+        ? Math.max(0, Math.min(1, verdict.confidence))
+        : 0.5;
+    if (confidence < minAccept) {
+      rejectedByLlm += 1;
+      continue;
+    }
+
+    // 对齐方向：默认把 a 当 source；b_to_a 时交换。
+    const directed = verdict.direction === "b_to_a";
+    const source = directed ? pair.b : pair.a;
+    const target = directed ? pair.a : pair.b;
+    const evidenceSource = directed
+      ? (verdict.evidenceTargetSpan ?? "")
+      : (verdict.evidenceSourceSpan ?? "");
+    const evidenceTarget = directed
+      ? (verdict.evidenceSourceSpan ?? "")
+      : (verdict.evidenceTargetSpan ?? "");
+
+    drafts.push({
+      sourceTable: source.table,
+      sourceId: source.id,
+      targetTable: target.table,
+      targetId: target.id,
+      linkType,
+      confidence,
+      reason: truncate(verdict.reason ?? "", 200),
+      evidenceSourceSpan: truncate(evidenceSource, 200),
+      evidenceTargetSpan: truncate(evidenceTarget, 200),
+      model: modelName,
+    });
+  }
+
+  const saved = await addSuggestions(drafts);
+
+  return {
+    ok: true,
+    dryRun: false,
+    totalEntries: entries.length,
+    totalCandidates: pairs.length,
+    judgedPairs: verdicts.length,
+    added: saved.added,
+    skippedByBlocklist,
+    skippedByExisting,
+    skippedByPending,
+    rejectedByLlm,
+    estimatedLlmCalls,
+    warnings,
+    elapsedMs: Date.now() - startedAt,
+  };
+}

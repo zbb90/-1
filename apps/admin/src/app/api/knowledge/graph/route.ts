@@ -19,11 +19,12 @@ export async function GET(request: NextRequest) {
       ?.trim() as KbTableName | null;
     const tagFilter = request.nextUrl.searchParams.get("tag")?.trim() || "";
     const includeIsolated = request.nextUrl.searchParams.get("includeIsolated") !== "0";
+    const includeAiSuggestions = request.nextUrl.searchParams.get("includeAi") !== "0";
     const {
       nodes: allNodes,
       edges: allEdges,
       tables,
-    } = await buildKnowledgeGraphData();
+    } = await buildKnowledgeGraphData({ includeAiSuggestions });
     let nodes = [...allNodes];
     if (tableFilter && tables.includes(tableFilter)) {
       nodes = nodes.filter((node) => node.table === tableFilter);
@@ -49,6 +50,8 @@ export async function GET(request: NextRequest) {
           nodes: nodes.length,
           edges: edges.length,
           isolatedNodes: nodes.filter((node) => node.isIsolated).length,
+          aiSuggestedEdges: edges.filter((edge) => edge.sourceKind === "ai-suggested")
+            .length,
           tables: Object.fromEntries(
             tables.map((table) => [
               table,

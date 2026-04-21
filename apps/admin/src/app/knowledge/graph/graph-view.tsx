@@ -83,7 +83,12 @@ function buildGroupList(nodes: GraphNode[]) {
     });
 }
 
-function edgeStroke(edge: { linkType: GraphEdge["linkType"] }) {
+function edgeStroke(edge: {
+  linkType: GraphEdge["linkType"];
+  sourceKind: GraphEdge["sourceKind"];
+}) {
+  // AI 建议边用醒目的琥珀色，便于和已确认关系区分。
+  if (edge.sourceKind === "ai-suggested") return "#d97706";
   if (edge.linkType === "contradicts") return "#dc2626";
   if (edge.linkType === "supersedes") return "#9333ea";
   if (edge.linkType === "supports") return "#16a34a";
@@ -95,10 +100,19 @@ function edgeDash(edge: {
   linkType: GraphEdge["linkType"];
   sourceKind: GraphEdge["sourceKind"];
 }) {
+  // AI 建议强制使用较为稀疏的虚线，区别于一般关联/派生的点线。
+  if (edge.sourceKind === "ai-suggested") return "8 6";
   if (edge.linkType === "related") return "7 5";
   if (edge.linkType === "supersedes") return "3 4";
   if (edge.sourceKind === "derived") return "2 4";
   return undefined;
+}
+
+function edgeSourceLabel(kind: GraphEdge["sourceKind"]) {
+  if (kind === "manual") return "人工维护";
+  if (kind === "derived") return "系统派生";
+  if (kind === "ai") return "AI 审核通过";
+  return "AI 建议（待审）";
 }
 
 function truncateText(value: string, max: number) {
@@ -524,6 +538,18 @@ export function KnowledgeGraphView({
                 <p>
                   连线颜色区分支撑、冲突、替代、引用等关系，虚线多为一般关联或系统派生。
                 </p>
+                <p>
+                  <span
+                    className="mr-1 inline-block h-0.5 w-8 align-middle"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, #d97706 0 8px, transparent 8px 14px)",
+                    }}
+                  />
+                  <span className="align-middle">
+                    琥珀色虚线为 AI 关联建议（待审），可在「AI 关联建议」标签页审核。
+                  </span>
+                </p>
               </div>
               <div className="grid gap-2">
                 {Object.entries(TABLE_LABELS).map(([table, label]) => (
@@ -557,14 +583,20 @@ export function KnowledgeGraphView({
           >
             {hovered?.kind === "edge" && previewEdge ? (
               <div className="space-y-2 text-sm text-gray-700">
-                <StatusPill tone="blue">
+                <StatusPill
+                  tone={previewEdge.sourceKind === "ai-suggested" ? "amber" : "blue"}
+                >
                   {LINK_TYPE_LABELS[previewEdge.linkType]}
+                  {previewEdge.sourceKind === "ai-suggested" ? " · AI 建议" : ""}
                 </StatusPill>
                 <p>{previewEdge.sourceLabel}</p>
                 <p className="text-xs text-gray-400">↓</p>
                 <p>{previewEdge.targetLabel}</p>
                 <p className="text-xs text-gray-500">
-                  来源：{previewEdge.sourceKind === "manual" ? "人工维护" : "系统提取"}
+                  来源：{edgeSourceLabel(previewEdge.sourceKind)}
+                  {typeof previewEdge.aiConfidence === "number"
+                    ? `（置信度 ${(previewEdge.aiConfidence * 100).toFixed(0)}%）`
+                    : ""}
                 </p>
               </div>
             ) : previewNode ? (
@@ -660,9 +692,16 @@ export function KnowledgeGraphView({
             <div className="space-y-1.5 text-slate-700">
               <p className="font-semibold text-slate-900">
                 {LINK_TYPE_LABELS[hovered.edge.linkType]}
+                {hovered.edge.sourceKind === "ai-suggested" ? " · AI 建议" : ""}
               </p>
               <p className="text-xs">{hovered.edge.sourceLabel}</p>
               <p className="text-xs">{hovered.edge.targetLabel}</p>
+              <p className="text-xs text-slate-500">
+                {edgeSourceLabel(hovered.edge.sourceKind)}
+                {typeof hovered.edge.aiConfidence === "number"
+                  ? ` · 置信度 ${(hovered.edge.aiConfidence * 100).toFixed(0)}%`
+                  : ""}
+              </p>
             </div>
           )}
         </div>

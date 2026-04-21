@@ -27,7 +27,9 @@ type LinkItem = {
   sourceLabel: string;
   targetLabel: string;
   linkType: KnowledgeLinkType;
-  source: "manual" | "derived";
+  source: "manual" | "derived" | "ai";
+  aiConfidence?: number;
+  aiReason?: string;
 };
 
 type HealthRuleItem = {
@@ -1325,9 +1327,18 @@ export function KnowledgeTabs() {
                               {LINK_TYPE_OPTIONS.find(
                                 (item) => item.value === link.linkType,
                               )?.label || link.linkType}
-                              · 来源：{link.source === "manual" ? "手动" : "派生"}
+                              · 来源：
+                              {link.source === "manual"
+                                ? "手动"
+                                : link.source === "derived"
+                                  ? "派生"
+                                  : `AI${
+                                      typeof link.aiConfidence === "number"
+                                        ? ` · ${(link.aiConfidence * 100).toFixed(0)}%`
+                                        : ""
+                                    }`}
                             </p>
-                            {link.source === "manual" ? (
+                            {link.source === "manual" || link.source === "ai" ? (
                               <button
                                 onClick={() => handleDeleteLink(link.id)}
                                 className="mt-2 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
@@ -1360,7 +1371,16 @@ export function KnowledgeTabs() {
                               {LINK_TYPE_OPTIONS.find(
                                 (item) => item.value === link.linkType,
                               )?.label || link.linkType}
-                              · 来源：{link.source === "manual" ? "手动" : "派生"}
+                              · 来源：
+                              {link.source === "manual"
+                                ? "手动"
+                                : link.source === "derived"
+                                  ? "派生"
+                                  : `AI${
+                                      typeof link.aiConfidence === "number"
+                                        ? ` · ${(link.aiConfidence * 100).toFixed(0)}%`
+                                        : ""
+                                    }`}
                             </p>
                           </div>
                         ))}
