@@ -11,15 +11,25 @@ interface Candidate {
   consensusId: string;
   generatedFaqId: string;
   alreadyMigrated: boolean;
+  reason: string;
+}
+
+interface RetainedClause {
+  ruleId: string;
+  clauseNo: string;
+  clauseTitle: string;
+  reason: string;
 }
 
 interface Plan {
   rulesTotal: number;
   faqTotal: number;
+  retained: number;
   matched: number;
   alreadyMigrated: number;
   toMigrate: number;
   candidates: Candidate[];
+  retainedClauses: RetainedClause[];
 }
 
 interface ApplyResult extends Plan {
@@ -62,12 +72,12 @@ export function SplitRulesMigrationPanel() {
 
   async function handleApply() {
     if (!plan) return;
-    if (plan.toMigrate === 0) {
-      setApplyMessage("没有待迁移条目，所有命中行都已在 FAQ 表里。");
+    if (plan.toMigrate === 0 && plan.alreadyMigrated === 0) {
+      setApplyMessage("没有需要处理的条目：所有非稽核条款都已迁过且已从 rules 清掉。");
       return;
     }
     const ok = window.confirm(
-      `本次将把 ${plan.toMigrate} 条 rules 行写入 FAQ，并从 rules 表物理删除（含已迁过的 ${plan.alreadyMigrated} 条幂等清理）。该操作仅写 Redis、不影响向量库，是否继续？`,
+      `本次将把 ${plan.toMigrate} 条非稽核条款写入 FAQ，并从 rules 表物理删除 ${plan.matched} 条（含已迁过的 ${plan.alreadyMigrated} 条幂等清理）。\n\nrules 将保留 ${plan.retained} 条真稽核条款。\n\n该操作仅写 Redis、不影响向量库，是否继续？`,
     );
     if (!ok) return;
     setApplying(true);
@@ -98,16 +108,20 @@ export function SplitRulesMigrationPanel() {
     <div className="space-y-4">
       <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-800 ring-1 ring-amber-200">
         <p className="font-medium">
-          一次性迁移：把 rules 中「自动从稽核共识抽取」拆到 FAQ。
+          一次性迁移：把 rules 中「不是真稽核条款」的答疑沉淀拆到 FAQ。
         </p>
         <p className="mt-1">
-          只动这 86 条历史共识行，其他在线编辑过的 rules / FAQ 一概不碰。幂等：
-          重复点击不会出脏数据；如果 FAQ 备注里已含 `迁移自规则表 R-xxxx`
-          会自动跳过该条。
+          <b>判定规则</b>：rules 只保留条款编号在古茗稽核 Excel 47 个 X.Y 标准条款（H1.1
+          / F4.1 / B2.3 …）里的行，或 tags 含 <code>audit-clause</code>{" "}
+          的人工白名单条款；其他全部迁到 FAQ。
+        </p>
+        <p className="mt-1">
+          <b>幂等</b>：FAQ 备注里已含 <code>迁移自规则表 R-xxxx</code>{" "}
+          的会跳过新增（仍从 rules 清掉）；重复点击不会出脏数据。
         </p>
         <p className="mt-1">
           执行后 <b>必须</b> 单独点上面的「重建知识向量库（规则 + 共识 + FAQ）」按钮，
-          线上的 AI 回答才会改用 FAQ 直答。
+          线上的 AI 回答才会改用新版数据布局。
         </p>
       </div>
 
@@ -129,10 +143,11 @@ export function SplitRulesMigrationPanel() {
 
       {plan ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Stat label="rules 当前总数" value={plan.rulesTotal} />
+            <Stat label="将保留稽核条款" value={plan.retained} tone="slate" />
             <Stat label="faq 当前总数" value={plan.faqTotal} />
-            <Stat label="命中迁移条件" value={plan.matched} tone="amber" />
+            <Stat label="判定为答疑沉淀" value={plan.matched} tone="amber" />
             <Stat label="本次实际待迁" value={plan.toMigrate} tone="green" />
           </div>
 
@@ -168,7 +183,7 @@ export function SplitRulesMigrationPanel() {
                     <th className="px-3 py-2">rule_id</th>
                     <th className="px-3 py-2">原条款编号</th>
                     <th className="px-3 py-2">条款标题 / 示例问法</th>
-                    <th className="px-3 py-2">关联共识</th>
+                    <th className="px-3 py-2">迁移原因</th>
                     <th className="px-3 py-2">→ FAQ ID</th>
                     <th className="px-3 py-2">状态</th>
                   </tr>
@@ -190,9 +205,7 @@ export function SplitRulesMigrationPanel() {
                           </div>
                         ) : null}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
-                        {c.consensusId || "—"}
-                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{c.reason}</td>
                       <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-600">
                         {c.generatedFaqId || "—"}
                       </td>
@@ -214,9 +227,47 @@ export function SplitRulesMigrationPanel() {
             </div>
           ) : (
             <p className="text-sm text-slate-500">
-              当前 Redis rules 表中没有以「自动从稽核共识抽取」开头备注的行。
+              当前 Redis rules 表中所有行都已是真稽核条款，没有需要迁出的答疑沉淀。
             </p>
           )}
+
+          <details className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700">
+              将保留在 rules 的稽核条款（{plan.retainedClauses.length} 条）
+            </summary>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead className="text-xs font-medium uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">rule_id</th>
+                    <th className="px-3 py-2">条款编号</th>
+                    <th className="px-3 py-2">条款标题</th>
+                    <th className="px-3 py-2">来源</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {plan.retainedClauses.map((r) => (
+                    <tr key={r.ruleId}>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-600">
+                        {r.ruleId}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-700">
+                        {r.clauseNo}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {r.clauseTitle || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">
+                        {r.reason === "audit-excel"
+                          ? "古茗稽核 Excel"
+                          : "tags=audit-clause 白名单"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </>
       ) : null}
     </div>
