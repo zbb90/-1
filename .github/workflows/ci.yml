@@ -130,6 +130,13 @@ jobs:
             STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/health)
             if [ \"\$STATUS\" = '200' ]; then
               echo 'Deploy OK - health check passed'
+
+              echo '>>> Pruning old images (keep <24h, latest, rollback)...'
+              # 只清 24h 之前未被使用的镜像，避免吃满系统盘
+              # latest 正在被容器引用、rollback 一般 < 24h，都不会被误删
+              podman image prune -a -f --filter 'until=24h' || true
+              echo '>>> Disk usage after prune:'
+              df -h / | tail -1
             else
               echo \"Health check FAILED (status=\$STATUS), rolling back...\"
               podman stop audit-admin 2>/dev/null || true
