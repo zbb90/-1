@@ -72,6 +72,10 @@ export async function readRows(table: KbTableName): Promise<Row[]> {
 /*  Write helpers                                                      */
 /* ------------------------------------------------------------------ */
 
+export async function replaceTableRows(table: KbTableName, rows: Row[]) {
+  await persistRows(table, rows);
+}
+
 async function persistRows(table: KbTableName, rows: Row[]) {
   if (isRedisConfigured()) {
     try {

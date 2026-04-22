@@ -18,6 +18,7 @@ import {
   repairUserIndexesAction,
   restoreKnowledgeFromCsvAction,
 } from "./actions";
+import { SplitRulesMigrationPanel } from "./split-rules-migration-panel";
 
 function StatCard({
   label,
@@ -307,6 +308,13 @@ export default async function StoragePage({
                 分钟内完成。
               </p>
             </div>
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="一次性迁移：rules → FAQ"
+            description="把 rules 表里历史共识沉积（备注以「自动从稽核共识抽取」开头）增量迁到 FAQ 沉积表，幂等、不动其他在线编辑。"
+          >
+            <SplitRulesMigrationPanel />
           </WorkspaceSection>
         </div>
 
