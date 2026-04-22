@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
-import { importRows } from "@/lib/knowledge-store";
+import { importRows, readRows } from "@/lib/knowledge-store";
 import type { KbTableName } from "@/lib/knowledge-csv";
+import type { ConsensusRow, RuleRow } from "@/lib/types";
+import { rebuildRuleVectorIndex, upsertConsensusVectors } from "@/lib/vector-store";
 import {
   generateLinkSuggestions,
   isLinkSuggestionsEnabled,
@@ -75,6 +77,42 @@ export async function POST(request: NextRequest) {
       rows,
       mode as "append" | "replace",
     );
+
+    // 导入完成后，按表类型异步触发向量同步：
+    // - rules：rebuild 整个规则向量集合（避免 append 出现重复 point id 漂移）
+    // - consensus：upsert 全部启用项（B 档双源召回必须）
+    // 失败仅记录日志，不影响导入成功状态；上线时建议管理员手动再点一次"重建索引"做兜底。
+    if (table === "rules") {
+      void (async () => {
+        try {
+          const allRules = (await readRows("rules")) as unknown as RuleRow[];
+          const sync = await rebuildRuleVectorIndex(allRules);
+          if (!sync.ok) {
+            console.warn("[knowledge-import] rule vector rebuild skipped", sync.reason);
+          }
+        } catch (err) {
+          console.warn("[knowledge-import] rule vector rebuild failed", err);
+        }
+      })();
+    } else if (table === "consensus") {
+      void (async () => {
+        try {
+          const allConsensus = (await readRows(
+            "consensus",
+          )) as unknown as ConsensusRow[];
+          const enabled = allConsensus.filter((row) => row.状态 !== "停用");
+          const sync = await upsertConsensusVectors(enabled);
+          if (!sync.ok) {
+            console.warn(
+              "[knowledge-import] consensus vector sync skipped",
+              sync.reason,
+            );
+          }
+        } catch (err) {
+          console.warn("[knowledge-import] consensus vector sync failed", err);
+        }
+      })();
+    }
 
     // 导入 rules / consensus 成功后，若开启了 AI 关联建议功能，则后台异步触发一次增量扫描。
     // 失败被吞掉：这是导入流程的副作用，不能影响导入成功状态。

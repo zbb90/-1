@@ -15,13 +15,14 @@ import {
   buildRegularQuestionMaterialText,
   detectMaterialMismatch,
 } from "@/lib/rule-material-guard";
-import { isSemanticSearchConfigured, searchRuleVectors } from "@/lib/vector-store";
+import { isSemanticSearchConfigured, searchKnowledgeVectors } from "@/lib/vector-store";
 import type {
   ConsensusRow,
   RegularQuestionMatchDebug,
   RegularQuestionMatchResult,
   RegularQuestionRequest,
   RuleRow,
+  SemanticConsensusRecallCandidate,
 } from "@/lib/types";
 
 export {
@@ -33,6 +34,10 @@ export {
 };
 
 const RAG_CONFIDENCE_THRESHOLD = Number(process.env.RAG_CONFIDENCE_THRESHOLD || "55");
+// 共识直答最低向量分阈值：低于该值时不直接采用，避免 RAG 失败 + 弱共识联合给出错误答案。
+const CONSENSUS_DIRECT_ANSWER_MIN_SCORE = Number(
+  process.env.CONSENSUS_DIRECT_ANSWER_MIN_SCORE || "0.55",
+);
 
 interface RagLlmResult {
   ruleId: string | null;
@@ -128,6 +133,58 @@ async function ragJudgeAndAnswer(
   return parsed;
 }
 
+function buildConsensusDirectAnswer(
+  consensus: ConsensusRow,
+  vectorScore: number,
+  debug: RegularQuestionMatchDebug,
+  reasonNote: string,
+): RegularQuestionMatchResult {
+  const explanation = consensus.解释内容 || consensus.示例问题 || "";
+  const clauseTitle = consensus.标题 || "业务共识";
+  const clauseNo = consensus.关联条款编号 || consensus.consensus_id;
+  const score = Math.round(vectorScore * 100);
+
+  return {
+    matched: true,
+    topScore: score,
+    answer: {
+      ruleId: consensus.consensus_id,
+      category: consensus.适用场景 || "业务共识",
+      shouldDeduct: consensus.判定结果 || "按场景判定",
+      deductScore: consensus.扣分分值 || "按共识判定",
+      clauseNo,
+      clauseTitle,
+      clauseSnippet: explanation.slice(0, 120),
+      explanation,
+      source: `${clauseTitle} / ${consensus.来源文件 || "业务共识沉淀"}`,
+      matchedReasons: [reasonNote],
+      consensusKeywords: consensus.关键词?.trim() || "",
+      consensusApplicableScene: consensus.适用场景?.trim() || "",
+      aiExplanation: explanation,
+      sourceKind: "consensus",
+      consensusId: consensus.consensus_id,
+    },
+    candidates: [
+      {
+        ruleId: consensus.consensus_id,
+        category: consensus.适用场景 || "业务共识",
+        clauseNo,
+        clauseTitle,
+        score,
+        vectorScore,
+        vectorBoost: 0,
+      },
+    ],
+    debug: {
+      ...debug,
+      judgeMode: "llm" as const,
+      judgeSelectedRuleId: consensus.consensus_id,
+      judgeReason: reasonNote,
+      judgeConfidence: score,
+    },
+  };
+}
+
 export async function matchRegularQuestion(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionMatchResult> {
@@ -139,15 +196,22 @@ export async function matchRegularQuestion(
   const [rules, consensusRows, semanticResult] = await Promise.all([
     loadKnowledgeTable<RuleRow>("rules"),
     loadKnowledgeTable<ConsensusRow>("consensus"),
-    searchRuleVectors(request),
+    searchKnowledgeVectors(request),
   ]);
 
-  if (semanticResult.hits.length === 0 && semanticResult.fallbackReason) {
+  // 双源（rules + consensus）都没有任何召回 → 走旧关键词兜底
+  if (
+    semanticResult.ruleHits.length === 0 &&
+    semanticResult.consensusHits.length === 0 &&
+    semanticResult.fallbackReason
+  ) {
     return matchRegularQuestionFallback(request);
   }
 
   const ruleMap = new Map(rules.map((r) => [r.rule_id, r]));
-  const vectorHitsRaw = semanticResult.hits
+  const consensusMap = new Map(consensusRows.map((c) => [c.consensus_id, c]));
+
+  const vectorHitsRaw = semanticResult.ruleHits
     .map((hit) => {
       const rule = ruleMap.get(hit.ruleId);
       return rule ? { rule, vectorScore: hit.vectorScore } : null;
@@ -160,21 +224,47 @@ export async function matchRegularQuestion(
     (c) => !detectMaterialMismatch(materialText, c.rule).mismatch,
   );
 
+  // 命中共识候选：按 consensus_id 反查正式行，过滤掉已停用 / 库内已不存在
+  const consensusHits = semanticResult.consensusHits
+    .map((hit): { consensus: ConsensusRow; vectorScore: number } | null => {
+      const consensus = consensusMap.get(hit.consensusId);
+      if (!consensus) return null;
+      if (consensus.状态 === "停用") return null;
+      return { consensus, vectorScore: hit.vectorScore };
+    })
+    .filter((c): c is { consensus: ConsensusRow; vectorScore: number } => c !== null);
+
+  const retrievalSources: string[] = [];
+  if (vectorHits.length > 0) retrievalSources.push("semantic");
+  if (consensusHits.length > 0) retrievalSources.push("consensus");
+
   const debug: RegularQuestionMatchDebug = {
-    retrievalMode: semanticResult.hits.length > 0 ? "semantic" : "fallback",
+    retrievalMode:
+      vectorHits.length > 0 || consensusHits.length > 0 ? "semantic" : "fallback",
     semanticEnabled: isSemanticSearchConfigured(),
     queryText: semanticResult.queryText,
     fallbackReason:
-      vectorHits.length > 0
-        ? undefined
-        : vectorHitsRaw.length > 0
+      vectorHits.length === 0 && consensusHits.length === 0
+        ? vectorHitsRaw.length > 0
           ? "语义候选与用户描述的具体物料不一致，已全部过滤。"
-          : semanticResult.fallbackReason,
-    recalled: semanticResult.hits,
-    retrievalSources: vectorHits.length > 0 ? ["semantic"] : [],
+          : semanticResult.fallbackReason
+        : undefined,
+    recalled: [
+      ...semanticResult.ruleHits.map((h) => ({ ...h, kind: "rule" as const })),
+      ...semanticResult.consensusHits.map((h) => ({
+        ruleId: h.consensusId,
+        category: h.applicableScene,
+        clauseTitle: h.title,
+        vectorScore: h.vectorScore,
+        kind: "consensus" as const,
+        consensusId: h.consensusId,
+      })),
+    ],
+    retrievalSources,
   };
 
-  if (vectorHits.length === 0) {
+  // 全部过滤掉 / 全部空：转人工
+  if (vectorHits.length === 0 && consensusHits.length === 0) {
     const noHitReason =
       vectorHitsRaw.length > 0
         ? "语义召回与用户描述的具体物料不一致，已拒绝自动命中。"
@@ -203,6 +293,47 @@ export async function matchRegularQuestion(
     vectorBoost: 0,
   }));
 
+  const topConsensus: SemanticConsensusRecallCandidate | undefined =
+    semanticResult.consensusHits[0];
+
+  // 仅有共识、无规则候选 → 直接共识直答
+  if (vectorHits.length === 0 && consensusHits.length > 0) {
+    const best = consensusHits[0];
+    if (best.vectorScore >= CONSENSUS_DIRECT_ANSWER_MIN_SCORE) {
+      recordSelected(best.consensus.consensus_id);
+      console.info("[regular-question-match] consensus-direct (no rule hit)", {
+        queryText: debug.queryText,
+        selectedConsensusId: best.consensus.consensus_id,
+        vectorScore: best.vectorScore,
+      });
+      return buildConsensusDirectAnswer(
+        best.consensus,
+        best.vectorScore,
+        debug,
+        "未命中稽核条款，但与该共识高度相关，直接给出共识答复。",
+      );
+    }
+
+    // 共识分数也不够高 → 转人工
+    const reason = `命中共识 ${best.consensus.consensus_id} 但向量分 ${best.vectorScore.toFixed(3)} 低于阈值 ${CONSENSUS_DIRECT_ANSWER_MIN_SCORE}，自动转人工复核。`;
+    recordUnmatchedQuery(request.description || request.issueTitle || "", reason);
+    return {
+      matched: false,
+      rejectReason: reason,
+      candidates: [],
+      debug: {
+        ...debug,
+        rerankedTop: [],
+        judgeMode: "llm" as const,
+        judgeReason: reason,
+        judgeConfidence: Math.round(best.vectorScore * 100),
+        escalatedToReview: true,
+        lowConfidenceReason: reason,
+      },
+    };
+  }
+
+  // 走原 RAG（规则候选）
   const ragResult = await ragJudgeAndAnswer(request, vectorHits);
 
   if (
@@ -210,6 +341,28 @@ export async function matchRegularQuestion(
     !ragResult.ruleId ||
     ragResult.confidence < RAG_CONFIDENCE_THRESHOLD
   ) {
+    // RAG 失败/低置信 — 若有强共识候选则回退到共识直答，避免无谓转人工
+    if (topConsensus && topConsensus.vectorScore >= CONSENSUS_DIRECT_ANSWER_MIN_SCORE) {
+      const fallbackConsensus = consensusHits.find(
+        (c) => c.consensus.consensus_id === topConsensus.consensusId,
+      );
+      if (fallbackConsensus) {
+        recordSelected(fallbackConsensus.consensus.consensus_id);
+        console.info("[regular-question-match] consensus-direct (rag fallback)", {
+          queryText: debug.queryText,
+          selectedConsensusId: fallbackConsensus.consensus.consensus_id,
+          vectorScore: fallbackConsensus.vectorScore,
+          ragConfidence: ragResult?.confidence ?? 0,
+        });
+        return buildConsensusDirectAnswer(
+          fallbackConsensus.consensus,
+          fallbackConsensus.vectorScore,
+          debug,
+          "稽核条款匹配置信度不足，回退至高相关共识答复。",
+        );
+      }
+    }
+
     const reason = !ragResult
       ? "LLM 未返回有效结果，自动转人工复核。"
       : ragResult.confidence < RAG_CONFIDENCE_THRESHOLD
@@ -265,6 +418,8 @@ export async function matchRegularQuestion(
       consensusKeywords: linkedConsensus?.关键词?.trim() || "",
       consensusApplicableScene: linkedConsensus?.适用场景?.trim() || "",
       aiExplanation: ragResult.answer,
+      sourceKind: "rule",
+      consensusId: linkedConsensus?.consensus_id,
     },
     candidates: rerankedTop,
     debug: {

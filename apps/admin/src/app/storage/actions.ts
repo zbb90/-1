@@ -5,8 +5,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAdminSessionFromCookies } from "@/lib/admin-session";
 import { repairReviewTaskStorage, type ReviewRepairSource } from "@/lib/review-pool";
-import { restoreKnowledgeBaseFromCsv } from "@/lib/knowledge-store";
+import { readRows, restoreKnowledgeBaseFromCsv } from "@/lib/knowledge-store";
 import { repairUserIndexes } from "@/lib/user-store";
+import {
+  isSemanticSearchConfigured,
+  rebuildKnowledgeVectorIndex,
+} from "@/lib/vector-store";
+import type { ConsensusRow, RuleRow } from "@/lib/types";
 
 async function assertLeaderSession() {
   const cookieStore = await cookies();
@@ -66,5 +71,27 @@ export async function repairUserIndexesAction() {
   revalidateStorageRelatedPages();
   redirectWithMessage(
     `账号索引修复完成：用户 ${result.repairedUsers}，手机号索引 ${result.repairedPhoneIndexes}。`,
+  );
+}
+
+export async function rebuildKnowledgeVectorIndexAction() {
+  await assertLeaderSession();
+  if (!isSemanticSearchConfigured()) {
+    redirectWithMessage("向量检索未配置（DashScope 或 Qdrant 缺失），重建已跳过。");
+    return;
+  }
+  const [rules, consensus] = await Promise.all([
+    readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
+    readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
+  ]);
+  const result = await rebuildKnowledgeVectorIndex(rules, consensus);
+  revalidateStorageRelatedPages();
+  if (!result.ok) {
+    redirectWithMessage(
+      `知识向量重建未完成：${result.ruleReason || result.consensusReason || "未知原因"}（规则 ${result.rules}，共识 ${result.consensus}）。`,
+    );
+  }
+  redirectWithMessage(
+    `知识向量重建完成：规则 ${result.rules} 条、共识 ${result.consensus} 条。`,
   );
 }

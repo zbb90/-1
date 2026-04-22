@@ -106,11 +106,23 @@ export interface OldItemRequest extends RequesterPayload {
   remark?: string;
 }
 
+export type KnowledgeRecallKind = "rule" | "consensus" | "faq";
+
 export interface SemanticRuleRecallCandidate {
   ruleId: string;
   category: string;
   clauseTitle: string;
   vectorScore: number;
+  kind?: KnowledgeRecallKind;
+  consensusId?: string;
+}
+
+export interface SemanticConsensusRecallCandidate {
+  consensusId: string;
+  title: string;
+  applicableScene: string;
+  vectorScore: number;
+  relatedClauseNo?: string;
 }
 
 export interface RegularQuestionAnswerPayload {
@@ -127,6 +139,10 @@ export interface RegularQuestionAnswerPayload {
   consensusKeywords?: string;
   consensusApplicableScene?: string;
   aiExplanation?: string;
+  // 命中来源类型：rule = 命中规则；consensus = 直接命中共识无对应规则；faq = 命中常问沉积。
+  sourceKind?: KnowledgeRecallKind;
+  // 当 sourceKind = consensus 时，记录命中的共识 ID；ruleId 字段会留空或填该共识 ID。
+  consensusId?: string;
 }
 
 export interface RegularQuestionCandidatePayload {
