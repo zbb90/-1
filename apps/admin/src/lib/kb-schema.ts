@@ -4,7 +4,8 @@ export type KbTableName =
   | "consensus"
   | "external-purchases"
   | "old-items"
-  | "operations";
+  | "operations"
+  | "faq";
 
 /** 各表 Excel/CSV 首行应包含的列名（与 [knowledge-store](knowledge-store.ts) 默认表头一致）。 */
 export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
@@ -79,6 +80,20 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "状态",
     "tags",
   ],
+  faq: [
+    "faq_id",
+    "问题",
+    "答案",
+    "关联条款编号",
+    "关联共识编号",
+    "review_id",
+    "沉积来源",
+    "命中关键词",
+    "tags",
+    "状态",
+    "备注",
+    "更新时间",
+  ],
 };
 
 const ID_FIELD: Record<KbTableName, string> = {
@@ -87,6 +102,7 @@ const ID_FIELD: Record<KbTableName, string> = {
   "external-purchases": "item_id",
   "old-items": "item_id",
   operations: "op_id",
+  faq: "faq_id",
 };
 
 export function validateKnowledgeRowKeys(

@@ -75,12 +75,28 @@ export interface OperationRow {
   tags: string;
 }
 
+export interface FaqRow {
+  faq_id: string;
+  问题: string;
+  答案: string;
+  关联条款编号: string;
+  关联共识编号: string;
+  review_id: string;
+  沉积来源: string;
+  命中关键词: string;
+  tags: string;
+  状态: string;
+  备注: string;
+  更新时间: string;
+}
+
 export interface KnowledgeBase {
   rules: RuleRow[];
   consensus: ConsensusRow[];
   externalPurchases: ExternalPurchaseRow[];
   oldItems: OldItemRow[];
   operations: OperationRow[];
+  faq: FaqRow[];
 }
 
 export interface RequesterPayload {
@@ -123,6 +139,15 @@ export interface SemanticConsensusRecallCandidate {
   applicableScene: string;
   vectorScore: number;
   relatedClauseNo?: string;
+}
+
+export interface SemanticFaqRecallCandidate {
+  faqId: string;
+  question: string;
+  answer: string;
+  vectorScore: number;
+  relatedClauseNo?: string;
+  relatedConsensusNo?: string;
 }
 
 export interface RegularQuestionAnswerPayload {

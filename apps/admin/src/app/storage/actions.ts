@@ -11,7 +11,7 @@ import {
   isSemanticSearchConfigured,
   rebuildKnowledgeVectorIndex,
 } from "@/lib/vector-store";
-import type { ConsensusRow, RuleRow } from "@/lib/types";
+import type { ConsensusRow, FaqRow, RuleRow } from "@/lib/types";
 
 async function assertLeaderSession() {
   const cookieStore = await cookies();
@@ -80,18 +80,19 @@ export async function rebuildKnowledgeVectorIndexAction() {
     redirectWithMessage("向量检索未配置（DashScope 或 Qdrant 缺失），重建已跳过。");
     return;
   }
-  const [rules, consensus] = await Promise.all([
+  const [rules, consensus, faq] = await Promise.all([
     readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
     readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
+    readRows("faq") as Promise<unknown> as Promise<FaqRow[]>,
   ]);
-  const result = await rebuildKnowledgeVectorIndex(rules, consensus);
+  const result = await rebuildKnowledgeVectorIndex(rules, consensus, faq);
   revalidateStorageRelatedPages();
   if (!result.ok) {
     redirectWithMessage(
-      `知识向量重建未完成：${result.ruleReason || result.consensusReason || "未知原因"}（规则 ${result.rules}，共识 ${result.consensus}）。`,
+      `知识向量重建未完成：${result.ruleReason || result.consensusReason || result.faqReason || "未知原因"}（规则 ${result.rules}，共识 ${result.consensus}，FAQ ${result.faq}）。`,
     );
   }
   redirectWithMessage(
-    `知识向量重建完成：规则 ${result.rules} 条、共识 ${result.consensus} 条。`,
+    `知识向量重建完成：规则 ${result.rules} 条、共识 ${result.consensus} 条、FAQ ${result.faq} 条。`,
   );
 }

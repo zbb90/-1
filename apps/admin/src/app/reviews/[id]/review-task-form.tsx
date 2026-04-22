@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
+  depositReviewToFaqAction,
   saveReviewTaskAction,
   saveAndSinkReviewTaskAction,
   type SaveReviewFormState,
@@ -105,15 +106,21 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
     FormData
   >(saveAndSinkReviewTaskAction, null);
 
+  const [faqState, faqAction, faqPending] = useActionState<
+    SaveReviewFormState,
+    FormData
+  >(depositReviewToFaqAction, null);
+
   useEffect(() => {
-    if (saveState?.ok === true || sinkState?.ok === true) {
+    if (saveState?.ok === true || sinkState?.ok === true || faqState?.ok === true) {
       router.refresh();
     }
-  }, [saveState, sinkState, router]);
+  }, [saveState, sinkState, faqState, router]);
 
   const autoAnswer = parseAutoAnswer(task);
-  const state = sinkState ?? saveState;
-  const pending = savePending || sinkPending;
+  const state = faqState ?? sinkState ?? saveState;
+  const pending = savePending || sinkPending || faqPending;
+  const isCommonQuestion = task.type === "常规问题";
 
   function applyTemplate(template: (typeof replyTemplates)[number]) {
     if (conclusionRef.current) {
@@ -265,6 +272,15 @@ export function ReviewTaskForm({ task }: { task: ReviewTask }) {
               saveFormId={`save-form-${task.id}`}
             />
 
+            {isCommonQuestion ? (
+              <FaqDepositButton
+                taskId={task.id}
+                pending={pending}
+                faqAction={faqAction}
+                saveFormId={`save-form-${task.id}`}
+              />
+            ) : null}
+
             {state?.message ? (
               <p
                 className={`text-sm ${state.ok === false ? "text-red-600" : "text-gray-600"}`}
@@ -399,6 +415,48 @@ function SinkButton({
       className="bg-emerald-700 px-5 py-3 hover:bg-emerald-800"
     >
       {pending ? "处理中..." : "保存并加入知识库"}
+    </WorkspaceActionButton>
+  );
+}
+
+function FaqDepositButton({
+  taskId,
+  pending,
+  faqAction,
+  saveFormId,
+}: {
+  taskId: string;
+  pending: boolean;
+  faqAction: (payload: FormData) => void;
+  saveFormId: string;
+}) {
+  function handleDeposit() {
+    const saveForm = document.getElementById(saveFormId) as HTMLFormElement | null;
+    if (!saveForm) return;
+    const fd = new FormData(saveForm);
+
+    const fields = document.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >(`[form="${saveFormId}"]`);
+    fields.forEach((el) => {
+      if (el.name && el.name !== "taskId") {
+        fd.set(el.name, el.value);
+      }
+    });
+
+    fd.set("taskId", taskId);
+    faqAction(fd);
+  }
+
+  return (
+    <WorkspaceActionButton
+      type="button"
+      onClick={handleDeposit}
+      disabled={pending}
+      tone="blue"
+      className="px-5 py-3"
+    >
+      {pending ? "处理中..." : "沉积到 FAQ"}
     </WorkspaceActionButton>
   );
 }

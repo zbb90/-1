@@ -4,6 +4,7 @@ import { patchRowStatus, type KbTableName } from "@/lib/knowledge-csv";
 import type {
   ConsensusRow,
   ExternalPurchaseRow,
+  FaqRow,
   KnowledgeBase,
   OperationRow,
   OldItemRow,
@@ -45,6 +46,7 @@ const FILTERS: Record<KbTableName, (row: RowWithStatus) => boolean> = {
   "external-purchases": (row) => row.状态 !== "停用",
   "old-items": (row) => row.状态 !== "停用",
   operations: (row) => row.状态 !== "停用",
+  faq: (row) => row.状态 !== "停用",
 };
 
 export async function loadKnowledgeTable<T>(name: KbTableName): Promise<T[]> {
@@ -101,15 +103,15 @@ export async function loadKnowledgeBase(forceRefresh = false): Promise<Knowledge
     tableCache.clear();
   }
 
-  const [rules, consensus, externalPurchases, oldItems, operations] = await Promise.all(
-    [
+  const [rules, consensus, externalPurchases, oldItems, operations, faq] =
+    await Promise.all([
       loadKnowledgeTable<RuleRow>("rules"),
       loadKnowledgeTable<ConsensusRow>("consensus"),
       loadKnowledgeTable<ExternalPurchaseRow>("external-purchases"),
       loadKnowledgeTable<OldItemRow>("old-items"),
       loadKnowledgeTable<OperationRow>("operations"),
-    ],
-  );
+      loadKnowledgeTable<FaqRow>("faq"),
+    ]);
 
   knowledgeBaseCache = {
     rules,
@@ -117,6 +119,7 @@ export async function loadKnowledgeBase(forceRefresh = false): Promise<Knowledge
     externalPurchases,
     oldItems,
     operations,
+    faq,
   };
 
   return knowledgeBaseCache;
@@ -130,6 +133,7 @@ export async function getKnowledgeSummary() {
     externalPurchases: knowledgeBase.externalPurchases.length,
     oldItems: knowledgeBase.oldItems.length,
     operations: knowledgeBase.operations.length,
+    faq: knowledgeBase.faq.length,
     templateDir: "Redis / CSV",
   };
 }

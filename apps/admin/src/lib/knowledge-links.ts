@@ -42,18 +42,21 @@ const SUPPORTED_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "faq",
 ];
 
 function idField(table: KbTableName) {
   if (table === "rules") return "rule_id";
   if (table === "consensus") return "consensus_id";
   if (table === "operations") return "op_id";
+  if (table === "faq") return "faq_id";
   return "item_id";
 }
 
 function primaryField(table: KbTableName) {
   if (table === "rules") return "条款标题";
   if (table === "consensus" || table === "operations") return "标题";
+  if (table === "faq") return "问题";
   return "物品名称";
 }
 

@@ -7,14 +7,16 @@ import {
   rebuildKnowledgeVectorIndex,
   rebuildRuleVectorIndex,
   upsertConsensusVectors,
+  upsertFaqVectors,
 } from "@/lib/vector-store";
-import type { ConsensusRow, RuleRow } from "@/lib/types";
+import type { ConsensusRow, FaqRow, RuleRow } from "@/lib/types";
 
-type ReindexTarget = "rules" | "consensus" | "all";
+type ReindexTarget = "rules" | "consensus" | "faq" | "all";
 
 function resolveTarget(raw: unknown): ReindexTarget {
   const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  if (value === "rules" || value === "consensus" || value === "all") return value;
+  if (value === "rules" || value === "consensus" || value === "faq" || value === "all")
+    return value;
   return "all";
 }
 
@@ -84,18 +86,33 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const [rules, consensus] = await Promise.all([
+    if (target === "faq") {
+      const faq = (await readRows("faq")) as unknown as FaqRow[];
+      const enabled = faq.filter((row) => row.状态 !== "停用");
+      const result = await upsertFaqVectors(enabled);
+      return NextResponse.json({
+        ok: result.ok,
+        target,
+        message: result.ok
+          ? `已同步 FAQ 向量，共 ${result.count} 条。`
+          : `FAQ 向量同步失败：${result.reason}`,
+        data: result,
+      });
+    }
+
+    const [rules, consensus, faq] = await Promise.all([
       readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
       readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
+      readRows("faq") as Promise<unknown> as Promise<FaqRow[]>,
     ]);
-    const result = await rebuildKnowledgeVectorIndex(rules, consensus);
+    const result = await rebuildKnowledgeVectorIndex(rules, consensus, faq);
 
     return NextResponse.json({
       ok: result.ok,
       target,
       message: result.ok
-        ? `已重建知识向量库：规则 ${result.rules} 条、共识 ${result.consensus} 条。`
-        : `部分失败：${result.ruleReason || result.consensusReason || "未知原因"}`,
+        ? `已重建知识向量库：规则 ${result.rules} 条、共识 ${result.consensus} 条、FAQ ${result.faq} 条。`
+        : `部分失败：${result.ruleReason || result.consensusReason || result.faqReason || "未知原因"}`,
       data: result,
     });
   } catch (error) {

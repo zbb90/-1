@@ -3,8 +3,12 @@ import * as XLSX from "xlsx";
 import { isAdminSessionOrBasicAuthorized } from "@/lib/admin-session";
 import { importRows, readRows } from "@/lib/knowledge-store";
 import type { KbTableName } from "@/lib/knowledge-csv";
-import type { ConsensusRow, RuleRow } from "@/lib/types";
-import { rebuildRuleVectorIndex, upsertConsensusVectors } from "@/lib/vector-store";
+import type { ConsensusRow, FaqRow, RuleRow } from "@/lib/types";
+import {
+  rebuildRuleVectorIndex,
+  upsertConsensusVectors,
+  upsertFaqVectors,
+} from "@/lib/vector-store";
 import {
   generateLinkSuggestions,
   isLinkSuggestionsEnabled,
@@ -16,6 +20,7 @@ const VALID_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "faq",
 ];
 
 function parseExcel(buffer: ArrayBuffer): Record<string, string>[] {
@@ -110,6 +115,19 @@ export async function POST(request: NextRequest) {
           }
         } catch (err) {
           console.warn("[knowledge-import] consensus vector sync failed", err);
+        }
+      })();
+    } else if (table === "faq") {
+      void (async () => {
+        try {
+          const allFaq = (await readRows("faq")) as unknown as FaqRow[];
+          const enabled = allFaq.filter((row) => row.状态 !== "停用");
+          const sync = await upsertFaqVectors(enabled);
+          if (!sync.ok) {
+            console.warn("[knowledge-import] faq vector sync skipped", sync.reason);
+          }
+        } catch (err) {
+          console.warn("[knowledge-import] faq vector sync failed", err);
         }
       })();
     }

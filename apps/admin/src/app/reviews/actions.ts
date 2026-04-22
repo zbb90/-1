@@ -185,6 +185,70 @@ export async function adminLogoutAction() {
   redirect("/reviews/login");
 }
 
+export async function depositReviewToFaqAction(
+  _prev: SaveReviewFormState,
+  formData: FormData,
+): Promise<SaveReviewFormState> {
+  if (!(await assertAdminSessionOrBasic())) {
+    return { ok: false, message: "登录已失效，请重新登录后台。" };
+  }
+
+  const id = String(formData.get("taskId") ?? "").trim();
+  if (!id) {
+    return { ok: false, message: "缺少任务编号。" };
+  }
+
+  const processor = String(formData.get("processor") ?? "").trim();
+  const rawStatus = String(formData.get("status") ?? "").trim() as ReviewTaskStatus;
+  const finalConclusion = String(formData.get("finalConclusion") ?? "").trim();
+  const finalScore = String(formData.get("finalScore") ?? "").trim();
+  const finalClause = String(formData.get("finalClause") ?? "").trim();
+  const finalExplanation = String(formData.get("finalExplanation") ?? "").trim();
+  const status = resolveFinalTaskStatus({
+    status: rawStatus,
+    finalConclusion,
+    finalExplanation,
+  });
+
+  const updated = await updateReviewTask(id, {
+    status,
+    processor,
+    finalConclusion,
+    finalScore,
+    finalClause,
+    finalExplanation,
+    ...buildRequesterReplyPatch({
+      status,
+      finalConclusion,
+      finalExplanation,
+    }),
+  });
+
+  if (!updated) {
+    return { ok: false, message: "未找到对应复核任务。" };
+  }
+
+  try {
+    const result = await sinkReviewTaskToKnowledge(id, { prefer: "faq" });
+    const vectorStatus =
+      result.audit.vectorSync === "synced"
+        ? "已同步 FAQ 向量索引"
+        : `已写入 FAQ，向量同步跳过：${result.audit.vectorSyncReason || "未配置"}`;
+    return {
+      ok: true,
+      message: `已沉积到 FAQ（${result.audit.newId}，${vectorStatus}）。`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? `主管结论已保存，但沉积到 FAQ 失败：${error.message}`
+          : "主管结论已保存，但沉积到 FAQ 失败。",
+    };
+  }
+}
+
 export async function saveAndSinkReviewTaskAction(
   _prev: SaveReviewFormState,
   formData: FormData,

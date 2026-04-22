@@ -15,6 +15,7 @@ const TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "faq",
 ];
 
 function isKbTableName(value: string | null): value is KbTableName {

@@ -3,11 +3,13 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import { embedTexts, isEmbeddingConfigured } from "@/lib/embeddings";
 import type {
   ConsensusRow,
+  FaqRow,
   KnowledgeRecallKind,
   RegularQuestionIntentParse,
   RegularQuestionRequest,
   RuleRow,
   SemanticConsensusRecallCandidate,
+  SemanticFaqRecallCandidate,
   SemanticRuleRecallCandidate,
 } from "@/lib/types";
 
@@ -35,7 +37,21 @@ type ConsensusVectorPayload = {
   document: string;
 };
 
-type KnowledgeVectorPayload = RuleVectorPayload | ConsensusVectorPayload;
+type FaqVectorPayload = {
+  kind: "faq";
+  faqId: string;
+  question: string;
+  answer: string;
+  relatedClauseNo: string;
+  relatedConsensusNo: string;
+  status: string;
+  document: string;
+};
+
+type KnowledgeVectorPayload =
+  | RuleVectorPayload
+  | ConsensusVectorPayload
+  | FaqVectorPayload;
 
 let qdrantClient: QdrantClient | null = null;
 
@@ -106,6 +122,17 @@ export function buildConsensusVectorDocument(consensus: ConsensusRow) {
   ].join("\n");
 }
 
+export function buildFaqVectorDocument(faq: FaqRow) {
+  return [
+    `常问问题:${faq.问题 || "-"}`,
+    `答案:${faq.答案 || "-"}`,
+    `关联条款编号:${faq.关联条款编号 || "-"}`,
+    `关联共识编号:${faq.关联共识编号 || "-"}`,
+    `命中关键词:${faq.命中关键词 || "-"}`,
+    `tags:${faq.tags || "-"}`,
+  ].join("\n");
+}
+
 export function buildRegularQuestionQueryText(
   request: RegularQuestionRequest,
   intent?: RegularQuestionIntentParse,
@@ -155,7 +182,20 @@ function buildConsensusPayload(consensus: ConsensusRow): ConsensusVectorPayload 
   };
 }
 
-function buildPointId(namespace: "rule" | "consensus", id: string) {
+function buildFaqPayload(faq: FaqRow): FaqVectorPayload {
+  return {
+    kind: "faq",
+    faqId: faq.faq_id,
+    question: faq.问题 || "",
+    answer: faq.答案 || "",
+    relatedClauseNo: faq.关联条款编号 || "",
+    relatedConsensusNo: faq.关联共识编号 || "",
+    status: faq.状态 || "启用",
+    document: buildFaqVectorDocument(faq),
+  };
+}
+
+function buildPointId(namespace: "rule" | "consensus" | "faq", id: string) {
   const normalized = `${namespace}:${id.trim()}`;
   const hex = createHash("md5").update(normalized).digest("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
@@ -167,6 +207,10 @@ function buildRulePointId(ruleId: string) {
 
 function buildConsensusPointId(consensusId: string) {
   return buildPointId("consensus", consensusId);
+}
+
+function buildFaqPointId(faqId: string) {
+  return buildPointId("faq", faqId);
 }
 
 async function ensureCollection(vectorSize: number) {
@@ -269,6 +313,40 @@ export async function upsertConsensusVectors(rows: ConsensusRow[]) {
   return { ok: true, count: normalized.length };
 }
 
+export async function upsertFaqVectors(rows: FaqRow[]) {
+  if (!isSemanticSearchConfigured()) {
+    return { ok: false, reason: "semantic search not configured", count: 0 };
+  }
+
+  const normalized = rows.filter((row) => row.faq_id?.trim() && row.问题?.trim());
+  if (normalized.length === 0) {
+    return { ok: true, count: 0 };
+  }
+
+  const documents = normalized.map(buildFaqVectorDocument);
+  const embeddings = await embedTexts(documents);
+  if (!embeddings || embeddings.length !== normalized.length) {
+    return { ok: false, reason: "embedding failed", count: 0 };
+  }
+
+  const client = getQdrantClient();
+  if (!client) {
+    return { ok: false, reason: "qdrant not configured", count: 0 };
+  }
+
+  await ensureCollection(embeddings[0].length);
+  await client.upsert(getQdrantCollectionName(), {
+    wait: true,
+    points: normalized.map((row, index) => ({
+      id: buildFaqPointId(row.faq_id),
+      vector: embeddings[index],
+      payload: buildFaqPayload(row),
+    })),
+  });
+
+  return { ok: true, count: normalized.length };
+}
+
 export async function rebuildRuleVectorIndex(rules: RuleRow[]) {
   if (!isSemanticSearchConfigured()) {
     return { ok: false, reason: "semantic search not configured", count: 0 };
@@ -290,11 +368,14 @@ export async function rebuildRuleVectorIndex(rules: RuleRow[]) {
 }
 
 /**
- * 重建整张知识向量库（rules + consensus）。线上首次启用 B 档（双源召回）时务必跑一次。
+ * 重建整张知识向量库（rules + consensus + faq）。
+ * 线上首次启用 B 档（多源召回）时务必跑一次。
+ * faq 参数可选：阶段 2 上线后会传入；老调用点可暂不传。
  */
 export async function rebuildKnowledgeVectorIndex(
   rules: RuleRow[],
   consensus: ConsensusRow[],
+  faq: FaqRow[] = [],
 ) {
   if (!isSemanticSearchConfigured()) {
     return {
@@ -302,12 +383,19 @@ export async function rebuildKnowledgeVectorIndex(
       reason: "semantic search not configured",
       rules: 0,
       consensus: 0,
+      faq: 0,
     };
   }
 
   const client = getQdrantClient();
   if (!client) {
-    return { ok: false, reason: "qdrant not configured", rules: 0, consensus: 0 };
+    return {
+      ok: false,
+      reason: "qdrant not configured",
+      rules: 0,
+      consensus: 0,
+      faq: 0,
+    };
   }
 
   try {
@@ -318,40 +406,45 @@ export async function rebuildKnowledgeVectorIndex(
 
   const enabledRules = rules.filter((rule) => rule.状态 !== "停用");
   const enabledConsensus = consensus.filter((row) => row.状态 !== "停用");
+  const enabledFaq = faq.filter((row) => row.状态 !== "停用");
 
   const ruleResult = await upsertRuleVectors(enabledRules);
   const consensusResult = await upsertConsensusVectors(enabledConsensus);
+  const faqResult = await upsertFaqVectors(enabledFaq);
 
   return {
-    ok: ruleResult.ok && consensusResult.ok,
+    ok: ruleResult.ok && consensusResult.ok && faqResult.ok,
     rules: ruleResult.count ?? 0,
     consensus: consensusResult.count ?? 0,
+    faq: faqResult.count ?? 0,
     ruleReason: ruleResult.ok ? undefined : ruleResult.reason,
     consensusReason: consensusResult.ok ? undefined : consensusResult.reason,
+    faqReason: faqResult.ok ? undefined : faqResult.reason,
   };
 }
 
 type SearchKnowledgeVectorsOptions = {
   limit?: number;
-  // 默认两类都召回；外部可指定 ["rule"] 或 ["consensus"] 强制单源。
+  // 默认全 3 类都召回；外部可指定子集（如 ["rule"]）强制单源。
   kinds?: KnowledgeRecallKind[];
 };
 
 export type KnowledgeRecallHit =
   | { kind: "rule"; rule: SemanticRuleRecallCandidate }
-  | { kind: "consensus"; consensus: SemanticConsensusRecallCandidate };
+  | { kind: "consensus"; consensus: SemanticConsensusRecallCandidate }
+  | { kind: "faq"; faq: SemanticFaqRecallCandidate };
 
 export type KnowledgeRecallResult = {
   queryText: string;
   hits: KnowledgeRecallHit[];
   ruleHits: SemanticRuleRecallCandidate[];
   consensusHits: SemanticConsensusRecallCandidate[];
+  faqHits: SemanticFaqRecallCandidate[];
   fallbackReason?: string;
 };
 
 /**
- * 双源（rules + consensus）语义召回。后续阶段 2 引入 FAQ 时只需在 collection 里增加 kind="faq"
- * 的 payload 并扩展过滤即可。
+ * 多源（rules + consensus + faq）语义召回。
  */
 export async function searchKnowledgeVectors(
   request: RegularQuestionRequest,
@@ -363,7 +456,7 @@ export async function searchKnowledgeVectors(
   const kinds =
     options.kinds && options.kinds.length > 0
       ? options.kinds
-      : (["rule", "consensus"] as KnowledgeRecallKind[]);
+      : (["rule", "consensus", "faq"] as KnowledgeRecallKind[]);
 
   if (!isSemanticSearchConfigured()) {
     return {
@@ -371,6 +464,7 @@ export async function searchKnowledgeVectors(
       hits: [],
       ruleHits: [],
       consensusHits: [],
+      faqHits: [],
       fallbackReason: "未配置 DashScope Embedding 或 Qdrant，使用旧版规则扫描。",
     };
   }
@@ -383,6 +477,7 @@ export async function searchKnowledgeVectors(
       hits: [],
       ruleHits: [],
       consensusHits: [],
+      faqHits: [],
       fallbackReason: "Embedding 生成失败，使用旧版规则扫描。",
     };
   }
@@ -394,6 +489,7 @@ export async function searchKnowledgeVectors(
       hits: [],
       ruleHits: [],
       consensusHits: [],
+      faqHits: [],
       fallbackReason: "Qdrant 未配置，使用旧版规则扫描。",
     };
   }
@@ -407,6 +503,9 @@ export async function searchKnowledgeVectors(
     ];
     if (kinds.length === 1) {
       must.push({ key: "kind", match: { value: kinds[0] } });
+    } else if (kinds.length < 3) {
+      // Qdrant 支持 should + match.any 过滤多个 kind
+      must.push({ key: "kind", match: { any: kinds as string[] } });
     }
 
     const results = await client.search(getQdrantCollectionName(), {
@@ -419,6 +518,7 @@ export async function searchKnowledgeVectors(
     const hits: KnowledgeRecallHit[] = [];
     const ruleHits: SemanticRuleRecallCandidate[] = [];
     const consensusHits: SemanticConsensusRecallCandidate[] = [];
+    const faqHits: SemanticFaqRecallCandidate[] = [];
 
     for (const item of results) {
       const payload = (item.payload ?? {}) as Partial<KnowledgeVectorPayload>;
@@ -426,6 +526,7 @@ export async function searchKnowledgeVectors(
       const kind = (payload.kind as KnowledgeRecallKind | undefined) ?? "rule";
 
       if (kind === "consensus" && (payload as ConsensusVectorPayload).consensusId) {
+        if (!kinds.includes("consensus")) continue;
         const cs = payload as Partial<ConsensusVectorPayload>;
         const candidate: SemanticConsensusRecallCandidate = {
           consensusId: cs.consensusId?.trim() || String(item.id),
@@ -434,11 +535,23 @@ export async function searchKnowledgeVectors(
           relatedClauseNo: cs.relatedClauseNo?.trim() || "",
           vectorScore: item.score ?? 0,
         };
-        if (kinds.includes("consensus")) {
-          consensusHits.push(candidate);
-          hits.push({ kind: "consensus", consensus: candidate });
-        }
+        consensusHits.push(candidate);
+        hits.push({ kind: "consensus", consensus: candidate });
+      } else if (kind === "faq" && (payload as FaqVectorPayload).faqId) {
+        if (!kinds.includes("faq")) continue;
+        const fq = payload as Partial<FaqVectorPayload>;
+        const candidate: SemanticFaqRecallCandidate = {
+          faqId: fq.faqId?.trim() || String(item.id),
+          question: fq.question?.trim() || "-",
+          answer: fq.answer?.trim() || "",
+          relatedClauseNo: fq.relatedClauseNo?.trim() || "",
+          relatedConsensusNo: fq.relatedConsensusNo?.trim() || "",
+          vectorScore: item.score ?? 0,
+        };
+        faqHits.push(candidate);
+        hits.push({ kind: "faq", faq: candidate });
       } else {
+        if (!kinds.includes("rule")) continue;
         const rl = payload as Partial<RuleVectorPayload>;
         const candidate: SemanticRuleRecallCandidate = {
           ruleId: rl.ruleId?.trim() || String(item.id),
@@ -447,10 +560,8 @@ export async function searchKnowledgeVectors(
           vectorScore: item.score ?? 0,
           kind: "rule",
         };
-        if (kinds.includes("rule")) {
-          ruleHits.push(candidate);
-          hits.push({ kind: "rule", rule: candidate });
-        }
+        ruleHits.push(candidate);
+        hits.push({ kind: "rule", rule: candidate });
       }
     }
 
@@ -459,6 +570,7 @@ export async function searchKnowledgeVectors(
       hits,
       ruleHits,
       consensusHits,
+      faqHits,
     };
   } catch (error) {
     console.error("Qdrant semantic search failed", error);
@@ -467,6 +579,7 @@ export async function searchKnowledgeVectors(
       hits: [],
       ruleHits: [],
       consensusHits: [],
+      faqHits: [],
       fallbackReason: "Qdrant 查询失败，已自动回退到旧版规则扫描。",
     };
   }

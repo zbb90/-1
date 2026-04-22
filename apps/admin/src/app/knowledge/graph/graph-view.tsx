@@ -33,6 +33,7 @@ type HoverState =
 const TABLE_LABELS: Record<TableKey, string> = {
   rules: "规则",
   consensus: "共识",
+  faq: "常问沉积",
   "external-purchases": "外购",
   "old-items": "旧品",
   operations: "操作",
@@ -41,10 +42,17 @@ const TABLE_LABELS: Record<TableKey, string> = {
 const TABLE_COLORS: Record<TableKey, string> = {
   rules: "#2563eb",
   consensus: "#16a34a",
+  faq: "#db2777",
   "external-purchases": "#ea580c",
   "old-items": "#7c3aed",
   operations: "#4b5563",
 };
+
+const KNOWLEDGE_LAYERS: Array<{ key: TableKey; label: string }> = [
+  { key: "rules", label: "规则层" },
+  { key: "consensus", label: "共识层" },
+  { key: "faq", label: "FAQ 层" },
+];
 
 const LINK_TYPE_LABELS: Record<GraphEdge["linkType"], string> = {
   references: "引用",
@@ -370,6 +378,27 @@ export function KnowledgeGraphView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-500">层过滤：</span>
+            <WorkspacePill
+              active={selectedTable === "all"}
+              onClick={() => setSelectedTable("all")}
+            >
+              全部
+            </WorkspacePill>
+            {KNOWLEDGE_LAYERS.map((layer) => (
+              <WorkspacePill
+                key={layer.key}
+                active={selectedTable === layer.key}
+                onClick={() => setSelectedTable(layer.key)}
+              >
+                <span
+                  className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
+                  style={{ backgroundColor: TABLE_COLORS[layer.key] }}
+                />
+                {layer.label}
+              </WorkspacePill>
+            ))}
+            <span className="mx-2 text-slate-300">|</span>
             <WorkspacePill
               active={layoutMode === "group"}
               onClick={() => setLayoutMode("group")}

@@ -9,7 +9,13 @@ import {
 } from "@/components/admin/knowledge-workspace";
 import { TagEditor } from "@/components/tag-editor";
 
-type TabKey = "rules" | "consensus" | "external-purchases" | "old-items" | "operations";
+type TabKey =
+  | "rules"
+  | "consensus"
+  | "external-purchases"
+  | "old-items"
+  | "operations"
+  | "faq";
 type Row = Record<string, string>;
 type KnowledgeLinkType =
   | "references"
@@ -75,6 +81,7 @@ type TagEntryItem = {
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "rules", label: "常规问题规则" },
   { key: "consensus", label: "共识解释" },
+  { key: "faq", label: "常问沉积" },
   { key: "external-purchases", label: "外购清单" },
   { key: "old-items", label: "旧品清单" },
   { key: "operations", label: "操作知识" },
@@ -95,7 +102,9 @@ function idField(tab: TabKey) {
       ? "consensus_id"
       : tab === "operations"
         ? "op_id"
-        : "item_id";
+        : tab === "faq"
+          ? "faq_id"
+          : "item_id";
 }
 
 function primaryField(tab: TabKey) {
@@ -103,7 +112,9 @@ function primaryField(tab: TabKey) {
     ? "条款标题"
     : tab === "consensus" || tab === "operations"
       ? "标题"
-      : "物品名称";
+      : tab === "faq"
+        ? "问题"
+        : "物品名称";
 }
 
 function defaultTargetTable(tab: TabKey): TabKey {
@@ -181,6 +192,7 @@ function summaryField(tab: TabKey) {
   if (tab === "consensus") return "解释内容";
   if (tab === "external-purchases") return "说明";
   if (tab === "old-items") return "识别备注";
+  if (tab === "faq") return "答案";
   return "解释说明";
 }
 
@@ -1482,6 +1494,17 @@ const FIELD_DEFS: Record<
     { key: "检核要点", label: "检核要点", multiline: true },
     { key: "解释说明", label: "解释说明", multiline: true },
     { key: "来源文件", label: "来源文件" },
+    { key: "备注", label: "备注" },
+    { key: "tags", label: "标签" },
+  ],
+  faq: [
+    { key: "问题", label: "常问问题", required: true, multiline: true },
+    { key: "答案", label: "标准答案", required: true, multiline: true },
+    { key: "关联条款编号", label: "关联条款编号（多个用 | 分隔）" },
+    { key: "关联共识编号", label: "关联共识编号（多个用 | 分隔）" },
+    { key: "命中关键词", label: "命中关键词（用于召回辅助）" },
+    { key: "沉积来源", label: "沉积来源（手工 / 复核沉淀）" },
+    { key: "review_id", label: "关联复核任务 ID（如来自复核沉淀）" },
     { key: "备注", label: "备注" },
     { key: "tags", label: "标签" },
   ],

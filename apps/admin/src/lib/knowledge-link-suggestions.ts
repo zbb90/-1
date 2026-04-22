@@ -40,6 +40,7 @@ const SUPPORTED_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "faq",
 ];
 const SUPPORTED_LINK_TYPES: KnowledgeLinkType[] = [
   "references",

@@ -1,7 +1,7 @@
 import { appendRow } from "@/lib/knowledge-store";
 import { getReviewTaskById, updateReviewTask } from "@/lib/review-pool";
-import { upsertRuleVectors } from "@/lib/vector-store";
-import type { ReviewTask, ReviewTaskType, RuleRow } from "@/lib/types";
+import { upsertFaqVectors, upsertRuleVectors } from "@/lib/vector-store";
+import type { FaqRow, ReviewTask, ReviewTaskType, RuleRow } from "@/lib/types";
 import type { KbTableName } from "@/lib/knowledge-csv";
 
 type SinkAudit = {
@@ -147,11 +147,48 @@ function buildOldItemRow(task: ReviewTask): Record<string, string> {
   };
 }
 
-function resolveSinkTarget(task: ReviewTask): {
+function buildFaqRow(task: ReviewTask): Record<string, string> {
+  const { clauseCode } = splitClauseAndReason(task);
+  const explanation = buildKnowledgeExplanation(task);
+  const desc = normalizeText(task.description);
+  const conclusion = normalizeText(task.finalConclusion);
+  const finalExplanation = normalizeText(task.finalExplanation);
+
+  // 答案优先用主管最终解释；若无则拼装"结论 + 默认提示"
+  const answer = finalExplanation || conclusion || explanation;
+  // 关联条款 / 共识：尽量从 finalClause 中识别 R-xxxx / C-xxxx 形式（多个用 | 拼接）
+  const clauseMatches = (task.finalClause || "").match(/R-\d{4,}/gi) || [];
+  const consensusMatches = (task.finalClause || "").match(/C-?S?\d{4,}/gi) || [];
+
+  return {
+    问题: desc || `${task.category || ""}相关问题`,
+    答案: answer || "-",
+    关联条款编号: [...new Set([...clauseMatches, clauseCode].filter(Boolean))]
+      .filter((v) => v !== "-")
+      .join("|"),
+    关联共识编号: [...new Set(consensusMatches)].join("|"),
+    review_id: task.id,
+    沉积来源: "复核沉淀",
+    命中关键词: extractKeywords(desc),
+    tags: "faq|review-sink",
+    状态: "启用",
+    备注: `由主管 ${task.processor || "-"} 于 ${new Date().toLocaleDateString("zh-CN")} 沉淀`,
+    更新时间: new Date().toISOString(),
+  };
+}
+
+function resolveSinkTarget(
+  task: ReviewTask,
+  prefer: "default" | "faq" = "default",
+): {
   table: KbTableName;
   row: Record<string, string>;
 } {
   const type = task.type as ReviewTaskType;
+
+  if (prefer === "faq" && type === "常规问题") {
+    return { table: "faq", row: buildFaqRow(task) };
+  }
 
   switch (type) {
     case "常规问题":
@@ -163,7 +200,10 @@ function resolveSinkTarget(task: ReviewTask): {
   }
 }
 
-export async function sinkReviewTaskToKnowledge(taskId: string): Promise<{
+export async function sinkReviewTaskToKnowledge(
+  taskId: string,
+  options: { prefer?: "default" | "faq" } = {},
+): Promise<{
   task: ReviewTask;
   audit: SinkAudit;
 }> {
@@ -172,16 +212,28 @@ export async function sinkReviewTaskToKnowledge(taskId: string): Promise<{
     throw new KnowledgeSinkError("未找到对应任务。", 404);
   }
 
-  if (!task.finalConclusion?.trim()) {
-    throw new KnowledgeSinkError("任务尚未填写最终结论，无法沉淀到知识库。", 422);
+  if (!task.finalConclusion?.trim() && !task.finalExplanation?.trim()) {
+    throw new KnowledgeSinkError("任务尚未填写最终结论或解释，无法沉淀到知识库。", 422);
   }
 
-  const target = resolveSinkTarget(task);
+  const prefer = options.prefer ?? "default";
+  const target = resolveSinkTarget(task, prefer);
   const inserted = await appendRow(target.table, target.row);
 
   let vectorSync: SinkAudit["vectorSync"] = "skipped";
   let vectorSyncReason: string | undefined;
-  if (target.table === "rules") {
+  if (target.table === "faq") {
+    try {
+      const syncResult = await upsertFaqVectors([inserted as unknown as FaqRow]);
+      if (syncResult.ok) {
+        vectorSync = "synced";
+      } else {
+        vectorSyncReason = syncResult.reason;
+      }
+    } catch (err) {
+      vectorSyncReason = err instanceof Error ? err.message : "faq vector sync failed";
+    }
+  } else if (target.table === "rules") {
     const MAX_RETRIES = 2;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const syncResult = await upsertRuleVectors([inserted as unknown as RuleRow]);
@@ -218,7 +270,9 @@ export async function sinkReviewTaskToKnowledge(taskId: string): Promise<{
       ? inserted.rule_id
       : target.table === "external-purchases" || target.table === "old-items"
         ? inserted.item_id
-        : "-";
+        : target.table === "faq"
+          ? inserted.faq_id
+          : "-";
 
   let verifyResult: SinkAudit["verifyResult"] = undefined;
   if (target.table === "rules" && vectorSync === "synced" && task.description) {

@@ -296,14 +296,14 @@ export default async function StoragePage({
               <div className="mt-3 flex flex-wrap gap-2">
                 <form action={rebuildKnowledgeVectorIndexAction}>
                   <WorkspaceActionButton type="submit" tone="violet">
-                    重建知识向量库（规则 + 共识）
+                    重建知识向量库（规则 + 共识 + FAQ）
                   </WorkspaceActionButton>
                 </form>
               </div>
               <p className="mt-2 text-xs text-slate-500">
                 B
-                档双源召回必须基于此动作重建一次：清空当前向量集合，重新对所有启用的规则和共识做
-                embedding 并写入 Qdrant。会消耗 DashScope 配额，单店知识库通常 1
+                档三源召回必须基于此动作重建一次：清空当前向量集合，重新对所有启用的规则、共识和
+                FAQ 做 embedding 并写入 Qdrant。会消耗 DashScope 配额，单店知识库通常 1
                 分钟内完成。
               </p>
             </div>

@@ -28,6 +28,7 @@ const KB_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "faq",
 ];
 
 export type KnowledgeStorageDiagnostics = {
@@ -111,6 +112,7 @@ function idField(table: KbTableName): string {
   if (table === "rules") return "rule_id";
   if (table === "consensus") return "consensus_id";
   if (table === "operations") return "op_id";
+  if (table === "faq") return "faq_id";
   return "item_id";
 }
 
@@ -124,7 +126,9 @@ function nextId(table: KbTableName, rows: Row[]): string {
           ? "EP"
           : table === "old-items"
             ? "OI"
-            : "OP";
+            : table === "faq"
+              ? "FAQ"
+              : "OP";
   return `${prefix}-${String(rows.length + 1).padStart(4, "0")}`;
 }
 
@@ -235,6 +239,7 @@ export async function getKnowledgeStorageDiagnostics(): Promise<KnowledgeStorage
         "external-purchases": 0,
         "old-items": 0,
         operations: 0,
+        faq: 0,
       },
       csvCounts,
     };
@@ -246,16 +251,15 @@ export async function getKnowledgeStorageDiagnostics(): Promise<KnowledgeStorage
     ...KB_TABLES.map((table) => getRedisTableRowCount(table)),
   ]);
 
+  // KB_TABLES 顺序与下面 redisCounts 字段一一对应。
+  const redisCountsByTable = Object.fromEntries(
+    KB_TABLES.map((table, idx) => [table, counts[idx] ?? 0]),
+  ) as Record<KbTableName, number>;
+
   return {
     redisConfigured: true,
     redisRowKeyCount: scanResult[1].length,
-    redisCounts: {
-      rules: counts[0],
-      consensus: counts[1],
-      "external-purchases": counts[2],
-      "old-items": counts[3],
-      operations: counts[4],
-    },
+    redisCounts: redisCountsByTable,
     csvCounts,
   };
 }
@@ -267,6 +271,7 @@ export async function restoreKnowledgeBaseFromCsv(): Promise<KnowledgeRestoreRep
     "external-purchases": 0,
     "old-items": 0,
     operations: 0,
+    faq: 0,
   } as Record<KbTableName, number>;
 
   for (const table of KB_TABLES) {

@@ -18,11 +18,13 @@ import {
 import { isSemanticSearchConfigured, searchKnowledgeVectors } from "@/lib/vector-store";
 import type {
   ConsensusRow,
+  FaqRow,
   RegularQuestionMatchDebug,
   RegularQuestionMatchResult,
   RegularQuestionRequest,
   RuleRow,
   SemanticConsensusRecallCandidate,
+  SemanticFaqRecallCandidate,
 } from "@/lib/types";
 
 export {
@@ -37,6 +39,10 @@ const RAG_CONFIDENCE_THRESHOLD = Number(process.env.RAG_CONFIDENCE_THRESHOLD || 
 // 共识直答最低向量分阈值：低于该值时不直接采用，避免 RAG 失败 + 弱共识联合给出错误答案。
 const CONSENSUS_DIRECT_ANSWER_MIN_SCORE = Number(
   process.env.CONSENSUS_DIRECT_ANSWER_MIN_SCORE || "0.55",
+);
+// FAQ 直答阈值：高分直答，跳过 LLM。
+const FAQ_DIRECT_ANSWER_MIN_SCORE = Number(
+  process.env.FAQ_DIRECT_ANSWER_MIN_SCORE || "0.75",
 );
 
 interface RagLlmResult {
@@ -185,6 +191,58 @@ function buildConsensusDirectAnswer(
   };
 }
 
+function buildFaqDirectAnswer(
+  faq: FaqRow,
+  faqHit: SemanticFaqRecallCandidate,
+  debug: RegularQuestionMatchDebug,
+): RegularQuestionMatchResult {
+  const score = Math.round(faqHit.vectorScore * 100);
+  const explanation = faq.答案 || faqHit.answer || "";
+  const clauseTitle = faq.问题 || "FAQ";
+  const clauseNo = faq.关联条款编号 || faq.关联共识编号 || faq.faq_id;
+  const reasonNote = `命中常问沉积 FAQ（向量分 ${faqHit.vectorScore.toFixed(3)}），直接给出沉淀答案。`;
+
+  return {
+    matched: true,
+    topScore: score,
+    answer: {
+      ruleId: faq.faq_id,
+      category: faq.tags || "FAQ",
+      shouldDeduct: "按场景判定",
+      deductScore: "按 FAQ 沉淀判定",
+      clauseNo,
+      clauseTitle,
+      clauseSnippet: explanation.slice(0, 120),
+      explanation,
+      source: `FAQ 沉淀 / ${faq.沉积来源 || "手工"}`,
+      matchedReasons: [reasonNote],
+      consensusKeywords: faq.命中关键词?.trim() || "",
+      consensusApplicableScene: "",
+      aiExplanation: explanation,
+      sourceKind: "faq",
+      consensusId: faq.关联共识编号 || undefined,
+    },
+    candidates: [
+      {
+        ruleId: faq.faq_id,
+        category: faq.tags || "FAQ",
+        clauseNo,
+        clauseTitle,
+        score,
+        vectorScore: faqHit.vectorScore,
+        vectorBoost: 0,
+      },
+    ],
+    debug: {
+      ...debug,
+      judgeMode: "llm" as const,
+      judgeSelectedRuleId: faq.faq_id,
+      judgeReason: reasonNote,
+      judgeConfidence: score,
+    },
+  };
+}
+
 export async function matchRegularQuestion(
   request: RegularQuestionRequest,
 ): Promise<RegularQuestionMatchResult> {
@@ -192,17 +250,18 @@ export async function matchRegularQuestion(
     return matchRegularQuestionFallback(request);
   }
 
-  // 主路径只用到 rules / consensus 两张表，避免冷启动时全量加载五张表。
-  const [rules, consensusRows, semanticResult] = await Promise.all([
+  const [rules, consensusRows, faqRows, semanticResult] = await Promise.all([
     loadKnowledgeTable<RuleRow>("rules"),
     loadKnowledgeTable<ConsensusRow>("consensus"),
+    loadKnowledgeTable<FaqRow>("faq"),
     searchKnowledgeVectors(request),
   ]);
 
-  // 双源（rules + consensus）都没有任何召回 → 走旧关键词兜底
+  // 三源（rules + consensus + faq）都没有任何召回 → 走旧关键词兜底
   if (
     semanticResult.ruleHits.length === 0 &&
     semanticResult.consensusHits.length === 0 &&
+    semanticResult.faqHits.length === 0 &&
     semanticResult.fallbackReason
   ) {
     return matchRegularQuestionFallback(request);
@@ -210,6 +269,7 @@ export async function matchRegularQuestion(
 
   const ruleMap = new Map(rules.map((r) => [r.rule_id, r]));
   const consensusMap = new Map(consensusRows.map((c) => [c.consensus_id, c]));
+  const faqMap = new Map(faqRows.map((f) => [f.faq_id, f]));
 
   const vectorHitsRaw = semanticResult.ruleHits
     .map((hit) => {
@@ -234,17 +294,37 @@ export async function matchRegularQuestion(
     })
     .filter((c): c is { consensus: ConsensusRow; vectorScore: number } => c !== null);
 
+  // 命中 FAQ 候选：按 faq_id 反查正式行，过滤掉已停用 / 库内已不存在
+  const faqHits = semanticResult.faqHits
+    .map(
+      (
+        hit,
+      ): {
+        faq: FaqRow;
+        hit: SemanticFaqRecallCandidate;
+      } | null => {
+        const faq = faqMap.get(hit.faqId);
+        if (!faq) return null;
+        if (faq.状态 === "停用") return null;
+        return { faq, hit };
+      },
+    )
+    .filter((c): c is { faq: FaqRow; hit: SemanticFaqRecallCandidate } => c !== null);
+
   const retrievalSources: string[] = [];
   if (vectorHits.length > 0) retrievalSources.push("semantic");
   if (consensusHits.length > 0) retrievalSources.push("consensus");
+  if (faqHits.length > 0) retrievalSources.push("faq");
 
   const debug: RegularQuestionMatchDebug = {
     retrievalMode:
-      vectorHits.length > 0 || consensusHits.length > 0 ? "semantic" : "fallback",
+      vectorHits.length > 0 || consensusHits.length > 0 || faqHits.length > 0
+        ? "semantic"
+        : "fallback",
     semanticEnabled: isSemanticSearchConfigured(),
     queryText: semanticResult.queryText,
     fallbackReason:
-      vectorHits.length === 0 && consensusHits.length === 0
+      vectorHits.length === 0 && consensusHits.length === 0 && faqHits.length === 0
         ? vectorHitsRaw.length > 0
           ? "语义候选与用户描述的具体物料不一致，已全部过滤。"
           : semanticResult.fallbackReason
@@ -259,9 +339,28 @@ export async function matchRegularQuestion(
         kind: "consensus" as const,
         consensusId: h.consensusId,
       })),
+      ...semanticResult.faqHits.map((h) => ({
+        ruleId: h.faqId,
+        category: "FAQ",
+        clauseTitle: h.question,
+        vectorScore: h.vectorScore,
+        kind: "faq" as const,
+      })),
     ],
     retrievalSources,
   };
+
+  // FAQ 高分直答（最高优先级）：避免对常问问题反复跑 LLM
+  const topFaq = faqHits[0];
+  if (topFaq && topFaq.hit.vectorScore >= FAQ_DIRECT_ANSWER_MIN_SCORE) {
+    recordSelected(topFaq.faq.faq_id);
+    console.info("[regular-question-match] faq-direct", {
+      queryText: debug.queryText,
+      selectedFaqId: topFaq.faq.faq_id,
+      vectorScore: topFaq.hit.vectorScore,
+    });
+    return buildFaqDirectAnswer(topFaq.faq, topFaq.hit, debug);
+  }
 
   // 全部过滤掉 / 全部空：转人工
   if (vectorHits.length === 0 && consensusHits.length === 0) {
