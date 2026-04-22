@@ -24,8 +24,9 @@ export function AskTracePanel() {
   const [result, setResult] = useState<TraceResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [includeWrite, setIncludeWrite] = useState(false);
 
-  async function runTrace() {
+  async function runTrace(opts: { writeReview: boolean }) {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -36,8 +37,9 @@ export function AskTracePanel() {
         body: JSON.stringify({
           storeCode: "DIAG",
           category: "稽核",
-          issueTitle: "外购除胶剂被发现了怎么处理",
-          description: "外购除胶剂被发现了怎么处理",
+          issueTitle: "门店在打烊前1小时，可下架新品、重点品扣分吗",
+          description: "门店在打烊前1小时，可下架新品、重点品扣分吗",
+          dryRun: !opts.writeReview,
         }),
         cache: "no-store",
       });
@@ -69,14 +71,28 @@ export function AskTracePanel() {
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <WorkspaceActionButton
           type="button"
           tone="violet"
-          onClick={runTrace}
+          onClick={() => {
+            setIncludeWrite(false);
+            runTrace({ writeReview: false });
+          }}
           disabled={loading}
         >
-          {loading ? "诊断中…" : "运行 ask 诊断"}
+          {loading && !includeWrite ? "诊断中…" : "运行 ask 诊断（dryRun）"}
+        </WorkspaceActionButton>
+        <WorkspaceActionButton
+          type="button"
+          tone="amber"
+          onClick={() => {
+            setIncludeWrite(true);
+            runTrace({ writeReview: true });
+          }}
+          disabled={loading}
+        >
+          {loading && includeWrite ? "诊断中…" : "完整诊断（含写复核池）"}
         </WorkspaceActionButton>
         {result ? (
           <span

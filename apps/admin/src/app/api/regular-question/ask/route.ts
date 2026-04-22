@@ -112,10 +112,21 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logRouteError("/api/regular-question/ask", error);
+    const detail =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            // 只取栈第一行（不含敏感路径）
+            where: error.stack?.split("\n")[1]?.trim(),
+          }
+        : { name: "UnknownError", message: String(error) };
     return NextResponse.json(
       {
         ok: false,
         message: "常规问题检索时发生异常，请稍后重试。",
+        // 仅用于排障：暴露异常类型 + 简短描述，不含敏感路径
+        debug: detail,
       },
       { status: 500 },
     );
