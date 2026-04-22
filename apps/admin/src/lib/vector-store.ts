@@ -586,6 +586,115 @@ export async function searchKnowledgeVectors(
 }
 
 /**
+ * 仅基于自然语言文本的轻量召回（不调 LLM、不解析 intent），
+ * 主要用于"录入时智能建联"等场景。
+ */
+export async function searchKnowledgeVectorsByText(
+  query: string,
+  options: { limit?: number; kinds?: KnowledgeRecallKind[] } = {},
+): Promise<KnowledgeRecallResult> {
+  const queryText = (query || "").trim();
+  const limit = options.limit ?? 5;
+  const kinds =
+    options.kinds && options.kinds.length > 0
+      ? options.kinds
+      : (["rule", "consensus", "faq"] as KnowledgeRecallKind[]);
+
+  const empty = (reason?: string): KnowledgeRecallResult => ({
+    queryText,
+    hits: [],
+    ruleHits: [],
+    consensusHits: [],
+    faqHits: [],
+    fallbackReason: reason,
+  });
+
+  if (!queryText) return empty("查询文本为空。");
+  if (!isSemanticSearchConfigured()) {
+    return empty("未配置 DashScope Embedding 或 Qdrant，无法召回。");
+  }
+
+  const queryEmbeddings = await embedTexts([queryText]);
+  const queryVector = queryEmbeddings?.[0];
+  if (!queryVector?.length) return empty("Embedding 生成失败，无法召回。");
+
+  const client = getQdrantClient();
+  if (!client) return empty("Qdrant 未配置，无法召回。");
+
+  try {
+    const must: Record<string, unknown>[] = [
+      { key: "status", match: { value: "启用" } },
+    ];
+    if (kinds.length === 1) {
+      must.push({ key: "kind", match: { value: kinds[0] } });
+    } else if (kinds.length < 3) {
+      must.push({ key: "kind", match: { any: kinds as string[] } });
+    }
+
+    const results = await client.search(getQdrantCollectionName(), {
+      vector: queryVector,
+      limit,
+      with_payload: true,
+      filter: { must },
+    });
+
+    const hits: KnowledgeRecallHit[] = [];
+    const ruleHits: SemanticRuleRecallCandidate[] = [];
+    const consensusHits: SemanticConsensusRecallCandidate[] = [];
+    const faqHits: SemanticFaqRecallCandidate[] = [];
+
+    for (const item of results) {
+      const payload = (item.payload ?? {}) as Partial<KnowledgeVectorPayload>;
+      const kind = (payload.kind as KnowledgeRecallKind | undefined) ?? "rule";
+
+      if (kind === "consensus" && (payload as ConsensusVectorPayload).consensusId) {
+        if (!kinds.includes("consensus")) continue;
+        const cs = payload as Partial<ConsensusVectorPayload>;
+        const candidate: SemanticConsensusRecallCandidate = {
+          consensusId: cs.consensusId?.trim() || String(item.id),
+          title: cs.title?.trim() || "-",
+          applicableScene: cs.applicableScene?.trim() || "-",
+          relatedClauseNo: cs.relatedClauseNo?.trim() || "",
+          vectorScore: item.score ?? 0,
+        };
+        consensusHits.push(candidate);
+        hits.push({ kind: "consensus", consensus: candidate });
+      } else if (kind === "faq" && (payload as FaqVectorPayload).faqId) {
+        if (!kinds.includes("faq")) continue;
+        const fq = payload as Partial<FaqVectorPayload>;
+        const candidate: SemanticFaqRecallCandidate = {
+          faqId: fq.faqId?.trim() || String(item.id),
+          question: fq.question?.trim() || "-",
+          answer: fq.answer?.trim() || "",
+          relatedClauseNo: fq.relatedClauseNo?.trim() || "",
+          relatedConsensusNo: fq.relatedConsensusNo?.trim() || "",
+          vectorScore: item.score ?? 0,
+        };
+        faqHits.push(candidate);
+        hits.push({ kind: "faq", faq: candidate });
+      } else {
+        if (!kinds.includes("rule")) continue;
+        const rl = payload as Partial<RuleVectorPayload>;
+        const candidate: SemanticRuleRecallCandidate = {
+          ruleId: rl.ruleId?.trim() || String(item.id),
+          category: rl.category?.trim() || "-",
+          clauseTitle: rl.clauseTitle?.trim() || "-",
+          vectorScore: item.score ?? 0,
+          kind: "rule",
+        };
+        ruleHits.push(candidate);
+        hits.push({ kind: "rule", rule: candidate });
+      }
+    }
+
+    return { queryText, hits, ruleHits, consensusHits, faqHits };
+  } catch (error) {
+    console.error("Qdrant text search failed", error);
+    return empty("Qdrant 查询失败。");
+  }
+}
+
+/**
  * 兼容旧调用：仅返回 rule 命中。新代码请优先使用 `searchKnowledgeVectors`。
  * @deprecated 将在阶段 2 后随调用方迁移完成移除。
  */

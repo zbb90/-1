@@ -7,6 +7,7 @@ import {
   WorkspacePill,
   WorkspaceSection,
 } from "@/components/admin/knowledge-workspace";
+import { ChipEditor } from "@/components/admin/chip-editor";
 import { TagEditor } from "@/components/tag-editor";
 
 type TabKey =
@@ -241,6 +242,8 @@ export function KnowledgeTabs() {
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [addFields, setAddFields] = useState<Row>({});
+  const [addUnadoptedHigh, setAddUnadoptedHigh] = useState<SuggestionItem[]>([]);
+  const [editUnadoptedHigh, setEditUnadoptedHigh] = useState<SuggestionItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -454,6 +457,15 @@ export function KnowledgeTabs() {
   }
 
   async function handleAdd() {
+    if (addUnadoptedHigh.length > 0) {
+      const labels = addUnadoptedHigh
+        .map((item) => `${item.label}（${(item.score * 100).toFixed(0)}%）`)
+        .join("\n");
+      const ok = window.confirm(
+        `检测到 ${addUnadoptedHigh.length} 条 AI 高强建议未采纳：\n${labels}\n\n仍要保存吗？`,
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     setSaveMsg("");
     try {
@@ -488,6 +500,15 @@ export function KnowledgeTabs() {
 
   async function saveEdit() {
     if (!editId) return;
+    if (editUnadoptedHigh.length > 0) {
+      const labels = editUnadoptedHigh
+        .map((item) => `${item.label}（${(item.score * 100).toFixed(0)}%）`)
+        .join("\n");
+      const ok = window.confirm(
+        `检测到 ${editUnadoptedHigh.length} 条 AI 高强建议未采纳：\n${labels}\n\n仍要保存吗？`,
+      );
+      if (!ok) return;
+    }
     setEditSaving(true);
     try {
       const res = await fetch(`/api/knowledge/${activeTab}`, {
@@ -846,6 +867,8 @@ export function KnowledgeTabs() {
                       tab={activeTab}
                       fields={addFields}
                       onChange={setAddFields}
+                      enableSuggestions
+                      onSuggestionsState={(s) => setAddUnadoptedHigh(s.unadoptedHigh)}
                     />
                   </div>
                   <div className="mt-4 flex items-center gap-4">
@@ -1246,7 +1269,13 @@ export function KnowledgeTabs() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-6">
-              <AddForm tab={activeTab} fields={editFields} onChange={setEditFields} />
+              <AddForm
+                tab={activeTab}
+                fields={editFields}
+                onChange={setEditFields}
+                enableSuggestions
+                onSuggestionsState={(s) => setEditUnadoptedHigh(s.unadoptedHigh)}
+              />
 
               <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1432,10 +1461,15 @@ export function KnowledgeTabs() {
   );
 }
 
-const FIELD_DEFS: Record<
-  TabKey,
-  Array<{ key: string; label: string; required?: boolean; multiline?: boolean }>
-> = {
+type FieldDef = {
+  key: string;
+  label: string;
+  required?: boolean;
+  multiline?: boolean;
+  kind?: "chip";
+};
+
+const FIELD_DEFS: Record<TabKey, Array<FieldDef>> = {
   rules: [
     { key: "问题分类", label: "问题分类", required: true },
     { key: "问题子类或关键词", label: "关键词" },
@@ -1447,14 +1481,18 @@ const FIELD_DEFS: Record<
     { key: "条款标题", label: "条款标题" },
     { key: "条款关键片段", label: "条款关键片段", multiline: true },
     { key: "条款解释", label: "条款解释", multiline: true },
-    { key: "共识来源", label: "共识来源" },
+    {
+      key: "共识来源",
+      label: "共识来源（多个用 | 分隔，可绑定 C-xxxx）",
+      kind: "chip",
+    },
     { key: "示例问法", label: "示例问法" },
     { key: "备注", label: "备注" },
     { key: "tags", label: "标签" },
   ],
   consensus: [
     { key: "标题", label: "标题", required: true },
-    { key: "关联条款编号", label: "关联条款编号" },
+    { key: "关联条款编号", label: "关联条款编号（多个用 | 分隔）", kind: "chip" },
     { key: "适用场景", label: "适用场景", multiline: true },
     { key: "解释内容", label: "解释内容", multiline: true },
     { key: "判定结果", label: "判定结果" },
@@ -1500,8 +1538,8 @@ const FIELD_DEFS: Record<
   faq: [
     { key: "问题", label: "常问问题", required: true, multiline: true },
     { key: "答案", label: "标准答案", required: true, multiline: true },
-    { key: "关联条款编号", label: "关联条款编号（多个用 | 分隔）" },
-    { key: "关联共识编号", label: "关联共识编号（多个用 | 分隔）" },
+    { key: "关联条款编号", label: "关联条款编号（多个用 | 分隔）", kind: "chip" },
+    { key: "关联共识编号", label: "关联共识编号（多个用 | 分隔）", kind: "chip" },
     { key: "命中关键词", label: "命中关键词（用于召回辅助）" },
     { key: "沉积来源", label: "沉积来源（手工 / 复核沉淀）" },
     { key: "review_id", label: "关联复核任务 ID（如来自复核沉淀）" },
@@ -1510,50 +1548,282 @@ const FIELD_DEFS: Record<
   ],
 };
 
+type SuggestionItem = {
+  table: "rules" | "consensus" | "faq";
+  id: string;
+  label: string;
+  score: number;
+};
+
+const HIGH_SCORE_THRESHOLD = 0.85;
+
+function chipFieldFor(
+  formTab: TabKey,
+  suggestionTable: SuggestionItem["table"],
+): string | null {
+  if (formTab === "rules" && suggestionTable === "consensus") return "共识来源";
+  if (formTab === "consensus" && suggestionTable === "rules") return "关联条款编号";
+  if (formTab === "faq" && suggestionTable === "rules") return "关联条款编号";
+  if (formTab === "faq" && suggestionTable === "consensus") return "关联共识编号";
+  return null;
+}
+
+function buildDraftQuerySignature(tab: TabKey, fields: Row): string {
+  const keys: string[] = (() => {
+    if (tab === "rules") {
+      return ["条款标题", "条款关键片段", "条款解释", "场景描述", "示例问法"];
+    }
+    if (tab === "consensus") {
+      return ["标题", "适用场景", "解释内容", "判定结果", "示例问题"];
+    }
+    if (tab === "faq") return ["问题", "答案", "命中关键词"];
+    if (tab === "operations") return ["标题", "操作内容", "解释说明"];
+    return ["物品名称", "别名或关键词", "别名或常见叫法", "说明", "识别备注"];
+  })();
+  return keys
+    .map((k) => (fields[k] ?? "").trim())
+    .filter(Boolean)
+    .join("||");
+}
+
 function AddForm({
   tab,
   fields,
   onChange,
+  enableSuggestions = false,
+  onSuggestionsState,
 }: {
   tab: TabKey;
   fields: Row;
   onChange: (f: Row) => void;
+  enableSuggestions?: boolean;
+  onSuggestionsState?: (state: { unadoptedHigh: SuggestionItem[] }) => void;
 }) {
   const defs = FIELD_DEFS[tab];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {defs.map((def) => (
-        <label
-          key={def.key}
-          className={`flex flex-col gap-1.5 text-sm text-gray-700 ${def.multiline ? "md:col-span-2" : ""}`}
-        >
-          <span>
-            {def.label}
-            {def.required && <span className="text-red-500 ml-0.5">*</span>}
-          </span>
-          {def.key === "tags" ? (
-            <TagEditor
-              value={fields[def.key] ?? ""}
-              onChange={(value) => onChange({ ...fields, [def.key]: value })}
-            />
-          ) : def.multiline ? (
-            <textarea
-              value={fields[def.key] ?? ""}
-              onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
-              className="min-h-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
-              placeholder={def.label}
-            />
-          ) : (
-            <input
-              value={fields[def.key] ?? ""}
-              onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
-              placeholder={def.label}
-            />
-          )}
-        </label>
-      ))}
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        {defs.map((def) => (
+          <label
+            key={def.key}
+            className={`flex flex-col gap-1.5 text-sm text-gray-700 ${def.multiline ? "md:col-span-2" : ""}`}
+          >
+            <span>
+              {def.label}
+              {def.required && <span className="text-red-500 ml-0.5">*</span>}
+            </span>
+            {def.key === "tags" ? (
+              <TagEditor
+                value={fields[def.key] ?? ""}
+                onChange={(value) => onChange({ ...fields, [def.key]: value })}
+              />
+            ) : def.kind === "chip" ? (
+              <ChipEditor
+                value={fields[def.key] ?? ""}
+                onChange={(value) => onChange({ ...fields, [def.key]: value })}
+                placeholder={def.label}
+              />
+            ) : def.multiline ? (
+              <textarea
+                value={fields[def.key] ?? ""}
+                onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
+                className="min-h-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
+                placeholder={def.label}
+              />
+            ) : (
+              <input
+                value={fields[def.key] ?? ""}
+                onChange={(e) => onChange({ ...fields, [def.key]: e.target.value })}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200"
+                placeholder={def.label}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      {enableSuggestions ? (
+        <SuggestionPanel
+          tab={tab}
+          fields={fields}
+          onAdopt={(item) => {
+            const fieldName = chipFieldFor(tab, item.table);
+            if (!fieldName) return;
+            const existing = (fields[fieldName] ?? "")
+              .split(/[|｜]/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (existing.includes(item.id)) return;
+            onChange({ ...fields, [fieldName]: [...existing, item.id].join("|") });
+          }}
+          onSuggestionsState={onSuggestionsState}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SuggestionPanel({
+  tab,
+  fields,
+  onAdopt,
+  onSuggestionsState,
+}: {
+  tab: TabKey;
+  fields: Row;
+  onAdopt: (item: SuggestionItem) => void;
+  onSuggestionsState?: (state: { unadoptedHigh: SuggestionItem[] }) => void;
+}) {
+  const [items, setItems] = useState<SuggestionItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [adoptedKeys, setAdoptedKeys] = useState<Set<string>>(new Set());
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
+  const signature = useMemo(() => buildDraftQuerySignature(tab, fields), [tab, fields]);
+  const lastSignatureRef = useRef<string>("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!["rules", "consensus", "faq"].includes(tab)) {
+      setItems([]);
+      return;
+    }
+    if (!signature || signature.length < 4) {
+      setItems([]);
+      return;
+    }
+    if (signature === lastSignatureRef.current) return;
+
+    const handle = window.setTimeout(async () => {
+      lastSignatureRef.current = signature;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/knowledge/links/suggest-on-create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ table: tab, draft: fields }),
+          signal: controller.signal,
+        });
+        const json = await res.json();
+        if (json.ok) {
+          setItems(((json.data?.items as SuggestionItem[]) ?? []).slice(0, 3));
+        } else {
+          setError(json.message || "AI 建议获取失败");
+          setItems([]);
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setError("网络错误");
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 800);
+
+    return () => window.clearTimeout(handle);
+  }, [signature, tab, fields]);
+
+  useEffect(() => {
+    if (!onSuggestionsState) return;
+    const unadoptedHigh = items.filter(
+      (item) =>
+        item.score >= HIGH_SCORE_THRESHOLD &&
+        !adoptedKeys.has(`${item.table}:${item.id}`) &&
+        !dismissedKeys.has(`${item.table}:${item.id}`),
+    );
+    onSuggestionsState({ unadoptedHigh });
+  }, [items, adoptedKeys, dismissedKeys, onSuggestionsState]);
+
+  if (!["rules", "consensus", "faq"].includes(tab)) return null;
+
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-sky-900">AI 建议绑定</p>
+        <span className="text-xs text-sky-600">
+          {loading
+            ? "正在分析…"
+            : items.length === 0
+              ? "暂无建议"
+              : `Top ${items.length} 候选`}
+        </span>
+      </div>
+      {error ? <p className="mt-1 text-xs text-amber-700">{error}</p> : null}
+      {items.length > 0 ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          {items.map((item) => {
+            const key = `${item.table}:${item.id}`;
+            const adopted = adoptedKeys.has(key);
+            const dismissed = dismissedKeys.has(key);
+            const targetField = chipFieldFor(tab, item.table);
+            return (
+              <div
+                key={key}
+                className={`rounded-xl border bg-white p-3 text-xs transition ${
+                  adopted
+                    ? "border-emerald-200 ring-1 ring-emerald-100"
+                    : dismissed
+                      ? "border-slate-200 opacity-60"
+                      : item.score >= HIGH_SCORE_THRESHOLD
+                        ? "border-amber-200 ring-1 ring-amber-100"
+                        : "border-slate-200"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                    {item.table === "rules"
+                      ? "规则"
+                      : item.table === "consensus"
+                        ? "共识"
+                        : "FAQ"}
+                  </span>
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      item.score >= HIGH_SCORE_THRESHOLD
+                        ? "text-amber-600"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {(item.score * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <p className="mt-1.5 line-clamp-3 text-sm font-medium text-slate-900">
+                  {item.label}
+                </p>
+                {targetField ? (
+                  <p className="mt-1 text-[11px] text-slate-400">→ {targetField}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-amber-600">无可写入字段</p>
+                )}
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={adopted || !targetField}
+                    onClick={() => {
+                      onAdopt(item);
+                      setAdoptedKeys((prev) => new Set(prev).add(key));
+                    }}
+                    className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                  >
+                    {adopted ? "已采纳" : "采纳"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedKeys((prev) => new Set(prev).add(key))}
+                    className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                  >
+                    忽略
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -178,3 +178,90 @@ describe("searchKnowledgeVectors 双源召回", () => {
     expect(result.hits.map((h) => h.kind)).toEqual(["rule", "consensus", "rule"]);
   });
 });
+
+describe("searchKnowledgeVectorsByText", () => {
+  const originalQdrantUrl = process.env.QDRANT_URL;
+  const originalDashKey = process.env.DASHSCOPE_API_KEY;
+
+  beforeEach(() => {
+    process.env.QDRANT_URL = "http://localhost:6333";
+    process.env.DASHSCOPE_API_KEY = "test";
+  });
+
+  afterEach(() => {
+    if (originalQdrantUrl === undefined) delete process.env.QDRANT_URL;
+    else process.env.QDRANT_URL = originalQdrantUrl;
+    if (originalDashKey === undefined) delete process.env.DASHSCOPE_API_KEY;
+    else process.env.DASHSCOPE_API_KEY = originalDashKey;
+    vi.resetModules();
+  });
+
+  it("基于文本召回 rule + consensus + faq 三层", async () => {
+    vi.resetModules();
+
+    vi.doMock("@qdrant/js-client-rest", () => {
+      const fakeClient = {
+        search: vi.fn(async () => [
+          {
+            id: "fq-1",
+            score: 0.92,
+            payload: {
+              kind: "faq",
+              faqId: "FAQ-0001",
+              question: "员工没有健康证怎么办",
+              answer: "立即停工补办",
+              relatedClauseNo: "R-0001",
+              relatedConsensusNo: "C-0001",
+              status: "启用",
+              document: "...",
+            },
+          },
+          {
+            id: "rule-1",
+            score: 0.81,
+            payload: {
+              kind: "rule",
+              ruleId: "R-0001",
+              category: "健康证",
+              clauseTitle: "健康证缺失",
+              clauseNo: "H1.1",
+              consensusSource: "C-0001",
+              status: "启用",
+              document: "...",
+            },
+          },
+        ]),
+        getCollection: vi.fn(async () => undefined),
+        createCollection: vi.fn(async () => undefined),
+        createPayloadIndex: vi.fn(async () => undefined),
+        upsert: vi.fn(async () => undefined),
+        deleteCollection: vi.fn(async () => undefined),
+      };
+      return { QdrantClient: vi.fn(() => fakeClient) };
+    });
+
+    vi.doMock("@/lib/embeddings", () => ({
+      embedTexts: vi.fn(async (texts: string[]) =>
+        texts.map(() => Array.from({ length: 8 }, () => 0.1)),
+      ),
+      isEmbeddingConfigured: () => true,
+    }));
+
+    const mod = await import("./vector-store");
+    const result = await mod.searchKnowledgeVectorsByText("健康证 缺失");
+
+    expect(result.faqHits).toHaveLength(1);
+    expect(result.faqHits[0].faqId).toBe("FAQ-0001");
+    expect(result.ruleHits).toHaveLength(1);
+    expect(result.ruleHits[0].ruleId).toBe("R-0001");
+    expect(result.queryText).toBe("健康证 缺失");
+  });
+
+  it("空文本直接返回 fallbackReason", async () => {
+    vi.resetModules();
+    const mod = await import("./vector-store");
+    const result = await mod.searchKnowledgeVectorsByText("");
+    expect(result.hits).toEqual([]);
+    expect(result.fallbackReason).toBeTruthy();
+  });
+});
