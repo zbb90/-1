@@ -62,9 +62,7 @@ function escapeField(value: string): string {
 
 function writeCsv(headers: string[], rows: Row[]): string {
   const head = headers.map(escapeField).join(",");
-  const body = rows.map((r) =>
-    headers.map((h) => escapeField(r[h] ?? "")).join(","),
-  );
+  const body = rows.map((r) => headers.map((h) => escapeField(r[h] ?? "")).join(","));
   return [head, ...body].join("\n") + "\n";
 }
 
@@ -175,8 +173,8 @@ function main() {
     const cs = csId ? consensusById.get(csId) : undefined;
     const question = (r.示例问法 ?? r.条款标题 ?? "").trim();
     // 答案优先用 条款解释（更长/详细），其次条款关键片段
-    const answerCandidates = [r.条款解释, r.条款关键片段, r.场景描述].map(
-      (v) => (v ?? "").trim(),
+    const answerCandidates = [r.条款解释, r.条款关键片段, r.场景描述].map((v) =>
+      (v ?? "").trim(),
     );
     const answer =
       answerCandidates.find((v) => v.length > 0) || (r.条款标题 ?? "").trim();
@@ -219,9 +217,7 @@ function main() {
   const auditObservations = audit.filter((a) => a.isObservation);
   const auditChapters = audit.filter((a) => a.isChapter);
   const ruleClauses = new Set(
-    keepRules
-      .map((r) => (r.条款编号 ?? "").trim().toUpperCase())
-      .filter(Boolean),
+    keepRules.map((r) => (r.条款编号 ?? "").trim().toUpperCase()).filter(Boolean),
   );
   const auditCovered = auditOfficial.filter((a) => ruleClauses.has(a.id));
   const auditMissing = auditOfficial.filter((a) => !ruleClauses.has(a.id));
@@ -290,8 +286,12 @@ function main() {
   report.push(`- ${resolve(OUT_DIR, "audit_excel_missing.csv")}`);
   report.push("");
   report.push("## 5. 下一步建议");
-  report.push("1. 你 review 上面的 dry-run 文件 + 报告，OK 后我把 03/07 覆盖到 templates 并 commit。");
-  report.push("2. 02 共识表里 311/33/37 等乱码 关联条款编号 不在本次范围，建议下一轮单独处理（用 Excel 的 chapter→category 映射做反查）。");
+  report.push(
+    "1. 你 review 上面的 dry-run 文件 + 报告，OK 后我把 03/07 覆盖到 templates 并 commit。",
+  );
+  report.push(
+    "2. 02 共识表里 311/33/37 等乱码 关联条款编号 不在本次范围，建议下一轮单独处理（用 Excel 的 chapter→category 映射做反查）。",
+  );
   report.push("3. 覆盖后需重建向量库 (后台 /storage 重建按钮)。");
 
   // 缺失的稽核条款 CSV
