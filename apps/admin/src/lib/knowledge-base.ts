@@ -486,7 +486,16 @@ export async function matchRegularQuestion(
   }
 
   recordSelected(ragResult.ruleId);
-  const best = vectorHits.find((c) => c.rule.rule_id === ragResult.ruleId)!;
+  const best = vectorHits.find((c) => c.rule.rule_id === ragResult.ruleId);
+  if (!best) {
+    // 防御性兜底：RAG 返回的 ruleId 无法在候选列表中找到（理论上不应发生）
+    return {
+      matched: false,
+      rejectReason: "RAG 命中规则无法在候选列表中找到，自动转人工复核。",
+      candidates: rerankedTop,
+      debug: { ...debug, rerankedTop },
+    };
+  }
   const linkedConsensus = best.rule.共识来源
     ? consensusRows.find((item) => item.consensus_id === best.rule.共识来源)
     : undefined;

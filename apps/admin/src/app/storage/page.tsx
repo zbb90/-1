@@ -18,6 +18,7 @@ import {
   repairUserIndexesAction,
   restoreKnowledgeFromCsvAction,
 } from "./actions";
+import { AskTracePanel } from "./ask-trace-panel";
 import { CleanFaqDupsPanel } from "./clean-faq-dups-panel";
 import { SplitRulesMigrationPanel } from "./split-rules-migration-panel";
 
@@ -309,6 +310,13 @@ export default async function StoragePage({
                 分钟内完成。
               </p>
             </div>
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="ask 接口诊断"
+            description="逐阶段测试 ask 核心链路（env / matchOperation / matchRegular），直接在页面看哪一步失败及错误信息。"
+          >
+            <AskTracePanel />
           </WorkspaceSection>
 
           <WorkspaceSection

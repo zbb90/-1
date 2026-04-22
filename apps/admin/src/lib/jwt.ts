@@ -111,7 +111,13 @@ export async function verifyJwt(token: string): Promise<JwtPayload | null> {
   if (parts.length !== 3) return null;
 
   const [header, body, sig] = parts;
-  const expectedSig = await hmacSign(`${header}.${body}`);
+  let expectedSig: string;
+  try {
+    expectedSig = await hmacSign(`${header}.${body}`);
+  } catch {
+    // JWT_SECRET 未配置或不满足最低长度要求时优雅降级，不向外抛出
+    return null;
+  }
 
   if (sig.length !== expectedSig.length) return null;
   let mismatch = 0;
