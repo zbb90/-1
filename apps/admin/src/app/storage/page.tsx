@@ -18,6 +18,7 @@ import {
   repairUserIndexesAction,
   restoreKnowledgeFromCsvAction,
 } from "./actions";
+import { CleanFaqDupsPanel } from "./clean-faq-dups-panel";
 import { SplitRulesMigrationPanel } from "./split-rules-migration-panel";
 
 function StatCard({
@@ -315,6 +316,13 @@ export default async function StoragePage({
             description="把 rules 表里历史共识沉积（备注以「自动从稽核共识抽取」开头）增量迁到 FAQ 沉积表，幂等、不动其他在线编辑。"
           >
             <SplitRulesMigrationPanel />
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="一次性清理：FAQ 中的共识冗余"
+            description="把 FAQ 沉积表里「关联共识在 consensus 表已有原版」的副本删掉，让常问沉积只保留真答疑。幂等。"
+          >
+            <CleanFaqDupsPanel />
           </WorkspaceSection>
         </div>
 
