@@ -17,7 +17,9 @@
       "description": "阁楼仓库里面有原物料直接放在地上，没有离地5cm",
       "selfJudgment": "待人工确认"
     },
-    "expectedRuleId": "R-0052"
+    "expectedRuleId": "R-0052",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0052 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "解冻品破损",
@@ -27,7 +29,9 @@
       "description": "榴莲果泥解冻后袋子破损漏液，门店未提前识别",
       "selfJudgment": "待人工确认"
     },
-    "expectedRuleId": "R-0114"
+    "expectedRuleId": "R-0114",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0114 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "原物料超赏味期",
@@ -57,7 +61,9 @@
       "description": "在仓储区发现一包干橙片无效期，属于门店原物料，不是私人物品",
       "selfJudgment": "待人工确认"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "麻薯无效期应优先物料无效期",
@@ -67,7 +73,9 @@
       "description": "巡检时发现两袋米麻薯其中一袋无效期，一袋有效期，监控核实为同时煮制，仅因伙伴理解失误漏打一份效期，本次提醒",
       "selfJudgment": "仅本次提醒"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "淡奶油无效期不应命中个人食用",
@@ -77,7 +85,9 @@
       "description": "冰箱里一瓶安佳淡奶油瓶盖有被掀开但未使用，门店反馈早上仅拧开一半后放回，需要正常打效期",
       "selfJudgment": "提醒门店打效期"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "垃圾桶旁过期生椰乳可提醒场景",
@@ -87,7 +97,9 @@
       "description": "门店垃圾桶旁边地面发现一瓶过期生椰乳，监控证实是废弃时丢歪，本次提醒",
       "selfJudgment": "本次提醒"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "奇亚籽原料无效期不应命中水果特殊规则",
@@ -97,7 +109,9 @@
       "description": "一包开封无效期的奇亚籽原料与其他开封物料放在一起，门店承认早上使用时忘记打效期，正常扣无效期",
       "selfJudgment": "扣无效期"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "Excel案例麻薯无效期可提醒",
@@ -107,7 +121,9 @@
       "description": "巡检时发现两袋米麻薯其中一袋无效期，一袋有效期，已经监控核实两袋为同时煮制然后因伙伴为新入职伙伴以为在一个容器内打印一份效期理解失误，已现场校准伙伴顾仅本次提醒\n个人想法：仅本次提醒",
       "selfJudgment": "仅本次提醒"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "Excel案例干橙片无效期伴随非人为破损",
@@ -117,7 +133,9 @@
       "description": "干橙片净含量100g，该包包物料实称112g，且破损处明显非人为原因，\n个人想法：本次提醒，让门店废弃",
       "selfJudgment": "本次提醒，让门店废弃"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "Excel案例垃圾桶旁过期生椰乳已回传监控",
@@ -127,7 +145,9 @@
       "description": "物料放置在垃圾桶旁边地面的角落，让门店提供废弃监控，若属实本次提醒。（门店已回传监控，证实为昨晚门店伙伴废弃时丢歪了，掉在了垃圾桶旁边的角落里）\n个人想法：本次提醒",
       "selfJudgment": "本次提醒"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "Excel案例奇亚籽禁用标识贴错仍是无效期",
@@ -137,7 +157,9 @@
       "description": "门店已在正常使用该物料，正常扣分\n个人想法：扣无效期",
       "selfJudgment": "扣无效期"
     },
-    "expectedRuleId": "R-0064"
+    "expectedRuleId": "R-0064",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0064 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "个人食用但无私人标识应优先反馈个人食用规则",
@@ -147,7 +169,9 @@
       "description": "伙伴自己吃的草莓，放在冰箱里面，但没有效期，也没有私人物品标识",
       "selfJudgment": "待人工确认"
     },
-    "expectedRuleId": "R-0063"
+    "expectedRuleId": "R-0063",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0063 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "明确私人物品区才允许命中私人物品区豁免规则",
@@ -157,7 +181,9 @@
       "description": "私人物品区内发现伙伴自己带来的草莓已过期，现场有私人物品区标识",
       "selfJudgment": "待人工确认"
     },
-    "expectedRuleId": "R-0076"
+    "expectedRuleId": "R-0076",
+    "expectsSemanticOnly": true,
+    "note": "原 R-0076 已于 2026-04-21 迁移至 FAQ 沉积表；语义模式应通过 FAQ 直答返回，fallback 关键词扫描下跳过该用例。"
   },
   {
     "name": "健康证未录入系统应命中 H1.2",
