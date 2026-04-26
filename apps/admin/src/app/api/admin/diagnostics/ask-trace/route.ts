@@ -2,9 +2,8 @@
  * Leader 专用诊断接口：完整模拟 /api/regular-question/ask 的所有阶段，
  * 把真实错误（含栈）原样返回，便于在 Railway 控制台之外快速定位。
  *
- * 覆盖阶段：env / matchScenarioPolicy / matchProductionCheck /
- * matchOperation / matchRegular / aiExplanation / createReviewTask
- * （默认 dryRun，不真正写复核池）。
+ * 覆盖阶段：env / matchRegular / matchOperation(兜底) / aiExplanation /
+ * createReviewTask（默认 dryRun，不真正写复核池）。
  */
 
 import { cookies } from "next/headers";
@@ -15,12 +14,10 @@ import {
   generateRegularQuestionAiExplanation,
 } from "@/lib/ai";
 import { matchOperationQuestion, matchRegularQuestion } from "@/lib/knowledge-base";
-import { matchProductionCheckQuestion } from "@/lib/production-check-matchers";
 import {
   createReviewTaskFromAnswer,
   createReviewTaskFromRegularQuestion,
 } from "@/lib/review-pool";
-import { matchScenarioPolicyQuestion } from "@/lib/scenario-policy-matchers";
 import { isSemanticSearchConfigured } from "@/lib/vector-store";
 import type { RegularQuestionAnswerPayload, RegularQuestionRequest } from "@/lib/types";
 
@@ -88,7 +85,7 @@ export async function POST(request: NextRequest) {
   } catch {
     payload = {};
   }
-  const dryRun = payload.dryRun !== false; // 默认 dry-run，不写复核池
+  const dryRun = payload.dryRun !== false;
   const fullPayload: RegularQuestionRequest = {
     storeCode: payload.storeCode || "DIAG",
     category: payload.category || "诊断",
@@ -113,67 +110,36 @@ export async function POST(request: NextRequest) {
   });
 
   type MatchResult = Awaited<ReturnType<typeof matchRegularQuestion>>;
-  let scenarioResult: MatchResult | null = null;
-  let productionCheckResult: MatchResult | null = null;
-  let opResult: MatchResult | null = null;
-  let regResult: MatchResult | null = null;
+  let regResult = null as MatchResult | null;
+  let opResult = null as MatchResult | null;
 
   stages.push(
-    await runStage("matchScenarioPolicyQuestion", async () => {
-      const r = (await matchScenarioPolicyQuestion(fullPayload)) as MatchResult | null;
-      scenarioResult = r;
+    await runStage("matchRegularQuestion", async () => {
+      const r = (await matchRegularQuestion(fullPayload)) as MatchResult;
+      regResult = r;
       return summarizeMatchResult(r);
     }),
   );
 
   stages.push(
-    await runStage("matchProductionCheckQuestion", async () => {
-      const r = scenarioResult
-        ? null
-        : ((await matchProductionCheckQuestion(fullPayload)) as MatchResult | null);
-      productionCheckResult = r;
-      return scenarioResult
-        ? { skipped: true, reason: "matchScenarioPolicyQuestion 已命中" }
-        : summarizeMatchResult(r);
-    }),
-  );
-
-  stages.push(
-    await runStage("matchOperationQuestion", async () => {
-      const previous = scenarioResult ?? productionCheckResult;
-      const r = previous
-        ? null
-        : ((await matchOperationQuestion(fullPayload)) as MatchResult | null);
+    await runStage("matchOperationQuestion (兜底)", async () => {
+      if (regResult?.matched) {
+        return { skipped: true, reason: "matchRegularQuestion 已命中" };
+      }
+      const r = (await matchOperationQuestion(fullPayload)) as MatchResult | null;
       opResult = r;
-      return previous
-        ? { skipped: true, reason: "前置 matcher 已命中" }
-        : summarizeMatchResult(r);
+      return summarizeMatchResult(r);
     }),
   );
 
-  stages.push(
-    await runStage("matchRegularQuestion", async () => {
-      const previous = scenarioResult ?? productionCheckResult ?? opResult;
-      const r = previous
-        ? null
-        : ((await matchRegularQuestion(fullPayload)) as MatchResult);
-      regResult = r;
-      return previous
-        ? { skipped: true, reason: "前置 matcher 已命中" }
-        : summarizeMatchResult(r);
-    }),
-  );
-
-  const finalResult = (scenarioResult ??
-    productionCheckResult ??
-    opResult ??
-    regResult) as MatchResult | null;
+  const finalResult = (
+    regResult?.matched ? regResult : (opResult ?? regResult)
+  ) as MatchResult | null;
   const matchedAnswer: RegularQuestionAnswerPayload | undefined =
     finalResult && finalResult.matched
       ? (finalResult as { answer?: RegularQuestionAnswerPayload }).answer
       : undefined;
 
-  // 模拟 ask 路由 line 80-84：LLM 解释生成（仅在原 result.answer.aiExplanation 为空时才会调用）
   let aiExplanation = matchedAnswer?.aiExplanation || "";
   if (matchedAnswer) {
     stages.push(
@@ -190,7 +156,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 模拟 ask 路由 line 88-98 / line 55-59：复核池写入
   stages.push(
     await runStage("createReviewTask", async () => {
       if (dryRun) {

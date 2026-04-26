@@ -6,10 +6,8 @@ import {
 } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { matchOperationQuestion, matchRegularQuestion } from "@/lib/knowledge-base";
-import { matchProductionCheckQuestion } from "@/lib/production-check-matchers";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import { regularQuestionBodySchema } from "@/lib/schemas";
-import { matchScenarioPolicyQuestion } from "@/lib/scenario-policy-matchers";
 import {
   createReviewTaskFromAnswer,
   createReviewTaskFromRegularQuestion,
@@ -49,12 +47,10 @@ export async function POST(request: NextRequest) {
       requesterName: payload.requesterName,
     };
 
-    const scenarioResult = await matchScenarioPolicyQuestion(payload);
-    const productionCheckResult =
-      scenarioResult ?? (await matchProductionCheckQuestion(payload));
-    const operationResult =
-      productionCheckResult ?? (await matchOperationQuestion(payload));
-    const result = operationResult ?? (await matchRegularQuestion(payload));
+    const regularResult = await matchRegularQuestion(payload);
+    const result = regularResult.matched
+      ? regularResult
+      : ((await matchOperationQuestion(payload)) ?? regularResult);
     if (!result.matched) {
       const rejectReason =
         result.rejectReason || "未找到明确依据，建议进入人工复核池。";
