@@ -14,6 +14,7 @@ import {
 } from "@/components/admin/knowledge-workspace";
 import {
   cleanBlankOperationRowsAction,
+  migrateProductionChecksFromOperationsAction,
   rebuildKnowledgeVectorIndexAction,
   repairReviewStorageAction,
   repairUserIndexesAction,
@@ -282,6 +283,11 @@ export default async function StoragePage({
                 value={knowledgeDiagnostics.redisCounts.operations}
               />
               <StatCard
+                label="出品检查 Redis 行数"
+                value={knowledgeDiagnostics.redisCounts["production-checks"]}
+                tone="amber"
+              />
+              <StatCard
                 label="外购表 CSV 行数"
                 value={knowledgeDiagnostics.csvCounts["external-purchases"]}
               />
@@ -306,6 +312,11 @@ export default async function StoragePage({
                 <form action={cleanBlankOperationRowsAction}>
                   <WorkspaceActionButton type="submit" tone="amber">
                     清理操作知识空白行
+                  </WorkspaceActionButton>
+                </form>
+                <form action={migrateProductionChecksFromOperationsAction}>
+                  <WorkspaceActionButton type="submit" tone="blue">
+                    迁出出品检查标准
                   </WorkspaceActionButton>
                 </form>
               </div>

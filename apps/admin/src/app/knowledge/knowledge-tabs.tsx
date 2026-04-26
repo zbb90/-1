@@ -16,6 +16,7 @@ type TabKey =
   | "external-purchases"
   | "old-items"
   | "operations"
+  | "production-checks"
   | "faq";
 type Row = Record<string, string>;
 type KnowledgeLinkType =
@@ -86,6 +87,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "external-purchases", label: "外购清单" },
   { key: "old-items", label: "旧品清单" },
   { key: "operations", label: "操作知识" },
+  { key: "production-checks", label: "出品检查标准" },
 ];
 
 const LINK_TYPE_OPTIONS: Array<{ value: KnowledgeLinkType; label: string }> = [
@@ -103,9 +105,11 @@ function idField(tab: TabKey) {
       ? "consensus_id"
       : tab === "operations"
         ? "op_id"
-        : tab === "faq"
-          ? "faq_id"
-          : "item_id";
+        : tab === "production-checks"
+          ? "check_id"
+          : tab === "faq"
+            ? "faq_id"
+            : "item_id";
 }
 
 function primaryField(tab: TabKey) {
@@ -113,9 +117,11 @@ function primaryField(tab: TabKey) {
     ? "条款标题"
     : tab === "consensus" || tab === "operations"
       ? "标题"
-      : tab === "faq"
-        ? "问题"
-        : "物品名称";
+      : tab === "production-checks"
+        ? "产品名称"
+        : tab === "faq"
+          ? "问题"
+          : "物品名称";
 }
 
 function defaultTargetTable(tab: TabKey): TabKey {
@@ -194,6 +200,7 @@ function summaryField(tab: TabKey) {
   if (tab === "external-purchases") return "说明";
   if (tab === "old-items") return "识别备注";
   if (tab === "faq") return "答案";
+  if (tab === "production-checks") return "检查点";
   return "解释说明";
 }
 
@@ -652,9 +659,11 @@ export function KnowledgeTabs() {
   const selectedTabLabel =
     TABS.find((tab) => tab.key === activeTab)?.label || "当前知识表";
   const importHelpText =
-    activeTab === "operations"
-      ? "可上传操作知识模板，也可直接上传「出品操作检查表 / 产品检核表」原始 Excel，系统会自动拆成出品操作扣分标准。"
-      : "先下载模板，再按模板格式填充后上传。";
+    activeTab === "production-checks"
+      ? "可直接上传「出品操作检查表 / 产品检核表」原始 Excel，系统会按产品、检查点和扣分口径拆成独立检查标准。"
+      : activeTab === "operations"
+        ? "用于标准操作、SOP、配方工艺等知识；出品检查扣分标准请上传到「出品检查标准」。"
+        : "先下载模板，再按模板格式填充后上传。";
 
   return (
     <div className="space-y-5">
@@ -1537,6 +1546,23 @@ const FIELD_DEFS: Record<TabKey, Array<FieldDef>> = {
     { key: "备注", label: "备注" },
     { key: "tags", label: "标签" },
   ],
+  "production-checks": [
+    { key: "来源文件", label: "来源文件" },
+    { key: "区域", label: "区域" },
+    { key: "产品名称", label: "产品名称", required: true },
+    { key: "产品别名", label: "产品别名" },
+    { key: "风险分类", label: "风险分类" },
+    { key: "检核类型", label: "检核类型" },
+    { key: "检查点", label: "检查点", required: true, multiline: true },
+    { key: "违规表达", label: "违规表达", multiline: true },
+    { key: "解释说明", label: "解释说明", multiline: true },
+    { key: "判定口径", label: "判定口径" },
+    { key: "关联操作编号", label: "关联操作编号（多个用 | 分隔）", kind: "chip" },
+    { key: "关联条款编号", label: "关联条款编号（多个用 | 分隔）", kind: "chip" },
+    { key: "关联共识编号", label: "关联共识编号（多个用 | 分隔）", kind: "chip" },
+    { key: "备注", label: "备注" },
+    { key: "tags", label: "标签" },
+  ],
   faq: [
     { key: "问题", label: "常问问题", required: true, multiline: true },
     { key: "答案", label: "标准答案", required: true, multiline: true },
@@ -1580,6 +1606,8 @@ function buildDraftQuerySignature(tab: TabKey, fields: Row): string {
     }
     if (tab === "faq") return ["问题", "答案", "命中关键词"];
     if (tab === "operations") return ["标题", "操作内容", "解释说明"];
+    if (tab === "production-checks")
+      return ["产品名称", "产品别名", "检查点", "违规表达", "解释说明"];
     return ["物品名称", "别名或关键词", "别名或常见叫法", "说明", "识别备注"];
   })();
   return keys

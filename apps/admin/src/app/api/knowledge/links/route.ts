@@ -15,6 +15,7 @@ const TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "production-checks",
   "faq",
 ];
 

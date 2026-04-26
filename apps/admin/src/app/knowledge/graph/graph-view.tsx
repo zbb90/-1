@@ -37,6 +37,7 @@ const TABLE_LABELS: Record<TableKey, string> = {
   "external-purchases": "外购",
   "old-items": "旧品",
   operations: "操作",
+  "production-checks": "出品检查",
 };
 
 const TABLE_COLORS: Record<TableKey, string> = {
@@ -46,6 +47,7 @@ const TABLE_COLORS: Record<TableKey, string> = {
   "external-purchases": "#ea580c",
   "old-items": "#7c3aed",
   operations: "#4b5563",
+  "production-checks": "#0891b2",
 };
 
 const KNOWLEDGE_LAYERS: Array<{ key: TableKey; label: string }> = [

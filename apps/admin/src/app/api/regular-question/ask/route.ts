@@ -6,8 +6,10 @@ import {
 } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { matchOperationQuestion, matchRegularQuestion } from "@/lib/knowledge-base";
+import { matchProductionCheckQuestion } from "@/lib/production-check-matchers";
 import { getRequesterPayloadFromRequest } from "@/lib/requester";
 import { regularQuestionBodySchema } from "@/lib/schemas";
+import { matchScenarioPolicyQuestion } from "@/lib/scenario-policy-matchers";
 import {
   createReviewTaskFromAnswer,
   createReviewTaskFromRegularQuestion,
@@ -47,7 +49,11 @@ export async function POST(request: NextRequest) {
       requesterName: payload.requesterName,
     };
 
-    const operationResult = await matchOperationQuestion(payload);
+    const scenarioResult = await matchScenarioPolicyQuestion(payload);
+    const productionCheckResult =
+      scenarioResult ?? (await matchProductionCheckQuestion(payload));
+    const operationResult =
+      productionCheckResult ?? (await matchOperationQuestion(payload));
     const result = operationResult ?? (await matchRegularQuestion(payload));
     if (!result.matched) {
       const rejectReason =

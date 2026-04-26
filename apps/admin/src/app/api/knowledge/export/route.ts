@@ -11,6 +11,7 @@ const VALID_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "production-checks",
   "faq",
 ];
 
@@ -20,6 +21,7 @@ const TABLE_NAMES: Record<KbTableName, string> = {
   "external-purchases": "外购清单表",
   "old-items": "旧品清单表",
   operations: "操作知识表",
+  "production-checks": "出品检查标准表",
   faq: "常问沉积表",
 };
 

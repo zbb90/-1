@@ -14,6 +14,7 @@ import type {
   FaqRow,
   OperationRow,
   OldItemRow,
+  ProductionCheckRow,
   RuleRow,
 } from "@/lib/types";
 import type { KbTableName } from "./kb-schema";
@@ -26,6 +27,7 @@ const CSV_FILES: Record<KbTableName, string> = {
   "external-purchases": "05_外购清单表.csv",
   "old-items": "04_旧品清单表.csv",
   operations: "06_操作知识表.csv",
+  "production-checks": "08_出品检查标准表.csv",
   faq: "07_常问沉积表.csv",
 };
 
@@ -51,6 +53,9 @@ export async function readTable(
 ): Promise<ExternalPurchaseRow[]>;
 export async function readTable(table: "old-items"): Promise<OldItemRow[]>;
 export async function readTable(table: "operations"): Promise<OperationRow[]>;
+export async function readTable(
+  table: "production-checks",
+): Promise<ProductionCheckRow[]>;
 export async function readTable(table: "faq"): Promise<FaqRow[]>;
 export async function readTable(
   table: KbTableName,
@@ -60,6 +65,7 @@ export async function readTable(
   | ExternalPurchaseRow[]
   | OldItemRow[]
   | OperationRow[]
+  | ProductionCheckRow[]
   | FaqRow[]
 >;
 export async function readTable(
@@ -70,6 +76,7 @@ export async function readTable(
   | ExternalPurchaseRow[]
   | OldItemRow[]
   | OperationRow[]
+  | ProductionCheckRow[]
   | FaqRow[]
 > {
   const path = getCsvPath(table);
@@ -85,6 +92,8 @@ export async function readTable(
       return readCsvAsObjects<OldItemRow>(path);
     case "operations":
       return readCsvAsObjects<OperationRow>(path);
+    case "production-checks":
+      return readCsvAsObjects<ProductionCheckRow>(path);
     case "faq":
       return readCsvAsObjects<FaqRow>(path);
   }
@@ -94,6 +103,7 @@ function idField(table: KbTableName): string {
   if (table === "rules") return "rule_id";
   if (table === "consensus") return "consensus_id";
   if (table === "operations") return "op_id";
+  if (table === "production-checks") return "check_id";
   if (table === "faq") return "faq_id";
   return "item_id";
 }
@@ -173,7 +183,9 @@ export async function appendRow(
               ? "OI"
               : table === "faq"
                 ? "FAQ"
-                : "OP";
+                : table === "production-checks"
+                  ? "PC"
+                  : "OP";
     row[field] = `${prefix}-${String(rows.length + 1).padStart(4, "0")}`;
   }
 

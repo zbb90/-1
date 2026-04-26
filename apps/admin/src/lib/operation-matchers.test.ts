@@ -30,6 +30,8 @@ describe("matchOperationQuestion", () => {
           备注: "",
         },
       ],
+      productionChecks: [],
+      faq: [],
     });
   });
 
@@ -107,6 +109,8 @@ describe("matchOperationQuestion", () => {
           备注: "",
         },
       ],
+      productionChecks: [],
+      faq: [],
     });
 
     const { matchOperationQuestion } = await import("./operation-matchers");

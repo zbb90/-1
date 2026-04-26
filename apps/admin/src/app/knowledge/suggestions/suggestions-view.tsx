@@ -17,6 +17,7 @@ type KbTable =
   | "external-purchases"
   | "old-items"
   | "operations"
+  | "production-checks"
   | "faq";
 
 type SuggestionItem = {
@@ -46,6 +47,7 @@ const TABLE_LABEL: Record<KbTable, string> = {
   "external-purchases": "外购",
   "old-items": "旧品",
   operations: "操作",
+  "production-checks": "出品检查",
   faq: "FAQ",
 };
 

@@ -5,6 +5,7 @@ export type KbTableName =
   | "external-purchases"
   | "old-items"
   | "operations"
+  | "production-checks"
   | "faq";
 
 /** 各表 Excel/CSV 首行应包含的列名（与 [knowledge-store](knowledge-store.ts) 默认表头一致）。 */
@@ -80,6 +81,25 @@ export const KB_TABLE_HEADERS: Record<KbTableName, string[]> = {
     "状态",
     "tags",
   ],
+  "production-checks": [
+    "check_id",
+    "来源文件",
+    "区域",
+    "产品名称",
+    "产品别名",
+    "风险分类",
+    "检核类型",
+    "检查点",
+    "违规表达",
+    "解释说明",
+    "判定口径",
+    "关联操作编号",
+    "关联条款编号",
+    "关联共识编号",
+    "备注",
+    "状态",
+    "tags",
+  ],
   faq: [
     "faq_id",
     "问题",
@@ -102,6 +122,7 @@ const ID_FIELD: Record<KbTableName, string> = {
   "external-purchases": "item_id",
   "old-items": "item_id",
   operations: "op_id",
+  "production-checks": "check_id",
   faq: "faq_id",
 };
 

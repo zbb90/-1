@@ -20,6 +20,7 @@ const VALID_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "production-checks",
   "faq",
 ];
 
@@ -134,30 +135,28 @@ function parseProductionChecklistExcel(
       if (!product || !category || !checkKind) continue;
 
       rows.push({
-        资料类型: "出品操作检查扣分标准",
-        标题: `${product}｜${checkKind}｜${detail.replace(/\n+/g, " / ")}`,
-        适用对象: product,
-        关键词: buildProductionChecklistKeywords(
+        来源文件: sourceFileName,
+        区域: section || sheetName,
+        产品名称: product,
+        产品别名: "",
+        风险分类: category,
+        检核类型: checkKind,
+        检查点: detail,
+        违规表达: detail,
+        解释说明: explanation,
+        判定口径: "出品检查扣分标准",
+        关联操作编号: "",
+        关联条款编号: "",
+        关联共识编号: "",
+        备注: `自动从出品操作检查表导入；sheet=${sheetName}；row=${r + 1}`,
+        状态: "启用",
+        tags: buildProductionChecklistKeywords(
           section,
           product,
           category,
           checkKind,
           detail,
         ),
-        操作内容: detail,
-        检核要点: [
-          `检查区域：${section || sheetName}`,
-          `扣分分类：${category}`,
-          `检核类型：${checkKind}`,
-          `检查点：${detail}`,
-        ].join("\n"),
-        解释说明: explanation,
-        来源文件: sourceFileName,
-        备注: `自动从出品操作检查表导入；sheet=${sheetName}；row=${r + 1}`,
-        状态: "启用",
-        tags: ["出品操作", "扣分标准", section, category, checkKind]
-          .filter(Boolean)
-          .join(","),
       });
     }
   }
@@ -204,7 +203,7 @@ export async function POST(request: NextRequest) {
     const buffer = await file.arrayBuffer();
     const parsedRows = parseExcel(buffer);
     const rows =
-      table === "operations" && looksLikeProductionChecklist(parsedRows)
+      table === "production-checks" && looksLikeProductionChecklist(parsedRows)
         ? parseProductionChecklistExcel(buffer, file.name)
         : parsedRows;
     if (rows.length === 0) {
@@ -276,6 +275,7 @@ export async function POST(request: NextRequest) {
       (table === "rules" ||
         table === "consensus" ||
         table === "operations" ||
+        table === "production-checks" ||
         table === "faq")
     ) {
       void generateLinkSuggestions({

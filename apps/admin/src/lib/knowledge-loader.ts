@@ -8,6 +8,7 @@ import type {
   KnowledgeBase,
   OperationRow,
   OldItemRow,
+  ProductionCheckRow,
   RuleRow,
 } from "@/lib/types";
 
@@ -46,6 +47,7 @@ const FILTERS: Record<KbTableName, (row: RowWithStatus) => boolean> = {
   "external-purchases": (row) => row.状态 !== "停用",
   "old-items": (row) => row.状态 !== "停用",
   operations: (row) => row.状态 !== "停用",
+  "production-checks": (row) => row.状态 !== "停用",
   faq: (row) => row.状态 !== "停用",
 };
 
@@ -103,15 +105,23 @@ export async function loadKnowledgeBase(forceRefresh = false): Promise<Knowledge
     tableCache.clear();
   }
 
-  const [rules, consensus, externalPurchases, oldItems, operations, faq] =
-    await Promise.all([
-      loadKnowledgeTable<RuleRow>("rules"),
-      loadKnowledgeTable<ConsensusRow>("consensus"),
-      loadKnowledgeTable<ExternalPurchaseRow>("external-purchases"),
-      loadKnowledgeTable<OldItemRow>("old-items"),
-      loadKnowledgeTable<OperationRow>("operations"),
-      loadKnowledgeTable<FaqRow>("faq"),
-    ]);
+  const [
+    rules,
+    consensus,
+    externalPurchases,
+    oldItems,
+    operations,
+    productionChecks,
+    faq,
+  ] = await Promise.all([
+    loadKnowledgeTable<RuleRow>("rules"),
+    loadKnowledgeTable<ConsensusRow>("consensus"),
+    loadKnowledgeTable<ExternalPurchaseRow>("external-purchases"),
+    loadKnowledgeTable<OldItemRow>("old-items"),
+    loadKnowledgeTable<OperationRow>("operations"),
+    loadKnowledgeTable<ProductionCheckRow>("production-checks"),
+    loadKnowledgeTable<FaqRow>("faq"),
+  ]);
 
   knowledgeBaseCache = {
     rules,
@@ -119,6 +129,7 @@ export async function loadKnowledgeBase(forceRefresh = false): Promise<Knowledge
     externalPurchases,
     oldItems,
     operations,
+    productionChecks,
     faq,
   };
 
@@ -133,6 +144,7 @@ export async function getKnowledgeSummary() {
     externalPurchases: knowledgeBase.externalPurchases.length,
     oldItems: knowledgeBase.oldItems.length,
     operations: knowledgeBase.operations.length,
+    productionChecks: knowledgeBase.productionChecks.length,
     faq: knowledgeBase.faq.length,
     templateDir: "Redis / CSV",
   };

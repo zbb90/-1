@@ -15,7 +15,13 @@ import {
   listSuggestions,
 } from "@/lib/knowledge-link-suggestions";
 import { normalizeTags } from "@/lib/knowledge-tags";
-import type { ConsensusRow, FaqRow, OperationRow, RuleRow } from "@/lib/types";
+import type {
+  ConsensusRow,
+  FaqRow,
+  OperationRow,
+  ProductionCheckRow,
+  RuleRow,
+} from "@/lib/types";
 
 /** 支持进入 Suggester 的条目。内部统一成这种结构，避免裸表类型扩散。 */
 type Entry = {
@@ -219,6 +225,40 @@ function buildFaqEntry(row: FaqRow): Entry | null {
   };
 }
 
+function buildProductionCheckEntry(row: ProductionCheckRow): Entry | null {
+  const id = row.check_id?.trim();
+  if (!id) return null;
+  const title =
+    [row.产品名称, row.检核类型].filter(Boolean).join("｜") ||
+    row.检查点?.trim() ||
+    "-";
+  const subtitle = row.风险分类?.trim() || row.区域?.trim() || "";
+  const doc = [
+    `区域：${row.区域 || "-"}`,
+    `产品名称：${row.产品名称 || "-"}`,
+    `产品别名：${row.产品别名 || "-"}`,
+    `风险分类：${row.风险分类 || "-"}`,
+    `检核类型：${row.检核类型 || "-"}`,
+    `检查点：${row.检查点 || "-"}`,
+    `违规表达：${row.违规表达 || "-"}`,
+    `解释说明：${row.解释说明 || "-"}`,
+    `判定口径：${row.判定口径 || "-"}`,
+  ].join("\n");
+  const snippet = truncate(
+    [row.检查点, row.违规表达, row.解释说明].filter(Boolean).join("；"),
+    180,
+  );
+  return {
+    table: "production-checks",
+    id,
+    title,
+    subtitle,
+    tags: normalizeTags(row.tags),
+    doc,
+    snippet,
+  };
+}
+
 function cosineSimilarity(a: number[], b: number[]) {
   if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0;
@@ -320,10 +360,11 @@ function sharedConcreteTerms(a: Entry, b: Entry) {
 
 function isProductionChecklistOperation(entry: Entry) {
   return (
-    entry.table === "operations" &&
-    /出品操作检查|扣分标准|产品检核表/.test(
-      [entry.subtitle, entry.title, entry.doc].join("\n"),
-    )
+    entry.table === "production-checks" ||
+    (entry.table === "operations" &&
+      /出品操作检查|扣分标准|产品检核表/.test(
+        [entry.subtitle, entry.title, entry.doc].join("\n"),
+      ))
   );
 }
 
@@ -332,7 +373,15 @@ function isStandardOperation(entry: Entry) {
 }
 
 function strongOperationRelation(a: Entry, b: Entry) {
-  if (a.table !== "operations" && b.table !== "operations") return null;
+  if (
+    a.table !== "operations" &&
+    b.table !== "operations" &&
+    a.table !== "production-checks" &&
+    b.table !== "production-checks" &&
+    a.table !== "rules" &&
+    b.table !== "rules"
+  )
+    return null;
   const strongTokens = sharedConcreteTerms(a, b);
   if (strongTokens.length === 0) return null;
 
@@ -348,8 +397,10 @@ function strongOperationRelation(a: Entry, b: Entry) {
   }
 
   const operationToAuditRule =
-    (a.table === "operations" && b.table === "rules") ||
-    (a.table === "rules" && b.table === "operations");
+    ((a.table === "operations" || a.table === "production-checks") &&
+      b.table === "rules") ||
+    (a.table === "rules" &&
+      (b.table === "operations" || b.table === "production-checks"));
   if (
     operationToAuditRule &&
     (strongTokens.length >= 2 || strongTokens[0].length >= 4)
@@ -376,10 +427,17 @@ function pairPriority(pair: PairCandidate) {
     priority += 0.18;
   } else if (
     (pair.a.table === "operations" && pair.b.table === "rules") ||
-    (pair.a.table === "rules" && pair.b.table === "operations")
+    (pair.a.table === "production-checks" && pair.b.table === "rules") ||
+    (pair.a.table === "rules" &&
+      (pair.b.table === "operations" || pair.b.table === "production-checks"))
   ) {
     priority += 0.14;
-  } else if (pair.a.table === "operations" || pair.b.table === "operations") {
+  } else if (
+    pair.a.table === "operations" ||
+    pair.b.table === "operations" ||
+    pair.a.table === "production-checks" ||
+    pair.b.table === "production-checks"
+  ) {
     priority += 0.03;
   }
   if (pair.tagOverlap.length > 0)
@@ -613,17 +671,22 @@ export async function generateLinkSuggestions(
   const minSim = options.minVectorSimilarity ?? DEFAULT_MIN_SIM;
   const minAccept = options.minAcceptConfidence ?? DEFAULT_MIN_CONFIDENCE;
 
-  const [ruleRows, consensusRows, operationRows, faqRows] = await Promise.all([
-    loadKnowledgeTable<RuleRow>("rules"),
-    loadKnowledgeTable<ConsensusRow>("consensus"),
-    loadKnowledgeTable<OperationRow>("operations"),
-    loadKnowledgeTable<FaqRow>("faq"),
-  ]);
+  const [ruleRows, consensusRows, operationRows, productionCheckRows, faqRows] =
+    await Promise.all([
+      loadKnowledgeTable<RuleRow>("rules"),
+      loadKnowledgeTable<ConsensusRow>("consensus"),
+      loadKnowledgeTable<OperationRow>("operations"),
+      loadKnowledgeTable<ProductionCheckRow>("production-checks"),
+      loadKnowledgeTable<FaqRow>("faq"),
+    ]);
 
   const entries: Entry[] = [
     ...ruleRows.map(buildRuleEntry).filter((x): x is Entry => Boolean(x)),
     ...consensusRows.map(buildConsensusEntry).filter((x): x is Entry => Boolean(x)),
     ...operationRows.map(buildOperationEntry).filter((x): x is Entry => Boolean(x)),
+    ...productionCheckRows
+      .map(buildProductionCheckEntry)
+      .filter((x): x is Entry => Boolean(x)),
     ...faqRows.map(buildFaqEntry).filter((x): x is Entry => Boolean(x)),
   ];
 

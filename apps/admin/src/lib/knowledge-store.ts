@@ -1,7 +1,7 @@
 /**
  * Redis-backed knowledge store — enables online editing in production.
  *
- * Key schema per table (rules / consensus / external-purchases / old-items / operations):
+ * Key schema per table (rules / consensus / external-purchases / old-items / operations / production-checks):
  *   audit:kb:{table}:rows   — String (JSON array of row objects)
  *   audit:kb:{table}:ver    — Number (incremented on every write)
  *
@@ -28,6 +28,7 @@ const KB_TABLES: KbTableName[] = [
   "external-purchases",
   "old-items",
   "operations",
+  "production-checks",
   "faq",
 ];
 
@@ -116,6 +117,7 @@ function idField(table: KbTableName): string {
   if (table === "rules") return "rule_id";
   if (table === "consensus") return "consensus_id";
   if (table === "operations") return "op_id";
+  if (table === "production-checks") return "check_id";
   if (table === "faq") return "faq_id";
   return "item_id";
 }
@@ -132,7 +134,9 @@ function nextId(table: KbTableName, rows: Row[]): string {
             ? "OI"
             : table === "faq"
               ? "FAQ"
-              : "OP";
+              : table === "production-checks"
+                ? "PC"
+                : "OP";
   return `${prefix}-${String(rows.length + 1).padStart(4, "0")}`;
 }
 
@@ -262,6 +266,7 @@ export async function getKnowledgeStorageDiagnostics(): Promise<KnowledgeStorage
         "external-purchases": 0,
         "old-items": 0,
         operations: 0,
+        "production-checks": 0,
         faq: 0,
       },
       csvCounts,
@@ -294,6 +299,7 @@ export async function restoreKnowledgeBaseFromCsv(): Promise<KnowledgeRestoreRep
     "external-purchases": 0,
     "old-items": 0,
     operations: 0,
+    "production-checks": 0,
     faq: 0,
   } as Record<KbTableName, number>;
 

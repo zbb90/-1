@@ -15,7 +15,13 @@ import {
   isSemanticSearchConfigured,
   rebuildKnowledgeVectorIndex,
 } from "@/lib/vector-store";
-import type { ConsensusRow, FaqRow, RuleRow } from "@/lib/types";
+import type {
+  ConsensusRow,
+  FaqRow,
+  OperationRow,
+  ProductionCheckRow,
+  RuleRow,
+} from "@/lib/types";
 
 async function assertLeaderSession() {
   const cookieStore = await cookies();
@@ -112,6 +118,121 @@ function isBlankOperationRow(row: Record<string, string>) {
     "解释说明",
     "来源文件",
   ].every((field) => !row[field]?.trim());
+}
+
+function isProductionChecklistOperation(row: OperationRow) {
+  return /出品操作检查|出品操作检查扣分标准|产品检核表|自动从出品操作检查表导入/.test(
+    [row.资料类型, row.标题, row.来源文件, row.备注].filter(Boolean).join("\n"),
+  );
+}
+
+function parseOperationChecklistTitle(row: OperationRow) {
+  const [product = row.适用对象 || "", checkKind = "", detail = row.操作内容 || ""] = (
+    row.标题 || ""
+  )
+    .split("｜")
+    .map((part) => part.trim());
+  return { product, checkKind, detail };
+}
+
+function nextProductionCheckId(existing: ProductionCheckRow[], offset: number) {
+  return `PC-${String(existing.length + offset + 1).padStart(4, "0")}`;
+}
+
+function migrateOperationToProductionCheck(
+  row: OperationRow,
+  existing: ProductionCheckRow[],
+  offset: number,
+): ProductionCheckRow {
+  const parsed = parseOperationChecklistTitle(row);
+  const product = row.适用对象?.trim() || parsed.product;
+  const checkKind = parsed.checkKind || "稽核点";
+  const checkPoint = row.操作内容?.trim() || parsed.detail || row.标题;
+
+  return {
+    check_id: nextProductionCheckId(existing, offset),
+    来源文件: row.来源文件 || "",
+    区域: /检查区域：([^\n]+)/.exec(row.检核要点 || "")?.[1]?.trim() || "",
+    产品名称: product,
+    产品别名: "",
+    风险分类: /扣分分类：([^\n]+)/.exec(row.检核要点 || "")?.[1]?.trim() || "",
+    检核类型: checkKind,
+    检查点: checkPoint,
+    违规表达: checkPoint,
+    解释说明: row.解释说明 || "",
+    判定口径: "出品检查扣分标准",
+    关联操作编号: "",
+    关联条款编号: "",
+    关联共识编号: "",
+    状态: row.状态 || "启用",
+    备注: [row.备注, row.op_id ? `由操作知识 ${row.op_id} 迁出` : ""]
+      .filter(Boolean)
+      .join("；"),
+    tags: row.关键词 || row.tags || "",
+  };
+}
+
+export async function migrateProductionChecksFromOperationsAction() {
+  await assertLeaderSession();
+  const [operationRows, productionCheckRows] = await Promise.all([
+    readRows("operations") as Promise<unknown> as Promise<OperationRow[]>,
+    readRows("production-checks") as Promise<unknown> as Promise<ProductionCheckRow[]>,
+  ]);
+
+  const existingSignatures = new Set(
+    productionCheckRows.map((row) =>
+      [row.产品名称, row.检核类型, row.检查点].join("::").trim(),
+    ),
+  );
+  const keptOperations: OperationRow[] = [];
+  const migrated: ProductionCheckRow[] = [];
+  let removedFromOperations = 0;
+
+  for (const row of operationRows) {
+    if (!isProductionChecklistOperation(row)) {
+      keptOperations.push(row);
+      continue;
+    }
+    removedFromOperations++;
+    const converted = migrateOperationToProductionCheck(
+      row,
+      productionCheckRows,
+      migrated.length,
+    );
+    const signature = [converted.产品名称, converted.检核类型, converted.检查点]
+      .join("::")
+      .trim();
+    if (!signature || existingSignatures.has(signature)) {
+      continue;
+    }
+    existingSignatures.add(signature);
+    migrated.push(converted);
+  }
+
+  if (removedFromOperations > 0) {
+    const writes: Array<Promise<void>> = [
+      replaceTableRows(
+        "operations",
+        keptOperations as unknown as Record<string, string>[],
+      ),
+    ];
+    if (migrated.length > 0) {
+      writes.push(
+        replaceTableRows("production-checks", [
+          ...productionCheckRows,
+          ...migrated,
+        ] as unknown as Record<string, string>[]),
+      );
+    }
+    await Promise.all(writes);
+  }
+
+  revalidateStorageRelatedPages();
+  redirectWithMessage(
+    removedFromOperations > 0
+      ? `出品检查标准迁移完成：从操作知识移出 ${removedFromOperations} 条，新增到出品检查标准 ${migrated.length} 条，操作知识保留 ${keptOperations.length} 条。`
+      : "未发现需要从操作知识迁出的出品检查标准，或新表已存在对应条目。",
+  );
 }
 
 export async function cleanBlankOperationRowsAction() {

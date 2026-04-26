@@ -75,6 +75,26 @@ export interface OperationRow {
   tags: string;
 }
 
+export interface ProductionCheckRow {
+  check_id: string;
+  来源文件: string;
+  区域: string;
+  产品名称: string;
+  产品别名: string;
+  风险分类: string;
+  检核类型: string;
+  检查点: string;
+  违规表达: string;
+  解释说明: string;
+  判定口径: string;
+  关联操作编号: string;
+  关联条款编号: string;
+  关联共识编号: string;
+  状态: string;
+  备注: string;
+  tags: string;
+}
+
 export interface FaqRow {
   faq_id: string;
   问题: string;
@@ -96,6 +116,7 @@ export interface KnowledgeBase {
   externalPurchases: ExternalPurchaseRow[];
   oldItems: OldItemRow[];
   operations: OperationRow[];
+  productionChecks: ProductionCheckRow[];
   faq: FaqRow[];
 }
 
@@ -122,7 +143,12 @@ export interface OldItemRequest extends RequesterPayload {
   remark?: string;
 }
 
-export type KnowledgeRecallKind = "rule" | "consensus" | "faq";
+export type KnowledgeRecallKind =
+  | "rule"
+  | "consensus"
+  | "faq"
+  | "operation"
+  | "production-check";
 
 export interface SemanticRuleRecallCandidate {
   ruleId: string;
@@ -164,7 +190,7 @@ export interface RegularQuestionAnswerPayload {
   consensusKeywords?: string;
   consensusApplicableScene?: string;
   aiExplanation?: string;
-  // 命中来源类型：rule = 命中规则；consensus = 直接命中共识无对应规则；faq = 命中常问沉积。
+  // 命中来源类型：rule = 命中规则；consensus = 直接命中共识；faq = 命中常问沉积。
   sourceKind?: KnowledgeRecallKind;
   // 当 sourceKind = consensus 时，记录命中的共识 ID；ruleId 字段会留空或填该共识 ID。
   consensusId?: string;
@@ -211,7 +237,12 @@ export interface RegularQuestionJudgeDecision {
 }
 
 export interface RegularQuestionMatchDebug {
-  retrievalMode: "semantic" | "fallback" | "operation";
+  retrievalMode:
+    | "semantic"
+    | "fallback"
+    | "operation"
+    | "production-check"
+    | "scenario-policy";
   semanticEnabled: boolean;
   queryText: string;
   fallbackReason?: string;
