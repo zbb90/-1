@@ -91,6 +91,7 @@ export function AiSuggestionsView() {
   const [scanning, setScanning] = useState(false);
   const [scanDryRun, setScanDryRun] = useState<null | {
     totalCandidates: number;
+    deterministicPairs: number;
     estimatedLlmCalls: number;
     skippedByBlocklist: number;
     skippedByExisting: number;
@@ -148,6 +149,7 @@ export function AiSuggestionsView() {
         if (dryRun) {
           setScanDryRun({
             totalCandidates: data.totalCandidates,
+            deterministicPairs: data.deterministicPairs ?? 0,
             estimatedLlmCalls: data.estimatedLlmCalls,
             skippedByBlocklist: data.skippedByBlocklist,
             skippedByExisting: data.skippedByExisting,
@@ -156,13 +158,17 @@ export function AiSuggestionsView() {
             elapsedMs: data.elapsedMs,
           });
           setScanMsg(
-            `预估将调用 LLM ${data.estimatedLlmCalls} 次，已过滤 ${
+            `预估将调用 LLM ${data.estimatedLlmCalls} 次，规则型强关联 ${
+              data.deterministicPairs ?? 0
+            } 对，已过滤 ${
               data.skippedByExisting + data.skippedByPending + data.skippedByBlocklist
             } 对。确认后点击「执行扫描」。`,
           );
         } else {
           setScanMsg(
-            `扫描完成：新增 ${data.added} 条待审建议（LLM 判定 ${data.judgedPairs} 对，拒绝 ${data.rejectedByLlm} 对，用时 ${
+            `扫描完成：新增 ${data.added} 条待审建议（规则型 ${
+              data.deterministicPairs ?? 0
+            } 对，LLM 判定 ${data.judgedPairs} 对，拒绝 ${data.rejectedByLlm} 对，用时 ${
               Math.round(data.elapsedMs / 100) / 10
             }s）。`,
           );
@@ -246,6 +252,11 @@ export function AiSuggestionsView() {
               label="预估 LLM 调用"
               value={scanDryRun.estimatedLlmCalls}
               tone="amber"
+            />
+            <WorkspaceMetric
+              label="规则型强关联"
+              value={scanDryRun.deterministicPairs}
+              tone="green"
             />
             <WorkspaceMetric
               label="已跳过（已存在/待审/blocklist）"

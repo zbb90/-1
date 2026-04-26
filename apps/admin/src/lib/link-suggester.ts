@@ -50,6 +50,7 @@ export type GenerateSuggestionsResult = {
   dryRun: boolean;
   totalEntries: number;
   totalCandidates: number;
+  deterministicPairs: number;
   judgedPairs: number;
   added: number;
   skippedByBlocklist: number;
@@ -153,7 +154,18 @@ function buildConsensusEntry(row: ConsensusRow): Entry | null {
 function buildOperationEntry(row: OperationRow): Entry | null {
   const id = row.op_id?.trim();
   if (!id) return null;
-  const title = row.标题?.trim() || "-";
+  const meaningful = [
+    row.资料类型,
+    row.标题,
+    row.适用对象,
+    row.关键词,
+    row.操作内容,
+    row.检核要点,
+    row.解释说明,
+    row.来源文件,
+  ].some((value) => value?.trim());
+  if (!meaningful) return null;
+  const title = row.标题?.trim() || row.适用对象?.trim() || "-";
   const subtitle = row.资料类型?.trim() || "";
   const doc = [
     `资料类型：${row.资料类型 || "-"}`,
@@ -234,7 +246,98 @@ type PairCandidate = {
   b: Entry;
   similarity: number;
   tagOverlap: string[];
+  strongReason?: string;
+  strongConfidence?: number;
+  strongLinkType?: KnowledgeLinkType;
 };
+
+const BROAD_RELATION_TERMS = new Set([
+  "操作",
+  "标准",
+  "出品",
+  "检查",
+  "检查表",
+  "检核",
+  "检核点",
+  "观察点",
+  "扣分",
+  "品质",
+  "食安",
+  "关键项",
+  "启用",
+  "后厨",
+  "调饮",
+  "通用条款",
+  "影响风味",
+  "影响品质",
+  "说明",
+]);
+
+function normalizeRelationTerm(value: string) {
+  return value
+    .replace(
+      /^(资料类型|标题|适用对象|关键词|操作内容|检核要点|解释说明|适用场景|解释内容|问题|答案)：/g,
+      "",
+    )
+    .replace(/操作标准|出品操作检查扣分标准|扣分标准/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function relationTerms(entry: Entry) {
+  const raw = [
+    entry.title,
+    entry.subtitle,
+    ...entry.tags,
+    ...entry.doc.split(/[|｜，,。；;：:\n、/\\()（）[\]【】\s]+/g),
+  ];
+  return [
+    ...new Set(
+      raw
+        .map(normalizeRelationTerm)
+        .filter((term) => term.length >= 2 && term.length <= 16)
+        .filter((term) => !BROAD_RELATION_TERMS.has(term)),
+    ),
+  ];
+}
+
+function strongOperationRelation(a: Entry, b: Entry) {
+  if (a.table !== "operations" && b.table !== "operations") return null;
+  if (
+    a.table === "operations" &&
+    b.table === "operations" &&
+    a.subtitle === b.subtitle
+  ) {
+    return null;
+  }
+
+  const leftTerms = relationTerms(a);
+  const rightTerms = relationTerms(b);
+  const overlaps: string[] = [];
+
+  for (const left of leftTerms) {
+    for (const right of rightTerms) {
+      if (left === right || left.includes(right) || right.includes(left)) {
+        const token = left.length >= right.length ? left : right;
+        if (!overlaps.includes(token)) overlaps.push(token);
+      }
+    }
+  }
+
+  const strongTokens = overlaps.filter((term) => term.length >= 3);
+  if (strongTokens.length === 0) return null;
+
+  const confidence =
+    a.table !== b.table ? Math.min(0.88, 0.76 + strongTokens.length * 0.04) : 0.74;
+  const linkType: KnowledgeLinkType =
+    a.table === "operations" && b.table === "operations" ? "supports" : "related";
+
+  return {
+    confidence,
+    linkType,
+    reason: `操作知识强匹配：共同对象/动作「${strongTokens.slice(0, 3).join("、")}」`,
+  };
+}
 
 function pairPriority(pair: PairCandidate) {
   let priority = pair.similarity;
@@ -261,7 +364,12 @@ function buildPairCandidates(
   }
 
   const pairs = new Map<string, PairCandidate>();
-  const pushPair = (a: Entry, b: Entry, similarity: number) => {
+  const pushPair = (
+    a: Entry,
+    b: Entry,
+    similarity: number,
+    strong?: { confidence: number; linkType: KnowledgeLinkType; reason: string },
+  ) => {
     if (a.table === b.table && a.id === b.id) return;
     const ka = entryKey(a);
     const kb = entryKey(b);
@@ -276,7 +384,15 @@ function buildPairCandidates(
       }
       return;
     }
-    pairs.set(pairKey, { a: left, b: right, similarity, tagOverlap: overlaps });
+    pairs.set(pairKey, {
+      a: left,
+      b: right,
+      similarity,
+      tagOverlap: overlaps,
+      strongReason: strong?.reason,
+      strongConfidence: strong?.confidence,
+      strongLinkType: strong?.linkType,
+    });
   };
 
   // 1) 向量 top-K 邻居
@@ -324,6 +440,27 @@ function buildPairCandidates(
         const sim = va && vb ? normalizeSim(cosineSimilarity(va, vb)) : 0;
         pushPair(a, b, sim);
       }
+    }
+  }
+
+  // 3) 操作知识强规则兜底：同产品/同原料/同关键动作时，不完全依赖 LLM。
+  for (let i = 0; i < entries.length; i += 1) {
+    for (let j = i + 1; j < entries.length; j += 1) {
+      const a = entries[i];
+      const b = entries[j];
+      if (
+        allowedEntryKeys &&
+        !allowedEntryKeys.has(entryKey(a)) &&
+        !allowedEntryKeys.has(entryKey(b))
+      ) {
+        continue;
+      }
+      const strong = strongOperationRelation(a, b);
+      if (!strong) continue;
+      const va = vectors.get(entryKey(a));
+      const vb = vectors.get(entryKey(b));
+      const sim = va && vb ? normalizeSim(cosineSimilarity(va, vb)) : strong.confidence;
+      pushPair(a, b, Math.max(sim, strong.confidence), strong);
     }
   }
 
@@ -452,6 +589,7 @@ export async function generateLinkSuggestions(
       dryRun: Boolean(options.dryRun),
       totalEntries: entries.length,
       totalCandidates: 0,
+      deterministicPairs: 0,
       judgedPairs: 0,
       added: 0,
       skippedByBlocklist: 0,
@@ -546,7 +684,9 @@ export async function generateLinkSuggestions(
     if (enqueued.length >= maxPairs) break;
   }
 
-  const estimatedLlmCalls = enqueued.length;
+  const deterministicPairs = enqueued.filter((pair) => pair.strongConfidence).length;
+  const llmPairs = enqueued.filter((pair) => !pair.strongConfidence);
+  const estimatedLlmCalls = llmPairs.length;
 
   if (options.dryRun) {
     return {
@@ -554,6 +694,7 @@ export async function generateLinkSuggestions(
       dryRun: true,
       totalEntries: entries.length,
       totalCandidates: pairs.length,
+      deterministicPairs,
       judgedPairs: 0,
       added: 0,
       skippedByBlocklist,
@@ -566,15 +707,34 @@ export async function generateLinkSuggestions(
     };
   }
 
+  const drafts: Parameters<typeof addSuggestions>[0] = [];
+  for (const pair of enqueued) {
+    if (!pair.strongConfidence) continue;
+    drafts.push({
+      sourceTable: pair.a.table,
+      sourceId: pair.a.id,
+      targetTable: pair.b.table,
+      targetId: pair.b.id,
+      linkType: pair.strongLinkType ?? "related",
+      confidence: pair.strongConfidence,
+      reason: truncate(pair.strongReason ?? "操作知识强规则匹配", 200),
+      evidenceSourceSpan: truncate(pair.a.snippet || pair.a.title, 200),
+      evidenceTargetSpan: truncate(pair.b.snippet || pair.b.title, 200),
+      model: "rule-based-operation-linker",
+    });
+  }
+
   if (!getDashScopeApiKey()) {
     warnings.push("未配置 DASHSCOPE_API_KEY，无法调用 LLM 裁判。");
+    const saved = await addSuggestions(drafts);
     return {
-      ok: false,
+      ok: saved.added > 0,
       dryRun: false,
       totalEntries: entries.length,
       totalCandidates: pairs.length,
+      deterministicPairs,
       judgedPairs: 0,
-      added: 0,
+      added: saved.added,
       skippedByBlocklist,
       skippedByExisting,
       skippedByPending,
@@ -587,13 +747,12 @@ export async function generateLinkSuggestions(
 
   // 4) LLM 并发判决
   const verdicts = await runWithConcurrency(
-    enqueued,
+    llmPairs,
     async (pair) => ({ pair, verdict: await judgePair(pair) }),
     LLM_CONCURRENCY,
   );
 
   let rejectedByLlm = 0;
-  const drafts: Parameters<typeof addSuggestions>[0] = [];
   const modelName = getDashScopeComplexModelName();
 
   for (const { pair, verdict } of verdicts) {
@@ -649,6 +808,7 @@ export async function generateLinkSuggestions(
     dryRun: false,
     totalEntries: entries.length,
     totalCandidates: pairs.length,
+    deterministicPairs,
     judgedPairs: verdicts.length,
     added: saved.added,
     skippedByBlocklist,
