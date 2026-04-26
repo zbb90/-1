@@ -43,10 +43,17 @@ export async function GET(request: NextRequest) {
       listSuggestions({ status, limit, offset }),
       countSuggestionsByStatus(),
     ]);
-    return NextResponse.json({
-      ok: true,
-      data: { items, total, stats, status, limit, offset },
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        data: { items, total, stats, status, limit, offset },
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
   } catch (error) {
     logRouteError("/api/knowledge/links/suggestions", error);
     return NextResponse.json(

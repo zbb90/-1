@@ -106,9 +106,8 @@ export function AiSuggestionsView() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `/api/knowledge/links/suggestions?status=${encodeURIComponent(status)}&limit=200`,
-      );
+      const url = `/api/knowledge/links/suggestions?status=${encodeURIComponent(status)}&limit=200&t=${Date.now()}`;
+      const res = await fetch(url, { cache: "no-store" });
       const json = await res.json();
       if (json.ok) {
         setItems((json.data?.items ?? []) as SuggestionItem[]);
@@ -195,6 +194,11 @@ export function AiSuggestionsView() {
         });
         const json = await res.json();
         if (!json.ok) {
+          if (res.status === 409) {
+            await fetchList();
+            alert(`${json.message || "该建议状态已变化。"}页面已刷新。`);
+            return;
+          }
           alert(json.message || "处理建议失败");
           return;
         }
