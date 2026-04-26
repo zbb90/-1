@@ -2,8 +2,9 @@
  * Leader 专用诊断接口：完整模拟 /api/regular-question/ask 的所有阶段，
  * 把真实错误（含栈）原样返回，便于在 Railway 控制台之外快速定位。
  *
- * 覆盖阶段：env / matchOperation / matchRegular / aiExplanation /
- * createReviewTask（默认 dryRun，不真正写复核池）。
+ * 覆盖阶段：env / matchScenarioPolicy / matchProductionCheck /
+ * matchOperation / matchRegular / aiExplanation / createReviewTask
+ * （默认 dryRun，不真正写复核池）。
  */
 
 import { cookies } from "next/headers";
@@ -14,10 +15,12 @@ import {
   generateRegularQuestionAiExplanation,
 } from "@/lib/ai";
 import { matchOperationQuestion, matchRegularQuestion } from "@/lib/knowledge-base";
+import { matchProductionCheckQuestion } from "@/lib/production-check-matchers";
 import {
   createReviewTaskFromAnswer,
   createReviewTaskFromRegularQuestion,
 } from "@/lib/review-pool";
+import { matchScenarioPolicyQuestion } from "@/lib/scenario-policy-matchers";
 import { isSemanticSearchConfigured } from "@/lib/vector-store";
 import type { RegularQuestionAnswerPayload, RegularQuestionRequest } from "@/lib/types";
 
@@ -52,6 +55,24 @@ async function runStage<T>(name: string, fn: () => Promise<T>): Promise<Stage> {
       },
     };
   }
+}
+
+function summarizeMatchResult(
+  result: Awaited<ReturnType<typeof matchRegularQuestion>> | null,
+) {
+  if (!result) return null;
+  const debug = result.debug;
+  return {
+    matched: result.matched,
+    hasAnswer: result.matched && Boolean((result as { answer?: unknown }).answer),
+    retrievalMode: debug?.retrievalMode,
+    fallbackReason: debug?.fallbackReason,
+    recalledCount: debug?.recalled?.length ?? 0,
+    selectedRuleId: debug?.judgeSelectedRuleId,
+    sourceKind: result.matched ? result.answer.sourceKind : undefined,
+    answerRuleId: result.matched ? result.answer.ruleId : undefined,
+    answerTitle: result.matched ? result.answer.clauseTitle : undefined,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -92,45 +113,61 @@ export async function POST(request: NextRequest) {
   });
 
   type MatchResult = Awaited<ReturnType<typeof matchRegularQuestion>>;
+  let scenarioResult: MatchResult | null = null;
+  let productionCheckResult: MatchResult | null = null;
   let opResult: MatchResult | null = null;
   let regResult: MatchResult | null = null;
 
   stages.push(
+    await runStage("matchScenarioPolicyQuestion", async () => {
+      const r = (await matchScenarioPolicyQuestion(fullPayload)) as MatchResult | null;
+      scenarioResult = r;
+      return summarizeMatchResult(r);
+    }),
+  );
+
+  stages.push(
+    await runStage("matchProductionCheckQuestion", async () => {
+      const r = scenarioResult
+        ? null
+        : ((await matchProductionCheckQuestion(fullPayload)) as MatchResult | null);
+      productionCheckResult = r;
+      return scenarioResult
+        ? { skipped: true, reason: "matchScenarioPolicyQuestion 已命中" }
+        : summarizeMatchResult(r);
+    }),
+  );
+
+  stages.push(
     await runStage("matchOperationQuestion", async () => {
-      const r = (await matchOperationQuestion(fullPayload)) as MatchResult | null;
+      const previous = scenarioResult ?? productionCheckResult;
+      const r = previous
+        ? null
+        : ((await matchOperationQuestion(fullPayload)) as MatchResult | null);
       opResult = r;
-      if (!r) return null;
-      return {
-        matched: r.matched,
-        hasAnswer: r.matched && Boolean((r as { answer?: unknown }).answer),
-      };
+      return previous
+        ? { skipped: true, reason: "前置 matcher 已命中" }
+        : summarizeMatchResult(r);
     }),
   );
 
   stages.push(
     await runStage("matchRegularQuestion", async () => {
-      const r = (await matchRegularQuestion(fullPayload)) as MatchResult;
+      const previous = scenarioResult ?? productionCheckResult ?? opResult;
+      const r = previous
+        ? null
+        : ((await matchRegularQuestion(fullPayload)) as MatchResult);
       regResult = r;
-      const debug = (
-        r as {
-          debug?: {
-            retrievalMode?: string;
-            fallbackReason?: string;
-            recalled?: unknown[];
-          };
-        }
-      ).debug;
-      return {
-        matched: r.matched,
-        hasAnswer: r.matched && Boolean((r as { answer?: unknown }).answer),
-        retrievalMode: debug?.retrievalMode,
-        fallbackReason: debug?.fallbackReason,
-        recalledCount: debug?.recalled?.length ?? 0,
-      };
+      return previous
+        ? { skipped: true, reason: "前置 matcher 已命中" }
+        : summarizeMatchResult(r);
     }),
   );
 
-  const finalResult = (opResult ?? regResult) as MatchResult | null;
+  const finalResult = (scenarioResult ??
+    productionCheckResult ??
+    opResult ??
+    regResult) as MatchResult | null;
   const matchedAnswer: RegularQuestionAnswerPayload | undefined =
     finalResult && finalResult.matched
       ? (finalResult as { answer?: RegularQuestionAnswerPayload }).answer

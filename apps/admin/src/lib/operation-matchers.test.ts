@@ -62,6 +62,43 @@ describe("matchOperationQuestion", () => {
     expect(result).toBeNull();
   });
 
+  it("does not route operation counter expiry disputes to operation knowledge", async () => {
+    loadKnowledgeBaseMock.mockResolvedValue({
+      rules: [],
+      consensus: [],
+      externalPurchases: [],
+      oldItems: [],
+      operations: [
+        {
+          op_id: "OP-GENERIC-QUALITY",
+          资料类型: "操作检查标准",
+          标题: "通用条款｜影响品质关键项",
+          适用对象: "后厨操作台",
+          关键词: "后厨|操作台|常温|储存|品质|无效期",
+          操作内容: "解冻及储存、标准设备使用、标准定量器具及数据正确。",
+          检核要点: "用于操作类检查提醒，不用于效期和储存条款判定。",
+          解释说明: "操作资料不能回答效期与储存方式是否叠加扣分。",
+          来源文件: "操作检查标准.xlsx",
+          状态: "启用",
+          备注: "",
+        },
+      ],
+      productionChecks: [],
+      faq: [],
+    });
+
+    const { matchOperationQuestion } = await import("./operation-matchers");
+    const result = await matchOperationQuestion({
+      category: "物料效期问题",
+      issueTitle:
+        "后厨操作台苹果块常温放置且无效期，老板反馈为自己吃，是仅落点无效期，还是需要叠加储存方式不合格",
+      description:
+        "后厨操作台苹果块常温放置且无效期，老板反馈为自己吃，是仅落点无效期，还是需要叠加储存方式不合格",
+    });
+
+    expect(result).toBeNull();
+  });
+
   it("does not let generic water-bath terms override an explicit product name", async () => {
     loadKnowledgeBaseMock.mockResolvedValue({
       rules: [],

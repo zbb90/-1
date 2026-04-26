@@ -171,9 +171,36 @@ function scoreOperationActionIntent(
   return { score, reasons };
 }
 
-function isOperationQuestion(request: RegularQuestionRequest) {
+function removeOperationLocationWords(text: string) {
+  return text.replace(/操作台|操作区|操作间|操作区域|操作后台/g, "");
+}
+
+function shouldPreferRegularQuestionRoute(request: RegularQuestionRequest) {
   const combined = buildOperationQueryText(request);
-  return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|出品|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|检查点|观察点|扣分|食安|品质|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
+  const loose = normalizeLooseText(combined);
+  const hasRuleIssue =
+    /无效期|效期缺失|未打效期|过期|超期|储存|存放|常温放置|冷藏|冷冻|离地|落地/.test(
+      loose,
+    );
+  const hasPersonalUseClaim =
+    /自己吃|自己喝|老板自用|员工自用|伙伴自用|个人食用|自带自食|私人物品|个人物品|私人用品|反馈自己吃|反馈.*个人食用/.test(
+      loose,
+    );
+
+  return hasRuleIssue || hasPersonalUseClaim;
+}
+
+function isOperationQuestion(request: RegularQuestionRequest) {
+  const combined = removeOperationLocationWords(buildOperationQueryText(request));
+  if (shouldPreferRegularQuestionRoute(request)) {
+    const hasStrongOperationIntent =
+      /操作标准|操作流程|操作步骤|怎么操作|如何操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|出品|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|克数|多少克|多少ml|多少毫升|去冰|少冰|热饮|温饮|直饮盖|吸管|奶茶|果茶|拿铁|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
+        combined,
+      );
+    if (!hasStrongOperationIntent) return false;
+  }
+
+  return /操作标准|操作流程|操作步骤|怎么操作|如何操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|出品|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|检查点|观察点|扣分|食安|品质|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
     combined,
   );
 }

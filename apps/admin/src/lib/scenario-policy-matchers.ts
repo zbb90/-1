@@ -46,7 +46,7 @@ function buildConsensusText(row: ConsensusRow) {
 
 function isPrivateItemQuestion(request: RegularQuestionRequest) {
   const text = normalizeLooseText(buildQueryText(request));
-  return /私人物品|个人物品|私人用品|员工自用|自用|营运区域|操作区|吧台|后厨/.test(
+  return /私人物品|个人物品|私人用品|员工自用|老板自用|伙伴自用|自用|自己吃|自己喝|个人食用|自带自食|反馈自己吃|营运区域|操作区|操作台|吧台|后厨/.test(
     text,
   );
 }
@@ -66,14 +66,25 @@ function scorePrivateItemConsensus(row: ConsensusRow, request: RegularQuestionRe
     }
   }
 
-  if (/员工自用|自用/.test(queryLoose) && /员工自用|自用/.test(rowLoose)) {
+  if (
+    /员工自用|老板自用|伙伴自用|自用/.test(queryLoose) &&
+    /员工自用|老板自用|伙伴自用|自用|个人食用|私人物品/.test(rowLoose)
+  ) {
     score += 24;
     reasons.push("命中员工自用口径");
   }
 
   if (
-    /营运区域|操作区|吧台|后厨/.test(queryLoose) &&
-    /营运区域|操作区|吧台|后厨/.test(rowLoose)
+    /自己吃|自己喝|个人食用|自带自食|反馈自己吃/.test(queryLoose) &&
+    /自己吃|自己喝|个人食用|自带自食|反馈.*个人食用|反馈.*自己吃/.test(rowLoose)
+  ) {
+    score += 34;
+    reasons.push("命中个人食用/自己吃主张口径");
+  }
+
+  if (
+    /营运区域|操作区|操作台|吧台|后厨/.test(queryLoose) &&
+    /营运区域|操作区|操作台|吧台|后厨/.test(rowLoose)
   ) {
     score += 18;
     reasons.push("命中营运区域/操作区场景");
