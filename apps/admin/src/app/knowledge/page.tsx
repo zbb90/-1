@@ -18,7 +18,7 @@ export default async function KnowledgePage() {
         title="稽核知识库"
         description={
           <>
-            管理五张知识表：常规问题规则、共识解释、外购清单、旧品清单、操作知识。
+            管理知识表：稽核规则、共识解释、常问沉积、外购清单、旧品清单、操作知识。
             <br />
             支持在线新增、编辑、停用/启用、Excel 批量导入导出，以及只读的知识健康分析。
           </>

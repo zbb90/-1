@@ -651,6 +651,10 @@ export function KnowledgeTabs() {
   );
   const selectedTabLabel =
     TABS.find((tab) => tab.key === activeTab)?.label || "当前知识表";
+  const importHelpText =
+    activeTab === "operations"
+      ? "可上传操作知识模板，也可直接上传「出品操作检查表 / 产品检核表」原始 Excel，系统会自动拆成出品操作扣分标准。"
+      : "先下载模板，再按模板格式填充后上传。";
 
   return (
     <div className="space-y-5">
@@ -807,9 +811,7 @@ export function KnowledgeTabs() {
                       <h4 className="text-sm font-semibold text-gray-900">
                         Excel 文件导入
                       </h4>
-                      <p className="mt-1 text-sm text-gray-600">
-                        先下载模板，再按模板格式填充后上传。
-                      </p>
+                      <p className="mt-1 text-sm text-gray-600">{importHelpText}</p>
                     </div>
                     <a
                       href={`/api/knowledge/export?table=${activeTab}&type=template`}

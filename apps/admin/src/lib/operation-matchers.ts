@@ -69,7 +69,7 @@ function extractOperationObjectHint(request: RegularQuestionRequest) {
 
 function isOperationQuestion(request: RegularQuestionRequest) {
   const combined = buildOperationQueryText(request);
-  return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
+  return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|出品|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|检查点|观察点|扣分|食安|品质|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
     combined,
   );
 }
@@ -160,7 +160,7 @@ function scoreOperationMatch(item: OperationRow, request: RegularQuestionRequest
 
   if (
     item.资料类型.includes("检查") &&
-    /检核|检查|标准|关键项|食安|品质/.test(queryText)
+    /检核|检查|标准|关键项|食安|品质|出品|扣分|观察点/.test(queryText)
   ) {
     score += 18;
     reasons.push("问题更接近检查标准类资料");

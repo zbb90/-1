@@ -40,6 +40,139 @@ function parseExcel(buffer: ArrayBuffer): Record<string, string>[] {
   });
 }
 
+function normalizeCell(value: unknown) {
+  return String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function buildMergedCellValueGetter(ws: XLSX.WorkSheet) {
+  const mergeAnchors = new Map<string, string>();
+  for (const merge of ws["!merges"] ?? []) {
+    const anchor = ws[XLSX.utils.encode_cell({ r: merge.s.r, c: merge.s.c })]?.v;
+    const anchorValue = normalizeCell(anchor);
+    for (let r = merge.s.r; r <= merge.e.r; r++) {
+      for (let c = merge.s.c; c <= merge.e.c; c++) {
+        mergeAnchors.set(`${r}:${c}`, anchorValue);
+      }
+    }
+  }
+
+  return (rowIndex: number, colIndex: number) => {
+    const cell = ws[XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })]?.v;
+    const directValue = normalizeCell(cell);
+    return directValue || mergeAnchors.get(`${rowIndex}:${colIndex}`) || "";
+  };
+}
+
+function buildProductionChecklistKeywords(
+  section: string,
+  product: string,
+  category: string,
+  checkKind: string,
+  detail: string,
+) {
+  const fragments = [
+    product,
+    category,
+    checkKind,
+    section,
+    ...detail
+      .split(/[，,。；;：:、/\\()（）[\]【】\s]+/g)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2 && item.length <= 12)
+      .slice(0, 8),
+  ].filter(Boolean);
+  return [...new Set(fragments)].join("|");
+}
+
+function parseProductionChecklistExcel(
+  buffer: ArrayBuffer,
+  sourceFileName: string,
+): Record<string, string>[] {
+  const wb = XLSX.read(buffer, { type: "array" });
+  const rows: Record<string, string>[] = [];
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws?.["!ref"]) continue;
+
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const getValue = buildMergedCellValueGetter(ws);
+    let section = "";
+
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const firstCol = getValue(r, 0);
+      const secondCol = getValue(r, 1);
+      const thirdCol = getValue(r, 2);
+      const detail = getValue(r, 3);
+      const explanation = getValue(r, 6);
+
+      if (/产品检核表/.test(firstCol)) {
+        section = firstCol.includes("调饮")
+          ? "调饮"
+          : firstCol.includes("后厨")
+            ? "后厨"
+            : firstCol;
+        continue;
+      }
+
+      if (
+        firstCol === "饮品" ||
+        firstCol === "检查人" ||
+        secondCol === "分类" ||
+        detail === "检核点详情" ||
+        !detail
+      ) {
+        continue;
+      }
+
+      const product = firstCol;
+      const category = secondCol;
+      const checkKind = thirdCol || category;
+      if (!product || !category || !checkKind) continue;
+
+      rows.push({
+        资料类型: "出品操作检查扣分标准",
+        标题: `${product}｜${checkKind}｜${detail.replace(/\n+/g, " / ")}`,
+        适用对象: product,
+        关键词: buildProductionChecklistKeywords(
+          section,
+          product,
+          category,
+          checkKind,
+          detail,
+        ),
+        操作内容: detail,
+        检核要点: [
+          `检查区域：${section || sheetName}`,
+          `扣分分类：${category}`,
+          `检核类型：${checkKind}`,
+          `检查点：${detail}`,
+        ].join("\n"),
+        解释说明: explanation,
+        来源文件: sourceFileName,
+        备注: `自动从出品操作检查表导入；sheet=${sheetName}；row=${r + 1}`,
+        状态: "启用",
+        tags: ["出品操作", "扣分标准", section, category, checkKind]
+          .filter(Boolean)
+          .join(","),
+      });
+    }
+  }
+
+  return rows;
+}
+
+function looksLikeProductionChecklist(rows: Record<string, string>[]) {
+  const firstRowsText = rows
+    .slice(0, 8)
+    .map((row) => Object.values(row).join(" "))
+    .join(" ");
+  return /产品检核表|检核点详情|饮品/.test(firstRowsText);
+}
+
 export async function POST(request: NextRequest) {
   if (!(await isAdminSessionOrBasicAuthorized(request))) {
     return NextResponse.json(
@@ -69,7 +202,11 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = await file.arrayBuffer();
-    const rows = parseExcel(buffer);
+    const parsedRows = parseExcel(buffer);
+    const rows =
+      table === "operations" && looksLikeProductionChecklist(parsedRows)
+        ? parseProductionChecklistExcel(buffer, file.name)
+        : parsedRows;
     if (rows.length === 0) {
       return NextResponse.json(
         { ok: false, message: "Excel 文件为空或格式不正确，请按模板格式填写后重试。" },
