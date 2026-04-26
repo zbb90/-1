@@ -136,6 +136,14 @@ function nextId(table: KbTableName, rows: Row[]): string {
   return `${prefix}-${String(rows.length + 1).padStart(4, "0")}`;
 }
 
+function hasMeaningfulImportContent(table: KbTableName, row: Row): boolean {
+  const ignoredFields = new Set([idField(table), "状态", "备注", "tags", "更新时间"]);
+  return KB_TABLE_HEADERS[table].some((header) => {
+    if (ignoredFields.has(header)) return false;
+    return Boolean(row[header]?.trim());
+  });
+}
+
 export function getHeaders(table: KbTableName, rows: Row[]): string[] {
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
   const merged = [...headers];
@@ -201,16 +209,21 @@ export async function importRows(
   table: KbTableName,
   incoming: Row[],
   mode: "append" | "replace" = "append",
-): Promise<{ added: number; total: number }> {
+): Promise<{ added: number; total: number; skipped: number }> {
   let rows = mode === "replace" ? [] : await readRows(table);
   const field = idField(table);
   const headers = getHeaders(table, rows.length > 0 ? rows : incoming);
 
   let added = 0;
+  let skipped = 0;
   for (const raw of incoming) {
     const normalized: Row = {};
     for (const h of headers) {
       normalized[h] = raw[h] ?? "";
+    }
+    if (!hasMeaningfulImportContent(table, normalized)) {
+      skipped++;
+      continue;
     }
     if (!normalized[field]) {
       normalized[field] = nextId(table, rows);
@@ -220,8 +233,14 @@ export async function importRows(
     added++;
   }
 
+  if (incoming.length > 0 && added === 0) {
+    throw new Error(
+      `没有可导入的有效内容：上传文件未匹配到 ${table} 表的模板字段，请检查表头或使用专用导入入口。`,
+    );
+  }
+
   await persistRows(table, rows);
-  return { added, total: rows.length };
+  return { added, total: rows.length, skipped };
 }
 
 export async function getKnowledgeStorageDiagnostics(): Promise<KnowledgeStorageDiagnostics> {

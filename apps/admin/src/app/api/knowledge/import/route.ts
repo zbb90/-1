@@ -168,9 +168,9 @@ function parseProductionChecklistExcel(
 function looksLikeProductionChecklist(rows: Record<string, string>[]) {
   const firstRowsText = rows
     .slice(0, 8)
-    .map((row) => Object.values(row).join(" "))
+    .map((row) => [...Object.keys(row), ...Object.values(row)].join(" "))
     .join(" ");
-  return /产品检核表|检核点详情|饮品/.test(firstRowsText);
+  return /产品检核表|出品操作检查表|检核点详情|饮品/.test(firstRowsText);
 }
 
 export async function POST(request: NextRequest) {
@@ -282,7 +282,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: `成功导入 ${result.added} 条，当前共 ${result.total} 条记录。`,
+      message:
+        `成功导入 ${result.added} 条，当前共 ${result.total} 条记录。` +
+        (result.skipped > 0 ? `已跳过 ${result.skipped} 条空白或无效行。` : ""),
       data: result,
     });
   } catch (error) {

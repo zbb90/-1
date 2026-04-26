@@ -13,6 +13,7 @@ import {
   WorkspaceSection,
 } from "@/components/admin/knowledge-workspace";
 import {
+  cleanBlankOperationRowsAction,
   rebuildKnowledgeVectorIndexAction,
   repairReviewStorageAction,
   repairUserIndexesAction,
@@ -300,6 +301,11 @@ export default async function StoragePage({
                 <form action={rebuildKnowledgeVectorIndexAction}>
                   <WorkspaceActionButton type="submit" tone="violet">
                     重建知识向量库（规则 + 共识 + FAQ）
+                  </WorkspaceActionButton>
+                </form>
+                <form action={cleanBlankOperationRowsAction}>
+                  <WorkspaceActionButton type="submit" tone="amber">
+                    清理操作知识空白行
                   </WorkspaceActionButton>
                 </form>
               </div>

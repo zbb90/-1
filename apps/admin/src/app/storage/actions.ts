@@ -5,7 +5,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAdminSessionFromCookies } from "@/lib/admin-session";
 import { repairReviewTaskStorage, type ReviewRepairSource } from "@/lib/review-pool";
-import { readRows, restoreKnowledgeBaseFromCsv } from "@/lib/knowledge-store";
+import {
+  readRows,
+  replaceTableRows,
+  restoreKnowledgeBaseFromCsv,
+} from "@/lib/knowledge-store";
 import { repairUserIndexes } from "@/lib/user-store";
 import {
   isSemanticSearchConfigured,
@@ -94,5 +98,36 @@ export async function rebuildKnowledgeVectorIndexAction() {
   }
   redirectWithMessage(
     `知识向量重建完成：规则 ${result.rules} 条、共识 ${result.consensus} 条、FAQ ${result.faq} 条。`,
+  );
+}
+
+function isBlankOperationRow(row: Record<string, string>) {
+  return [
+    "资料类型",
+    "标题",
+    "适用对象",
+    "关键词",
+    "操作内容",
+    "检核要点",
+    "解释说明",
+    "来源文件",
+  ].every((field) => !row[field]?.trim());
+}
+
+export async function cleanBlankOperationRowsAction() {
+  await assertLeaderSession();
+  const rows = (await readRows("operations")) as Record<string, string>[];
+  const kept = rows.filter((row) => !isBlankOperationRow(row));
+  const removed = rows.length - kept.length;
+
+  if (removed > 0) {
+    await replaceTableRows("operations", kept);
+  }
+
+  revalidateStorageRelatedPages();
+  redirectWithMessage(
+    removed > 0
+      ? `操作知识空白行清理完成：删除 ${removed} 条，保留 ${kept.length} 条。`
+      : "操作知识没有发现空白行，无需清理。",
   );
 }
