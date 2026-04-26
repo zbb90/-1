@@ -134,6 +134,43 @@ function matchesAnyAnchor(item: OperationRow, anchors: string[]) {
   return anchors.some((anchor) => identity.includes(anchor));
 }
 
+function scoreOperationActionIntent(
+  item: OperationRow,
+  request: RegularQuestionRequest,
+) {
+  const queryLoose = normalizeLooseText(buildOperationQueryText(request));
+  const searchLoose = normalizeLooseText(buildOperationSearchText(item));
+  let score = 0;
+  const reasons: string[] = [];
+
+  const asksTimeout = /超时|过时|超过|超了|太久|未更换|没更换|没有更换/.test(
+    queryLoose,
+  );
+  const asksBathBucket = /冰水浴桶|冰浴桶|水浴桶|冰水桶|浴桶/.test(queryLoose);
+  const hasTimedReplacementEvidence = /小时|分钟|定时|计时|更换|换水|超时/.test(
+    searchLoose,
+  );
+  const hasIceWaterEvidence = /冰水混合物|冰水|水浴|冰浴/.test(searchLoose);
+
+  if (asksTimeout && hasTimedReplacementEvidence) {
+    score += 34;
+    reasons.push("问题在问超时/更换，命中带时间或更换要求的检查点");
+  } else if (asksTimeout && !hasTimedReplacementEvidence) {
+    score -= 28;
+    reasons.push("问题在问超时，但该条未包含时间或更换要求");
+  }
+
+  if (asksBathBucket && hasIceWaterEvidence && hasTimedReplacementEvidence) {
+    score += 24;
+    reasons.push("问题在问冰水/水浴桶，命中冰水混合物更换要求");
+  } else if (asksBathBucket && !hasTimedReplacementEvidence) {
+    score -= 12;
+    reasons.push("问题在问浴桶超时，该条仅泛化命中冰浴");
+  }
+
+  return { score, reasons };
+}
+
 function isOperationQuestion(request: RegularQuestionRequest) {
   const combined = buildOperationQueryText(request);
   return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|出品|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|检查点|观察点|扣分|食安|品质|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
@@ -274,14 +311,21 @@ export async function matchOperationQuestion(
   const scoredCandidates = knowledgeBase.operations
     .map((item) => {
       const { score, reasons } = scoreOperationMatch(item, request);
+      const actionIntent = scoreOperationActionIntent(item, request);
       const anchorMatched = matchesAnyAnchor(item, explicitAnchors);
       return {
         item,
-        score: anchorMatched && explicitAnchors.length > 0 ? score + 40 : score,
+        score:
+          (anchorMatched && explicitAnchors.length > 0 ? score + 40 : score) +
+          actionIntent.score,
         reasons:
           anchorMatched && explicitAnchors.length > 0
-            ? [...reasons, `命中明确产品对象：${explicitAnchors.join("、")}`]
-            : reasons,
+            ? [
+                ...reasons,
+                ...actionIntent.reasons,
+                `命中明确产品对象：${explicitAnchors.join("、")}`,
+              ]
+            : [...reasons, ...actionIntent.reasons],
         anchorMatched,
       };
     })
