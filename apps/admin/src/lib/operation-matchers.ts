@@ -67,6 +67,73 @@ function extractOperationObjectHint(request: RegularQuestionRequest) {
   return [...issueObjects, ...descObjects][0] ?? "";
 }
 
+const GENERIC_OPERATION_ANCHORS = new Set([
+  "操作",
+  "标准",
+  "出品",
+  "检查",
+  "检核",
+  "观察点",
+  "稽核点",
+  "扣分",
+  "品质",
+  "食安",
+  "冰水",
+  "热水",
+  "水浴",
+  "冰浴",
+  "超时",
+  "使用",
+]);
+
+function operationIdentityText(item: OperationRow) {
+  return normalizeLooseText([item.标题, item.适用对象, item.关键词].join(" "));
+}
+
+function operationAnchorTerms(item: OperationRow) {
+  const titleTerm = (item.标题 || "")
+    .replace(/操作标准|打制标准|调制标准|出品标准|检查标准|扣分标准/g, "")
+    .trim();
+  const rawTerms = [
+    item.适用对象,
+    titleTerm,
+    ...(item.关键词 || "").split(/[|｜,，、；;\s]+/g),
+  ];
+
+  return [
+    ...new Set(
+      rawTerms
+        .map((term) => normalizeLooseText(term))
+        .filter((term) => term.length >= 2)
+        .filter((term) => !GENERIC_OPERATION_ANCHORS.has(term)),
+    ),
+  ];
+}
+
+function findExplicitOperationAnchors(
+  operations: OperationRow[],
+  request: RegularQuestionRequest,
+) {
+  const queryLoose = normalizeLooseText(buildOperationQueryText(request));
+  if (!queryLoose) return [];
+
+  const anchors = new Set<string>();
+  for (const item of operations) {
+    for (const term of operationAnchorTerms(item)) {
+      if (queryLoose.includes(term)) {
+        anchors.add(term);
+      }
+    }
+  }
+  return [...anchors].sort((left, right) => right.length - left.length);
+}
+
+function matchesAnyAnchor(item: OperationRow, anchors: string[]) {
+  if (anchors.length === 0) return true;
+  const identity = operationIdentityText(item);
+  return anchors.some((anchor) => identity.includes(anchor));
+}
+
 function isOperationQuestion(request: RegularQuestionRequest) {
   const combined = buildOperationQueryText(request);
   return /操作|配方|怎么做|如何做|怎么打|如何打|步骤|做法|出杯|出品|加料|奶露|奶芙|维也纳|抹茶液|茶汤|手泡|煮制|复热|打制|检核|检查表|检核点|检查点|观察点|扣分|食安|品质|器具|用量|克数|多少克|多少ml|多少毫升|几秒|去冰|少冰|热饮|温饮|直饮盖|吸管|风味贴|奶茶|果茶|拿铁|柠檬茶|饮品|数据|配比|杯贴|杯型|SOP|标准糖|甜度|冰量|少糖|全糖|半糖/.test(
@@ -200,13 +267,32 @@ export async function matchOperationQuestion(
   }
 
   const knowledgeBase = await loadKnowledgeBase();
-  const candidates = knowledgeBase.operations
+  const explicitAnchors = findExplicitOperationAnchors(
+    knowledgeBase.operations,
+    request,
+  );
+  const scoredCandidates = knowledgeBase.operations
     .map((item) => {
       const { score, reasons } = scoreOperationMatch(item, request);
-      return { item, score, reasons };
+      const anchorMatched = matchesAnyAnchor(item, explicitAnchors);
+      return {
+        item,
+        score: anchorMatched && explicitAnchors.length > 0 ? score + 40 : score,
+        reasons:
+          anchorMatched && explicitAnchors.length > 0
+            ? [...reasons, `命中明确产品对象：${explicitAnchors.join("、")}`]
+            : reasons,
+        anchorMatched,
+      };
     })
-    .filter((item) => item.score >= 18)
-    .sort((left, right) => right.score - left.score);
+    .filter((item) => item.score >= 18);
+
+  const anchoredCandidates = explicitAnchors.length
+    ? scoredCandidates.filter((item) => item.anchorMatched)
+    : scoredCandidates;
+  const candidates = (
+    anchoredCandidates.length > 0 ? anchoredCandidates : scoredCandidates
+  ).sort((left, right) => right.score - left.score);
 
   if (candidates.length === 0) {
     return null;

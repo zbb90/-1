@@ -59,4 +59,54 @@ describe("matchOperationQuestion", () => {
 
     expect(result).toBeNull();
   });
+
+  it("does not let generic water-bath terms override an explicit product name", async () => {
+    loadKnowledgeBaseMock.mockResolvedValue({
+      rules: [],
+      consensus: [],
+      externalPurchases: [],
+      oldItems: [],
+      operations: [
+        {
+          op_id: "OP-BUDDING",
+          资料类型: "出品操作检查扣分标准",
+          标题: "布丁｜稽核点｜布丁水浴或常温冷却时间过长",
+          适用对象: "布丁",
+          关键词: "布丁|冰浴|水浴|超时|品质",
+          操作内容: "布丁水浴或常温冷却时间过长。",
+          检核要点: "检查区域：后厨\n扣分分类：品质\n检核类型：稽核点",
+          解释说明: "保存环境出现偏差，效期不准确。",
+          来源文件: "出品操作检查表.xlsx",
+          状态: "启用",
+          备注: "",
+        },
+        {
+          op_id: "OP-VIENNA",
+          资料类型: "出品操作检查扣分标准",
+          标题: "维也纳云顶｜稽核点｜冰水混合物必须2小时进行一次更换",
+          适用对象: "维也纳云顶",
+          关键词: "维也纳云顶|冰水混合物|2小时|更换|品质",
+          操作内容: "冰水混合物必须2小时进行一次更换。",
+          检核要点: "检查区域：后厨\n扣分分类：品质\n检核类型：稽核点",
+          解释说明: "影响风味，且存在食安风险。",
+          来源文件: "出品操作检查表.xlsx",
+          状态: "启用",
+          备注: "",
+        },
+      ],
+    });
+
+    const { matchOperationQuestion } = await import("./operation-matchers");
+    const result = await matchOperationQuestion({
+      category: "操作扣分",
+      issueTitle: "维也纳云顶冰水浴桶超时是否扣分",
+      description: "维也纳云顶冰水浴桶超时是否扣分",
+    });
+
+    expect(result?.matched).toBe(true);
+    if (result?.matched) {
+      expect(result.answer.ruleId).toBe("OP-VIENNA");
+      expect(result.answer.clauseTitle).toContain("维也纳云顶");
+    }
+  });
 });
