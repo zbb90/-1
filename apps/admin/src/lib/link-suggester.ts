@@ -301,16 +301,7 @@ function relationTerms(entry: Entry) {
   ];
 }
 
-function strongOperationRelation(a: Entry, b: Entry) {
-  if (a.table !== "operations" && b.table !== "operations") return null;
-  if (
-    a.table === "operations" &&
-    b.table === "operations" &&
-    a.subtitle === b.subtitle
-  ) {
-    return null;
-  }
-
+function sharedConcreteTerms(a: Entry, b: Entry) {
   const leftTerms = relationTerms(a);
   const rightTerms = relationTerms(b);
   const overlaps: string[] = [];
@@ -324,25 +315,73 @@ function strongOperationRelation(a: Entry, b: Entry) {
     }
   }
 
-  const strongTokens = overlaps.filter((term) => term.length >= 3);
+  return overlaps.filter((term) => term.length >= 3);
+}
+
+function isProductionChecklistOperation(entry: Entry) {
+  return (
+    entry.table === "operations" &&
+    /出品操作检查|扣分标准|产品检核表/.test(
+      [entry.subtitle, entry.title, entry.doc].join("\n"),
+    )
+  );
+}
+
+function isStandardOperation(entry: Entry) {
+  return entry.table === "operations" && !isProductionChecklistOperation(entry);
+}
+
+function strongOperationRelation(a: Entry, b: Entry) {
+  if (a.table !== "operations" && b.table !== "operations") return null;
+  const strongTokens = sharedConcreteTerms(a, b);
   if (strongTokens.length === 0) return null;
 
-  const confidence =
-    a.table !== b.table ? Math.min(0.88, 0.76 + strongTokens.length * 0.04) : 0.74;
-  const linkType: KnowledgeLinkType =
-    a.table === "operations" && b.table === "operations" ? "supports" : "related";
+  const checklistToStandard =
+    (isProductionChecklistOperation(a) && isStandardOperation(b)) ||
+    (isProductionChecklistOperation(b) && isStandardOperation(a));
+  if (checklistToStandard) {
+    return {
+      confidence: Math.min(0.92, 0.82 + strongTokens.length * 0.03),
+      linkType: "supports" as KnowledgeLinkType,
+      reason: `标准操作与出品检查表关联：共同对象/动作「${strongTokens.slice(0, 3).join("、")}」`,
+    };
+  }
 
-  return {
-    confidence,
-    linkType,
-    reason: `操作知识强匹配：共同对象/动作「${strongTokens.slice(0, 3).join("、")}」`,
-  };
+  const operationToAuditRule =
+    (a.table === "operations" && b.table === "rules") ||
+    (a.table === "rules" && b.table === "operations");
+  if (
+    operationToAuditRule &&
+    (strongTokens.length >= 2 || strongTokens[0].length >= 4)
+  ) {
+    return {
+      confidence: Math.min(0.88, 0.76 + strongTokens.length * 0.03),
+      linkType: "related" as KnowledgeLinkType,
+      reason: `操作知识与稽核表关联：共同对象/动作「${strongTokens.slice(0, 3).join("、")}」`,
+    };
+  }
+
+  // 共识/FAQ 与操作知识仍可通过向量 + LLM 产生建议，但不走规则型强关联，
+  // 避免"操作类共识 ↔ 出品检查点"刷屏，淹没 SOP/稽核表主线关系。
+  return null;
 }
 
 function pairPriority(pair: PairCandidate) {
   let priority = pair.similarity;
   if (pair.a.table !== pair.b.table) priority += 0.08;
-  if (pair.a.table === "operations" || pair.b.table === "operations") priority += 0.04;
+  if (
+    (isProductionChecklistOperation(pair.a) && isStandardOperation(pair.b)) ||
+    (isProductionChecklistOperation(pair.b) && isStandardOperation(pair.a))
+  ) {
+    priority += 0.18;
+  } else if (
+    (pair.a.table === "operations" && pair.b.table === "rules") ||
+    (pair.a.table === "rules" && pair.b.table === "operations")
+  ) {
+    priority += 0.14;
+  } else if (pair.a.table === "operations" || pair.b.table === "operations") {
+    priority += 0.03;
+  }
   if (pair.tagOverlap.length > 0)
     priority += Math.min(0.04, pair.tagOverlap.length * 0.01);
   return priority;
@@ -378,6 +417,11 @@ function buildPairCandidates(
     const overlaps = left.tags.filter((t) => right.tags.includes(t));
     const existing = pairs.get(pairKey);
     if (existing) {
+      if (strong && !existing.strongConfidence) {
+        existing.strongReason = strong.reason;
+        existing.strongConfidence = strong.confidence;
+        existing.strongLinkType = strong.linkType;
+      }
       if (similarity > existing.similarity) {
         existing.similarity = similarity;
         existing.tagOverlap = overlaps;
