@@ -16,7 +16,8 @@ type KbTable =
   | "consensus"
   | "external-purchases"
   | "old-items"
-  | "operations";
+  | "operations"
+  | "faq";
 
 type SuggestionItem = {
   id: string;
@@ -45,6 +46,7 @@ const TABLE_LABEL: Record<KbTable, string> = {
   "external-purchases": "外购",
   "old-items": "旧品",
   operations: "操作",
+  faq: "FAQ",
 };
 
 const LINK_TYPE_LABEL: Record<LinkType, string> = {

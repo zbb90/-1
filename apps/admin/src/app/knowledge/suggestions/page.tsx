@@ -22,7 +22,7 @@ export default async function AiLinkSuggestionsPage() {
         title="知识库 AI 关联审核"
         description={
           <>
-            由大模型对 rules / consensus 两张核心表做语义扫描，产出待审核的关联建议。
+            由大模型对规则、共识、FAQ、操作知识做语义扫描，产出待审核的关联建议。
             <br />
             管理员可在这里逐条采纳、拒绝或跳过；采纳后将作为 source=ai
             的正式关联写入知识图谱。

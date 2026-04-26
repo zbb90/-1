@@ -15,7 +15,7 @@ import {
   listSuggestions,
 } from "@/lib/knowledge-link-suggestions";
 import { normalizeTags } from "@/lib/knowledge-tags";
-import type { ConsensusRow, RuleRow } from "@/lib/types";
+import type { ConsensusRow, FaqRow, OperationRow, RuleRow } from "@/lib/types";
 
 /** 支持进入 Suggester 的条目。内部统一成这种结构，避免裸表类型扩散。 */
 type Entry = {
@@ -150,6 +150,63 @@ function buildConsensusEntry(row: ConsensusRow): Entry | null {
   };
 }
 
+function buildOperationEntry(row: OperationRow): Entry | null {
+  const id = row.op_id?.trim();
+  if (!id) return null;
+  const title = row.标题?.trim() || "-";
+  const subtitle = row.资料类型?.trim() || "";
+  const doc = [
+    `资料类型：${row.资料类型 || "-"}`,
+    `标题：${row.标题 || "-"}`,
+    `适用对象：${row.适用对象 || "-"}`,
+    `关键词：${row.关键词 || "-"}`,
+    `操作内容：${row.操作内容 || "-"}`,
+    `检核要点：${row.检核要点 || "-"}`,
+    `解释说明：${row.解释说明 || "-"}`,
+    `来源文件：${row.来源文件 || "-"}`,
+  ].join("\n");
+  const snippet = truncate(
+    [row.操作内容, row.检核要点, row.解释说明].filter(Boolean).join("；"),
+    180,
+  );
+  return {
+    table: "operations",
+    id,
+    title,
+    subtitle,
+    tags: normalizeTags(row.tags),
+    doc,
+    snippet,
+  };
+}
+
+function buildFaqEntry(row: FaqRow): Entry | null {
+  const id = row.faq_id?.trim();
+  if (!id) return null;
+  const title = row.问题?.trim() || "-";
+  const subtitle = row.沉积来源?.trim() || "";
+  const doc = [
+    `问题：${row.问题 || "-"}`,
+    `答案：${row.答案 || "-"}`,
+    `关联条款编号：${row.关联条款编号 || "-"}`,
+    `关联共识编号：${row.关联共识编号 || "-"}`,
+    `命中关键词：${row.命中关键词 || "-"}`,
+  ].join("\n");
+  const snippet = truncate(
+    [row.问题, row.答案, row.命中关键词].filter(Boolean).join("；"),
+    180,
+  );
+  return {
+    table: "faq",
+    id,
+    title,
+    subtitle,
+    tags: normalizeTags(row.tags),
+    doc,
+    snippet,
+  };
+}
+
 function cosineSimilarity(a: number[], b: number[]) {
   if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0;
@@ -178,6 +235,15 @@ type PairCandidate = {
   similarity: number;
   tagOverlap: string[];
 };
+
+function pairPriority(pair: PairCandidate) {
+  let priority = pair.similarity;
+  if (pair.a.table !== pair.b.table) priority += 0.08;
+  if (pair.a.table === "operations" || pair.b.table === "operations") priority += 0.04;
+  if (pair.tagOverlap.length > 0)
+    priority += Math.min(0.04, pair.tagOverlap.length * 0.01);
+  return priority;
+}
 
 function buildPairCandidates(
   entries: Entry[],
@@ -297,6 +363,8 @@ ${pair.b.doc}
 - 若 A 与 B 相互替代（新旧版本、通用/特殊规定覆盖关系），用 "supersedes"
 - 若两者在同一情景给出相反结论，用 "contradicts"
 - 若仅是话题相关、没有明显因果，用 "related"
+- 若一条是操作/配方/SOP，另一条是出品检查/扣分标准，且对象或关键动作一致，应视为值得关联；检查标准可作为操作标准的检核依据
+- 若一条是共识解释，另一条是操作/出品检查标准，且都在解释同一产品、原料、动作或扣分口径，应视为值得关联
 - 若两者无显著关系或关系牵强（例如只是都来自"食品安全"这种宽泛领域），必须返回 verdict = "reject"
 - supports/contradicts/related 属于对称关系，direction 请返回 "bidirectional"
 - supersedes/references 属于有方向关系，需要判断是 a_to_b（A 指向/替代 B）还是 b_to_a
@@ -364,14 +432,18 @@ export async function generateLinkSuggestions(
   const minSim = options.minVectorSimilarity ?? DEFAULT_MIN_SIM;
   const minAccept = options.minAcceptConfidence ?? DEFAULT_MIN_CONFIDENCE;
 
-  const [ruleRows, consensusRows] = await Promise.all([
+  const [ruleRows, consensusRows, operationRows, faqRows] = await Promise.all([
     loadKnowledgeTable<RuleRow>("rules"),
     loadKnowledgeTable<ConsensusRow>("consensus"),
+    loadKnowledgeTable<OperationRow>("operations"),
+    loadKnowledgeTable<FaqRow>("faq"),
   ]);
 
   const entries: Entry[] = [
     ...ruleRows.map(buildRuleEntry).filter((x): x is Entry => Boolean(x)),
     ...consensusRows.map(buildConsensusEntry).filter((x): x is Entry => Boolean(x)),
+    ...operationRows.map(buildOperationEntry).filter((x): x is Entry => Boolean(x)),
+    ...faqRows.map(buildFaqEntry).filter((x): x is Entry => Boolean(x)),
   ];
 
   if (entries.length < 2) {
@@ -414,7 +486,7 @@ export async function generateLinkSuggestions(
     topK: topKPerEntry,
     minSim,
     allowedEntryKeys: changedKeys,
-  }).sort((a, b) => b.similarity - a.similarity);
+  }).sort((a, b) => pairPriority(b) - pairPriority(a));
 
   // 3) 过滤已存在 / blocklist / 已 pending
   const [existingSignatures, blocklist, pendingSuggestions] = await Promise.all([

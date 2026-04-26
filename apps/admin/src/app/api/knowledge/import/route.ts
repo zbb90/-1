@@ -269,12 +269,18 @@ export async function POST(request: NextRequest) {
       })();
     }
 
-    // 导入 rules / consensus 成功后，若开启了 AI 关联建议功能，则后台异步触发一次增量扫描。
+    // 导入核心知识表成功后，若开启了 AI 关联建议功能，则后台异步触发一次增量扫描。
     // 失败被吞掉：这是导入流程的副作用，不能影响导入成功状态。
-    if (isLinkSuggestionsEnabled() && (table === "rules" || table === "consensus")) {
+    if (
+      isLinkSuggestionsEnabled() &&
+      (table === "rules" ||
+        table === "consensus" ||
+        table === "operations" ||
+        table === "faq")
+    ) {
       void generateLinkSuggestions({
-        // 最大 60 对，避免一次性大批量导入时打爆 LLM 配额。
-        maxPairs: 60,
+        // 最大 80 对，避免一次性大批量导入时打爆 LLM 配额。
+        maxPairs: 80,
       }).catch((err) => {
         console.warn("[knowledge-import] auto link suggest failed", err);
       });
