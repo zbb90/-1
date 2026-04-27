@@ -52,6 +52,11 @@ type ConsensusCompatibility = {
   reason: string;
 };
 
+type FaqCompatibility = {
+  allowed: boolean;
+  reason: string;
+};
+
 interface RagLlmResult {
   ruleId: string | null;
   reason: string;
@@ -132,6 +137,22 @@ function buildConsensusDomainText(consensus: ConsensusRow) {
       consensus.关键词,
       consensus.示例问题,
       consensus.tags,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+}
+
+function buildFaqDomainText(faq: FaqRow) {
+  return normalizeDomainText(
+    [
+      faq.问题,
+      faq.答案,
+      faq.关联条款编号,
+      faq.关联共识编号,
+      faq.命中关键词,
+      faq.tags,
+      faq.备注,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -243,6 +264,56 @@ export function isConsensusCompatibleWithIntent(
   }
 
   return { allowed: true, reason: "共识领域与用户问题兼容。" };
+}
+
+export function isFaqCompatibleWithIntent(
+  faq: FaqRow,
+  request: RegularQuestionRequest,
+  intent: RegularQuestionIntentParse,
+): FaqCompatibility {
+  const requestText = buildRequestDomainText(request, intent);
+  const faqText = buildFaqDomainText(faq);
+  const requestStorageOrExpiry = isStorageOrExpiryDomain(requestText, intent);
+  const requestPersonalUse = isPersonalUseDomain(requestText, intent);
+  const faqStorageOrExpiry =
+    /储存|存放|冷藏|冷冻|常温|虚盖|加盖|盖好|密封|离地|上架|仓储|仓库|后仓|效期|无效期|过期|超期|赏味|废弃|禁用标识/.test(
+      faqText,
+    );
+  const faqPersonalUse =
+    /自己吃|自己喝|个人食用|员工自用|老板自用|伙伴自用|私人物品|个人物品|反馈.*个人|反馈.*自己|禁用标识/.test(
+      faqText,
+    );
+  const faqOperationProcedure = isOperationProcedureDomain(faqText);
+
+  if (requestStorageOrExpiry && !faqStorageOrExpiry) {
+    return {
+      allowed: false,
+      reason: "问题属于储存/效期/离地领域，但 FAQ 未覆盖同域议题。",
+    };
+  }
+
+  if (requestPersonalUse && !faqPersonalUse) {
+    return {
+      allowed: false,
+      reason: "问题包含个人食用/私人物品/反馈主张，但 FAQ 未覆盖该主张。",
+    };
+  }
+
+  if (requestStorageOrExpiry && faqOperationProcedure && !faqStorageOrExpiry) {
+    return {
+      allowed: false,
+      reason: "储存/效期问题不得由操作/配方/用量类 FAQ 接管。",
+    };
+  }
+
+  if (requestPersonalUse && requestStorageOrExpiry && !faqStorageOrExpiry) {
+    return {
+      allowed: false,
+      reason: "个人食用争议 FAQ 需同时覆盖个人食用和效期/储存核心议题。",
+    };
+  }
+
+  return { allowed: true, reason: "FAQ 领域与用户问题兼容。" };
 }
 
 async function ragJudgeAndAnswer(
@@ -491,30 +562,57 @@ export async function matchRegularQuestion(
   // FAQ 高分直答（最高优先级）：避免对常问问题反复跑 LLM
   const topFaq = faqHits[0];
   if (topFaq && topFaq.hit.vectorScore >= FAQ_DIRECT_ANSWER_MIN_SCORE) {
-    recordSelected(topFaq.faq.faq_id);
-    console.info("[regular-question-match] faq-direct", {
+    const gate = isFaqCompatibleWithIntent(topFaq.faq, request, intentParse);
+    debug.faqGate = {
+      allowed: gate.allowed,
+      faqId: topFaq.faq.faq_id,
+      reason: gate.reason,
+    };
+    if (gate.allowed) {
+      recordSelected(topFaq.faq.faq_id);
+      console.info("[regular-question-match] faq-direct", {
+        queryText: debug.queryText,
+        selectedFaqId: topFaq.faq.faq_id,
+        vectorScore: topFaq.hit.vectorScore,
+      });
+      return buildFaqDirectAnswer(topFaq.faq, topFaq.hit, debug);
+    }
+    console.info("[regular-question-match] faq-direct gated", {
       queryText: debug.queryText,
       selectedFaqId: topFaq.faq.faq_id,
       vectorScore: topFaq.hit.vectorScore,
+      reason: gate.reason,
     });
-    return buildFaqDirectAnswer(topFaq.faq, topFaq.hit, debug);
   }
 
   // 全部过滤掉 / 全部空：转人工
   if (vectorHits.length === 0 && consensusHits.length === 0) {
     const noHitReason =
-      vectorHitsRaw.length > 0
-        ? "语义召回与用户描述的具体物料不一致，已拒绝自动命中。"
-        : "向量检索无候选";
+      debug.faqGate?.allowed === false
+        ? `FAQ 候选未通过领域门禁：${debug.faqGate.reason}`
+        : vectorHitsRaw.length > 0
+          ? "语义召回与用户描述的具体物料不一致，已拒绝自动命中。"
+          : "向量检索无候选";
     recordUnmatchedQuery(request.description || request.issueTitle || "", noHitReason);
+    const rejectReason =
+      debug.faqGate?.allowed === false
+        ? "召回到的 FAQ 与问题领域不一致，已拒绝自动回答，建议进入人工复核池。"
+        : vectorHitsRaw.length > 0
+          ? "您描述的具体物料与检索到的条款范围不一致（例如不同小料不得混用），建议进入人工复核池。"
+          : "未在知识库中找到与该问题相关的规则，建议进入人工复核池。";
     return {
       matched: false,
-      rejectReason:
-        vectorHitsRaw.length > 0
-          ? "您描述的具体物料与检索到的条款范围不一致（例如不同小料不得混用），建议进入人工复核池。"
-          : "未在知识库中找到与该问题相关的规则，建议进入人工复核池。",
+      rejectReason,
       candidates: [],
-      debug: { ...debug, rerankedTop: [] },
+      debug: {
+        ...debug,
+        rerankedTop: [],
+        judgeMode:
+          debug.faqGate?.allowed === false ? ("heuristic" as const) : undefined,
+        judgeReason: debug.faqGate?.allowed === false ? noHitReason : undefined,
+        escalatedToReview: debug.faqGate?.allowed === false ? true : undefined,
+        lowConfidenceReason: debug.faqGate?.allowed === false ? noHitReason : undefined,
+      },
     };
   }
 

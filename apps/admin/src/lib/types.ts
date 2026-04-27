@@ -262,6 +262,11 @@ export interface RegularQuestionMatchDebug {
     consensusId?: string;
     reason: string;
   };
+  faqGate?: {
+    allowed: boolean;
+    faqId?: string;
+    reason: string;
+  };
   judgeMode?: RegularQuestionJudgeMode;
   judgeSelectedRuleId?: string;
   judgeReason?: string;
