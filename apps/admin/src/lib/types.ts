@@ -257,6 +257,11 @@ export interface RegularQuestionMatchDebug {
   retrievalSources?: string[];
   rerankedTop?: RegularQuestionCandidatePayload[];
   intentParse?: RegularQuestionIntentParse;
+  consensusGate?: {
+    allowed: boolean;
+    consensusId?: string;
+    reason: string;
+  };
   judgeMode?: RegularQuestionJudgeMode;
   judgeSelectedRuleId?: string;
   judgeReason?: string;

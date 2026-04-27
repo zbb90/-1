@@ -1,5 +1,17 @@
 [
   {
+    "name": "储存问题不应由操作用量类共识自动回答",
+    "input": {
+      "category": "储存与离地问题",
+      "issueTitle": "摇杯内装着的树番茄百香鲜榨汁未虚盖储存",
+      "description": "摇杯内装着的树番茄百香鲜榨汁未虚盖储存",
+      "selfJudgment": "待人工确认"
+    },
+    "expectedRuleId": null,
+    "expectsSemanticOnly": true,
+    "note": "该类储存/加盖问题若规则低置信，不得回退到勺子/用量/配方类共识自动回答；无明确同域依据时应转人工。"
+  },
+  {
     "name": "通用仓库未离地",
     "input": {
       "category": "储存与离地问题",
