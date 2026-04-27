@@ -90,21 +90,25 @@ export async function rebuildKnowledgeVectorIndexAction() {
     redirectWithMessage("向量检索未配置（DashScope 或 Qdrant 缺失），重建已跳过。");
     return;
   }
-  const [rules, consensus, faq] = await Promise.all([
-    readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
-    readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
-    readRows("faq") as Promise<unknown> as Promise<FaqRow[]>,
-  ]);
-  const result = await rebuildKnowledgeVectorIndex(rules, consensus, faq);
-  revalidateStorageRelatedPages();
-  if (!result.ok) {
-    redirectWithMessage(
-      `知识向量重建未完成：${result.ruleReason || result.consensusReason || result.faqReason || "未知原因"}（规则 ${result.rules}，共识 ${result.consensus}，FAQ ${result.faq}）。`,
-    );
+  let message: string;
+  try {
+    const [rules, consensus, faq] = await Promise.all([
+      readRows("rules") as Promise<unknown> as Promise<RuleRow[]>,
+      readRows("consensus") as Promise<unknown> as Promise<ConsensusRow[]>,
+      readRows("faq") as Promise<unknown> as Promise<FaqRow[]>,
+    ]);
+    const result = await rebuildKnowledgeVectorIndex(rules, consensus, faq);
+    revalidateStorageRelatedPages();
+    if (!result.ok) {
+      message = `知识向量重建未完成：${result.ruleReason || result.consensusReason || result.faqReason || "未知原因"}（规则 ${result.rules}，共识 ${result.consensus}，FAQ ${result.faq}）。`;
+    } else {
+      message = `知识向量重建完成：规则 ${result.rules} 条、共识 ${result.consensus} 条、FAQ ${result.faq} 条。`;
+    }
+  } catch (error) {
+    console.warn("[storage] rebuildKnowledgeVectorIndexAction failed", error);
+    message = `知识向量重建失败：${error instanceof Error ? error.message : "未知错误"}。`;
   }
-  redirectWithMessage(
-    `知识向量重建完成：规则 ${result.rules} 条、共识 ${result.consensus} 条、FAQ ${result.faq} 条。`,
-  );
+  redirectWithMessage(message);
 }
 
 function isBlankOperationRow(row: Record<string, string>) {

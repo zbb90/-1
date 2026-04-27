@@ -23,6 +23,7 @@ import {
 import { AskTracePanel } from "./ask-trace-panel";
 import { CleanFaqDupsPanel } from "./clean-faq-dups-panel";
 import { SplitRulesMigrationPanel } from "./split-rules-migration-panel";
+import { VectorRebuildSubmitButton } from "./vector-rebuild-submit-button";
 
 function StatCard({
   label,
@@ -305,9 +306,7 @@ export default async function StoragePage({
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <form action={rebuildKnowledgeVectorIndexAction}>
-                  <WorkspaceActionButton type="submit" tone="violet">
-                    重建知识向量库（规则 + 共识 + FAQ）
-                  </WorkspaceActionButton>
+                  <VectorRebuildSubmitButton />
                 </form>
                 <form action={cleanBlankOperationRowsAction}>
                   <WorkspaceActionButton type="submit" tone="amber">
@@ -386,13 +385,7 @@ export default async function StoragePage({
                 </WorkspaceActionButton>
               </form>
               <form action={rebuildKnowledgeVectorIndexAction}>
-                <WorkspaceActionButton
-                  type="submit"
-                  tone="amber"
-                  className="w-full justify-center"
-                >
-                  重建知识向量库
-                </WorkspaceActionButton>
+                <VectorRebuildSubmitButton className="w-full justify-center" />
               </form>
             </div>
           </WorkspaceSection>
